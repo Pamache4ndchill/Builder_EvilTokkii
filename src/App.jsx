@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
@@ -178,6 +178,7 @@ const CloudflareImageGenerator = () => {
   const [localPreview, setLocalPreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState('');
+  const [showToast, setShowToast] = useState(false);
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -221,7 +222,8 @@ const CloudflareImageGenerator = () => {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(generatedLink);
-    alert('¡Enlace listo en portapapeles! Pegalo en cualquier casilla para previsualizarlo.');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2000);
   };
 
   const resetUploader = () => {
@@ -294,11 +296,43 @@ const CloudflareImageGenerator = () => {
           )}
         </div>
       )}
+      
+      {showToast && (
+        <div 
+          className="animate-slide-up-fade"
+          style={{
+            position: 'fixed',
+            bottom: '30px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--primary)',
+            color: 'var(--text-main)',
+            padding: '12px 24px',
+            borderRadius: '50px',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            boxShadow: '0 10px 30px rgba(236, 72, 153, 0.3)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+        >
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></div>
+          ¡Enlace copiado al portapapeles!
+        </div>
+      )}
     </div>
   );
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
+  const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const [view, setView] = useState('home'); // 'home' or 'create'
   
   const [libraryItems, setLibraryItems] = useState([]); // Base de datos (Eventos/Sorteos)
@@ -339,6 +373,44 @@ function App() {
   const [twitchList, setTwitchList] = useState([]);
   const [selectedRewardName, setSelectedRewardName] = useState(null);
   const [isLoadingTwitch, setIsLoadingTwitch] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setLoginError('');
+    
+    try {
+      const { data, error } = await supabase
+        .from('whitelist')
+        .select('email')
+        .eq('email', loginEmail.trim().toLowerCase())
+        .single();
+        
+      if (error || !data) {
+        setLoginError('Vaya, este correo no parece tener permiso de acceso.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      localStorage.setItem('builder_session', 'true');
+      localStorage.setItem('builder_email', data.email);
+      setSessionEmail(data.email);
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error(err);
+      setLoginError('Ocurrió un error al verificar tu acceso.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('builder_session');
+    localStorage.removeItem('builder_email');
+    setIsAuthenticated(false);
+    setSessionEmail('');
+    setView('home');
+  };
 
   useEffect(() => {
     if (view === 'create_content_item' || view === 'create' || view === 'view_twitch' || view === 'view_participations') {
@@ -476,7 +548,6 @@ function App() {
   };
 
   const resetItemForm = (tipo) => {
-    setLibraryItems([]); // Limpia la lista lateral al instante
     setEditingItemId(null);
     setTipoItem(tipo);
     setNewNorma('');
@@ -621,8 +692,8 @@ function App() {
     fetchLibraryItems();
     setIsSubmitting(false);
     
-    resetItemForm('evento');
-    setView('home');
+    resetItemForm(tipoItem);
+    // Permanece en la vista actual para fluidez
   };
 
   const handleSubmit = async (e) => {
@@ -666,10 +737,55 @@ function App() {
     fetchLibraryItems(); // Refrescar librería
     setIsSubmitting(false);
     
-    // Reset Form & go back to home
+    // Reset Form & stay in current view for fluidity
+    setEditingItemId(null);
     setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
-    setView('home');
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="login-view">
+        <div className="login-card animate-slide-down">
+          <div className="login-logo">
+            <Lock size={32} />
+          </div>
+          <h1 className="login-title">Builder Tokkii</h1>
+          <p className="login-subtitle">Ingresa tu correo autorizado para acceder al panel de control.</p>
+          
+          <form onSubmit={handleLogin}>
+            {loginError && (
+              <div className="error-message">
+                <AlertCircle size={18} />
+                {loginError}
+              </div>
+            )}
+            <div className="form-group">
+              <input 
+                type="email" 
+                className="form-control" 
+                placeholder="correo@ejemplo.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required 
+                style={{ textAlign: 'center', marginBottom: '1rem' }}
+              />
+            </div>
+            <button 
+              type="submit" 
+              className="btn-submit" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Verificando...' : 'Entrar al Builder'}
+            </button>
+          </form>
+          
+          <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Si no tienes acceso, contacta con el administrador.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-layout">
@@ -772,7 +888,16 @@ function App() {
       <main className="main-area">
         {view === 'home' ? (
           <div className="home-view animate-slide-down">
-            <h1 className="home-header-title">Panel de Creadores</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h1 className="home-header-title">Panel de Creadores</h1>
+              <button 
+                onClick={handleLogout}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}
+                title="Cerrar Sesión"
+              >
+                <LogOut size={18} /> Salir ({sessionEmail})
+              </button>
+            </div>
             <p className="home-header-subtitle">
               Gestiona el contenido estructurado de la web. Selecciona una acción para comenzar.
             </p>
