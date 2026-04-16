@@ -973,17 +973,17 @@ function App() {
             justifyContent: 'center',
             zIndex: 4000
           }}
-          className="animate-slide-up-fade"
         >
           <div 
-            className="login-card" 
+            className="login-card animate-modal-in" 
             style={{ 
               width: '100%', 
               maxWidth: '400px', 
               padding: '2rem', 
               textAlign: 'center',
               border: '1px solid rgba(168, 85, 247, 0.3)',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+              margin: '0 20px'
             }}
           >
             <div className="login-logo" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', marginBottom: '1.5rem' }}>
