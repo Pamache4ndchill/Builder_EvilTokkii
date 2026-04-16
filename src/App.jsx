@@ -1192,7 +1192,7 @@ function App() {
         ) : view === 'view_twitch' ? (
           <div className="builder-view">
             <div className="builder-header animate-slide-down">
-              <button className="btn-back" onClick={() => { setView('home'); setSelectedRewardName(null); }}>
+              <button className="btn-back" onClick={() => { setView('home'); setSelectedRewardName(null); setExpandedDates({}); }}>
                 <ChevronLeft size={18} /> Volver
               </button>
               <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
@@ -1207,46 +1207,103 @@ function App() {
                   <br />
                   Selecciona una categoría de canje a la izquierda para ver quiénes lo han reclamado.
                 </div>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>
-                    <h2 style={{ color: '#A855F7', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                      <LayoutTemplate size={24} />
-                      Canje: "{selectedRewardName}"
-                    </h2>
-                    <span style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', padding: '5px 12px', borderRadius: '20px', fontWeight: 'bold' }}>
-                      {twitchList.filter(t => t.reward_name === selectedRewardName).length} Reclamos
-                    </span>
-                  </div>
+              ) : (() => {
+                  const claimsForReward = twitchList.filter(t => t.reward_name === selectedRewardName);
                   
-                  <div style={{ display: 'grid', gap: '12px' }}>
-                    {twitchList.filter(t => t.reward_name === selectedRewardName).map(claim => (
-                      <div key={claim.id} style={{ background: 'var(--bg-card-hover)', padding: '15px 20px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #A855F7' }}>
-                        <div>
-                          <strong style={{ display: 'block', fontSize: '1.1rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Users size={16} color="#A855F7" /> {claim.username}
-                          </strong>
-                          <div style={{ fontSize: '0.80rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                            Reclamado el {new Date(claim.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </div>
-                        
-                        <button 
-                          className="btn-delete-news"
-                          style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px', width: 'auto', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}
-                          onClick={async () => {
-                            if(!confirm(`¿Eliminar reclamo de ${claim.username}?`)) return;
-                            const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
-                            if(!error) fetchLibraryItems();
-                          }}
-                        >
-                          <Trash2 size={16} /> Completado
-                        </button>
+                  // Agrupar por día
+                  const groupedByDay = claimsForReward.reduce((acc, claim) => {
+                    const day = new Date(claim.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+                    if (!acc[day]) acc[day] = [];
+                    acc[day].push(claim);
+                    return acc;
+                  }, {});
+
+                  const sortedDays = Object.keys(groupedByDay).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+                  return (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>
+                        <h2 style={{ color: '#A855F7', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                          <LayoutTemplate size={24} />
+                          Canje: "{selectedRewardName}"
+                        </h2>
+                        <span style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', padding: '5px 12px', borderRadius: '20px', fontWeight: 'bold' }}>
+                          {claimsForReward.length} Reclamos
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                      
+                      <div style={{ display: 'grid', gap: '20px' }}>
+                        {sortedDays.map(day => (
+                          <div key={day} style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden', background: 'rgba(15, 23, 42, 0.3)' }}>
+                            {/* Header del día */}
+                            <div 
+                              style={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center', 
+                                padding: '12px 20px', 
+                                background: 'var(--bg-card-hover)', 
+                                cursor: 'pointer',
+                                borderBottom: expandedDates[day] ? '1px solid var(--border-color)' : 'none'
+                              }}
+                              onClick={() => setExpandedDates(prev => ({ ...prev, [day]: !prev[day] }))}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {expandedDates[day] ? <ChevronUp size={18} color="#A855F7" /> : <ChevronDown size={18} color="#A855F7" />}
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>{day}</span>
+                                <span style={{ fontSize: '0.8rem', background: '#A855F7', color: 'white', padding: '2px 8px', borderRadius: '10px' }}>{groupedByDay[day].length}</span>
+                              </div>
+                              
+                              <button 
+                                className="btn-add" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const list = groupedByDay[day].map(c => c.username).join('\n');
+                                  navigator.clipboard.writeText(list);
+                                  setShowToast(true);
+                                  setTimeout(() => setShowToast(false), 2000);
+                                }}
+                                style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                              >
+                                <Copy size={14} /> Copiar Usuarios
+                              </button>
+                            </div>
+
+                            {/* Lista de usuarios (si está expandido) */}
+                            {expandedDates[day] && (
+                              <div style={{ display: 'grid', gap: '8px', padding: '15px' }} className="animate-slide-down">
+                                {groupedByDay[day].map(claim => (
+                                  <div key={claim.id} style={{ background: 'var(--bg-card)', padding: '10px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '3px solid #A855F7' }}>
+                                    <div>
+                                      <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Users size={14} color="#A855F7" /> {claim.username}
+                                      </strong>
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        A las {new Date(claim.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                    
+                                    <button 
+                                      className="btn-delete-news"
+                                      style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.05)' }}
+                                      onClick={async () => {
+                                        if(!confirm(`¿Eliminar reclamo de ${claim.username}?`)) return;
+                                        const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
+                                        if(!error) fetchLibraryItems();
+                                      }}
+                                    >
+                                      <Trash2 size={14} /> Listo
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+              })()}
             </div>
           </div>
         ) : (
