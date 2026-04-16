@@ -336,6 +336,12 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginError, setLoginError] = useState('');
   const [expandedDates, setExpandedDates] = useState({});
+  const [toast, setToast] = useState({ show: false, message: '' });
+
+  const triggerToast = (message) => {
+    setToast({ show: true, message });
+    setTimeout(() => setToast({ show: false, message: '' }), 2500);
+  };
 
   const [view, setView] = useState('home'); // 'home' or 'create'
   
@@ -731,7 +737,7 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      alert(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} actualizado exitosamente!`);
+      triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} actualizado exitosamente!`);
     } else {
       console.log(`Guardando nuevo ${tipoItem} en Supabase...`);
       const { error } = await supabase
@@ -744,7 +750,7 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      alert(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} generado y guardado exitosamente!`);
+      triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} generado y guardado exitosamente!`);
     }
 
     // Refresh Sidebar
@@ -782,7 +788,7 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      alert('¡Noticia actualizada exitosamente!');
+      triggerToast('¡Noticia actualizada exitosamente!');
     } else {
       const { error } = await supabase.from('news_articles').insert([payload]);
       if (error) {
@@ -791,7 +797,7 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      alert('¡Noticia publicada exitosamente en Supabase!');
+      triggerToast('¡Noticia publicada exitosamente!');
     }
 
     fetchLibraryItems(); // Refrescar librería
@@ -883,6 +889,34 @@ function App() {
   return (
     <div className="app-layout">
       {view !== 'home' && <CloudflareImageGenerator />}
+      
+      {toast.show && (
+        <div 
+          className="animate-slide-up-fade"
+          style={{
+            position: 'fixed',
+            bottom: '30px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--primary)',
+            color: 'var(--text-main)',
+            padding: '12px 24px',
+            borderRadius: '50px',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            boxShadow: '0 10px 30px rgba(236, 72, 153, 0.3)',
+            zIndex: 3000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+        >
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></div>
+          {toast.message}
+        </div>
+      )}
+
       {/* SIDEBAR ZONE */}
       {view !== 'home' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
