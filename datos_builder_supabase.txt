@@ -1,0 +1,60 @@
+============================================================
+DATOS DE ACCESO Y TABLAS PARA EL BUILDER EXTERNO
+============================================================
+
+1. CÓDIGOS API Y CLAVES DE ACCESO
+------------------------------------------------------------
+
+SUPABASE:
+- URL: https://hddzijixsigsqsmabtej.supabase.co
+- ANON_KEY: sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp
+
+CLOUDFLARE (R2):
+- BASE_URL: https://pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/public
+*(Nota: Si necesitas agregar imágenes desde tu builder directamente a R2, requerirás los R2 Access Key y Secret Key de Cloudflare en tu entorno Node.js/Backend, estos no están expuestos en el lado cliente de esta web).*
+
+------------------------------------------------------------
+2. ESQUEMAS SQL DE LAS TABLAS DE SUPABASE
+------------------------------------------------------------
+
+A continuación se detallan los esquemas SQL deducidos de la estructura de la aplicación actual. Puedes ejecutarlos en el SQL Editor de tu proyecto de Supabase o usarlos como base para tu Builder.
+
+-- TABLA: content_items (Sorteos y Eventos)
+CREATE TABLE content_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tipo VARCHAR NOT NULL,          -- 'evento' o 'sorteo'
+    titulo VARCHAR NOT NULL,
+    slug VARCHAR NOT NULL,
+    descripcion TEXT,
+    detalles TEXT,
+    fecha VARCHAR,
+    imagen VARCHAR,                 -- Nombre del archivo en R2 (ej: Logo.png)
+    estado VARCHAR,                 -- 'activo' o 'proximo'
+    premios TEXT,
+    normas JSONB,                   -- Array de textos, ej: ["Ser seguidor", "Tener cuenta"]
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- TABLA: participations (Usuarios inscritos a Sorteos/Eventos)
+CREATE TABLE participations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    nombre VARCHAR NOT NULL,
+    tipo VARCHAR,                   -- 'evento' o 'sorteo'
+    item_id UUID REFERENCES content_items(id) ON DELETE CASCADE,
+    item_titulo VARCHAR,
+    mensaje TEXT,                   -- Detalles adicionales (Discord, BattleTag, etc)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- TABLA: news_articles (Para el futuro News Builder de Artículos)
+CREATE TABLE news_articles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR NOT NULL,
+    subtitle VARCHAR,
+    slug VARCHAR UNIQUE NOT NULL,
+    header_image VARCHAR,           -- Nombre de la imagen en R2
+    content_blocks JSONB,           -- Array dinámico de bloques de texto/imagen del builder
+    author VARCHAR,
+    published_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
