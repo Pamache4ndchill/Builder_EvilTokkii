@@ -377,6 +377,26 @@ function App() {
   const [selectedRewardName, setSelectedRewardName] = useState(null);
   const [isLoadingTwitch, setIsLoadingTwitch] = useState(false);
 
+  // Validar sesión y username al cargar
+  useEffect(() => {
+    const validateSession = async () => {
+      if (isAuthenticated && sessionEmail) {
+        const { data, error } = await supabase
+          .from('whitelist')
+          .select('username')
+          .eq('email', sessionEmail)
+          .single();
+        
+        if (!error && data && !data.username) {
+          setNeedsUsername(true);
+        } else if (data && data.username) {
+          setSessionUsername(data.username);
+        }
+      }
+    };
+    validateSession();
+  }, []);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
