@@ -337,12 +337,12 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginError, setLoginError] = useState('');
   const [expandedDates, setExpandedDates] = useState({});
-  const [toast, setToast] = useState({ show: false, message: '' });
+  const [toast, setToast] = useState({ show: false, message: '', type: 'bottom' });
   const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
 
-  const triggerToast = (message) => {
-    setToast({ show: true, message });
-    setTimeout(() => setToast({ show: false, message: '' }), 2500);
+  const triggerToast = (message, type = 'bottom') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'bottom' }), 2500);
   };
 
   const showConfirm = (message, action) => {
@@ -781,7 +781,7 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} actualizado exitosamente!`);
+      triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} actualizado exitosamente!`, 'center');
     } else {
       console.log(`Guardando nuevo ${tipoItem} en Supabase...`);
       const { error } = await supabase
@@ -794,7 +794,8 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} generado y guardado exitosamente!`);
+      triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} generado exitosamente!`, 'center');
+      resetItemForm(tipoItem);
     }
 
     // Refresh Sidebar
@@ -832,7 +833,7 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      triggerToast('¡Noticia actualizada exitosamente!');
+      triggerToast('¡Noticia actualizada exitosamente!', 'center');
     } else {
       const { error } = await supabase.from('news_articles').insert([payload]);
       if (error) {
@@ -841,7 +842,8 @@ function App() {
         setIsSubmitting(false);
         return;
       }
-      triggerToast('¡Noticia publicada exitosamente!');
+      triggerToast('¡Noticia publicada exitosamente!', 'center');
+      setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
     }
 
     fetchLibraryItems(); // Refrescar librería
@@ -936,8 +938,27 @@ function App() {
       
       {toast.show && (
         <div 
-          className="animate-slide-up-fade"
-          style={{
+          className={toast.type === 'center' ? 'animate-modal-in' : 'animate-slide-up-fade'}
+          style={toast.type === 'center' ? {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'var(--bg-card)',
+            border: '2px solid var(--primary)',
+            color: 'var(--text-main)',
+            padding: '2rem 3.5rem',
+            borderRadius: '24px',
+            fontSize: '1.2rem',
+            fontWeight: '700',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 20px rgba(168, 85, 247, 0.2)',
+            zIndex: 5000,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '15px',
+            textAlign: 'center'
+          } : {
             position: 'fixed',
             bottom: '30px',
             left: '50%',
@@ -956,7 +977,13 @@ function App() {
             gap: '10px'
           }}
         >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></div>
+          {toast.type === 'center' && (
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+               <Plus size={32} style={{ transform: 'rotate(45deg)' }} /> {/* Checkmark replacement or just X/Plus */}
+               <Save size={24} />
+            </div>
+          )}
+          {toast.type !== 'center' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></div>}
           {toast.message}
         </div>
       )}
