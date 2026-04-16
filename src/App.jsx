@@ -338,10 +338,19 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [expandedDates, setExpandedDates] = useState({});
   const [toast, setToast] = useState({ show: false, message: '' });
+  const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
 
   const triggerToast = (message) => {
     setToast({ show: true, message });
     setTimeout(() => setToast({ show: false, message: '' }), 2500);
+  };
+
+  const showConfirm = (message, action) => {
+    setConfirmModal({ show: true, message, onConfirm: action });
+  };
+
+  const closeConfirm = () => {
+    setConfirmModal({ show: false, message: '', onConfirm: null });
   };
 
   const hasAccess = (requiredPermission) => {
@@ -715,24 +724,31 @@ function App() {
     }));
   };
 
-  const handleDeleteItem = async (id) => {
-    if (view === 'create') {
-      if (window.confirm("¿Seguro que deseas eliminar esta noticia permanentemente de Supabase?")) {
+  const handleDeleteItem = (id) => {
+    const msg = view === 'create' 
+      ? "¿Seguro que deseas eliminar esta noticia permanentemente de Supabase?" 
+      : "¿Seguro que deseas eliminar este registro permanentemente de Supabase?";
+      
+    showConfirm(msg, async () => {
+      if (view === 'create') {
         const { error } = await supabase.from('news_articles').delete().eq('id', id);
-        if (!error) setSavedNews(prev => prev.filter(item => item.id !== id));
-        else alert("Error al eliminar noticia: " + error.message);
-      }
-      return;
-    }
-
-    if (window.confirm("¿Seguro que deseas eliminar este registro permanentemente de Supabase?")) {
-      const { error } = await supabase.from('content_items').delete().eq('id', id);
-      if (!error) {
-        setLibraryItems(prev => prev.filter(item => item.id !== id));
+        if (!error) {
+          setSavedNews(prev => prev.filter(item => item.id !== id));
+          triggerToast("Noticia eliminada correctamente.");
+        } else {
+          alert("Error al eliminar noticia: " + error.message);
+        }
       } else {
-        alert("Error al eliminar: " + error.message);
+        const { error } = await supabase.from('content_items').delete().eq('id', id);
+        if (!error) {
+          setLibraryItems(prev => prev.filter(item => item.id !== id));
+          triggerToast("Registro eliminado correctamente.");
+        } else {
+          alert("Error al eliminar: " + error.message);
+        }
       }
-    }
+      closeConfirm();
+    });
   };
 
   const handleItemSubmit = async (e) => {
@@ -942,6 +958,59 @@ function App() {
         >
           <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></div>
           {toast.message}
+        </div>
+      )}
+
+      {confirmModal.show && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(2, 6, 23, 0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000
+          }}
+          className="animate-slide-up-fade"
+        >
+          <div 
+            className="login-card" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '400px', 
+              padding: '2rem', 
+              textAlign: 'center',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+            }}
+          >
+            <div className="login-logo" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', marginBottom: '1.5rem' }}>
+              <Trash2 size={32} />
+            </div>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: 'var(--text-main)' }}>¿Estás seguro?</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', lineHeight: '1.6' }}>
+              {confirmModal.message}
+            </p>
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
+                onClick={closeConfirm}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn-submit" 
+                style={{ background: '#ef4444', color: 'white' }}
+                onClick={confirmModal.onConfirm}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1364,11 +1433,11 @@ function App() {
                                     <button 
                                       className="btn-delete-news"
                                       style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.05)' }}
-                                      onClick={async () => {
-                                        if(!confirm(`¿Eliminar reclamo de ${claim.username}?`)) return;
+                                      onClick={() => showConfirm(`¿Eliminar reclamo de ${claim.username}?`, async () => {
                                         const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
                                         if(!error) fetchLibraryItems();
-                                      }}
+                                        closeConfirm();
+                                      })}
                                     >
                                       <Trash2 size={14} /> Eliminar
                                     </button>
