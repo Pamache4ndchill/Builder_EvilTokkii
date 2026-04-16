@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
@@ -335,6 +335,7 @@ function App() {
   const [newUsername, setNewUsername] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [expandedDates, setExpandedDates] = useState({});
 
   const [view, setView] = useState('home'); // 'home' or 'create'
   
