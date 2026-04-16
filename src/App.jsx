@@ -331,6 +331,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
   const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
   const [sessionUsername, setSessionUsername] = useState(localStorage.getItem('builder_username') || '');
+  const [sessionPermissions, setSessionPermissions] = useState(localStorage.getItem('builder_permissions') || '*');
   const [needsUsername, setNeedsUsername] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
@@ -341,6 +342,27 @@ function App() {
   const triggerToast = (message) => {
     setToast({ show: true, message });
     setTimeout(() => setToast({ show: false, message: '' }), 2500);
+  };
+
+  const hasAccess = (requiredPermission) => {
+    if (sessionPermissions === '*') return true;
+    return sessionPermissions === requiredPermission;
+  };
+
+  const restrictedNavigate = (targetView, requiredPermission) => {
+    if (hasAccess(requiredPermission)) {
+      if (targetView === 'create_content_item_event') {
+        resetItemForm('evento');
+        setView('create_content_item');
+      } else if (targetView === 'create_content_item_sorteo') {
+        resetItemForm('sorteo');
+        setView('create_content_item');
+      } else {
+        setView(targetView);
+      }
+    } else {
+      triggerToast("⚠️ Acceso restringido para tu cuenta.");
+    }
   };
 
   const [view, setView] = useState('home'); // 'home' or 'create'
@@ -390,14 +412,16 @@ function App() {
       if (isAuthenticated && sessionEmail) {
         const { data, error } = await supabase
           .from('whitelist')
-          .select('username')
+          .select('username, permissions')
           .eq('email', sessionEmail)
           .single();
         
-        if (!error && data && !data.username) {
-          setNeedsUsername(true);
-        } else if (data && data.username) {
-          setSessionUsername(data.username);
+        if (!error && data) {
+          if (!data.username) setNeedsUsername(true);
+          else setSessionUsername(data.username);
+          
+          setSessionPermissions(data.permissions || '*');
+          localStorage.setItem('builder_permissions', data.permissions || '*');
         }
       }
     };
@@ -412,7 +436,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from('whitelist')
-        .select('email, username')
+        .select('email, username, permissions')
         .eq('email', loginEmail.trim().toLowerCase())
         .single();
         
@@ -423,7 +447,9 @@ function App() {
       }
       
       localStorage.setItem('builder_email', data.email);
+      localStorage.setItem('builder_permissions', data.permissions || '*');
       setSessionEmail(data.email);
+      setSessionPermissions(data.permissions || '*');
       
       if (!data.username) {
         setNeedsUsername(true);
@@ -471,9 +497,11 @@ function App() {
     localStorage.removeItem('builder_session');
     localStorage.removeItem('builder_email');
     localStorage.removeItem('builder_username');
+    localStorage.removeItem('builder_permissions');
     setIsAuthenticated(false);
     setSessionEmail('');
     setSessionUsername('');
+    setSessionPermissions('*');
     setView('home');
   };
 
@@ -1030,7 +1058,10 @@ function App() {
             </p>
             
             <div className="dashboard-grid">
-              <div className="dashboard-card" onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); setView('create'); }}>
+              <div 
+                className={`dashboard-card ${!hasAccess('news_only') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
+              >
                 <div className="icon-bg">
                   <FilePlus size={36} />
                 </div>
@@ -1038,7 +1069,10 @@ function App() {
                 <p>Genera un nuevo artículo inmersivo con imágenes y bloques de texto para la vista principal.</p>
               </div>
 
-              <div className="dashboard-card" onClick={() => { resetItemForm('evento'); setView('create_content_item'); }}>
+              <div 
+                className={`dashboard-card ${!hasAccess('events_only') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('create_content_item_event', 'events_only')}
+              >
                 <div className="icon-bg">
                   <Calendar size={36} />
                 </div>
@@ -1046,7 +1080,10 @@ function App() {
                 <p>Configura nuevos eventos interactivos con sus normas, detalles, premios y fechas.</p>
               </div>
 
-              <div className="dashboard-card" onClick={() => { resetItemForm('sorteo'); setView('create_content_item'); }}>
+              <div 
+                className={`dashboard-card ${!hasAccess('giveaways_only') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('create_content_item_sorteo', 'giveaways_only')}
+              >
                 <div className="icon-bg">
                   <Gift size={36} />
                 </div>
@@ -1054,7 +1091,10 @@ function App() {
                 <p>Genera nuevos sorteos para la comunidad, definiendo las condiciones y recompensas.</p>
               </div>
 
-              <div className="dashboard-card" onClick={() => setView('view_participations')}>
+              <div 
+                className={`dashboard-card ${!hasAccess('admin') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_participations', 'admin')}
+              >
                 <div className="icon-bg">
                   <Users size={36} />
                 </div>
@@ -1062,11 +1102,15 @@ function App() {
                 <p>Revisa y gestiona los usuarios inscritos a los diferentes eventos y sorteos activos.</p>
               </div>
 
-              <div className="dashboard-card" style={{ border: '1px solid rgba(168, 85, 247, 0.4)' }} onClick={() => setView('view_twitch')}>
-                <div className="icon-bg" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7' }}>
+              <div 
+                className={`dashboard-card ${!hasAccess('admin') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                style={{ border: sessionPermissions === '*' || sessionPermissions === 'admin' ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_twitch', 'admin')}
+              >
+                <div className="icon-bg" style={{ background: sessionPermissions === '*' || sessionPermissions === 'admin' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: sessionPermissions === '*' || sessionPermissions === 'admin' ? '#A855F7' : 'var(--primary)' }}>
                   <LayoutTemplate size={36} />
                 </div>
-                <h3 style={{ color: '#A855F7' }}>Canjes de Twitch</h3>
+                <h3 style={{ color: sessionPermissions === '*' || sessionPermissions === 'admin' ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
                 <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
               </div>
             </div>

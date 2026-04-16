@@ -18,6 +18,20 @@
   --transition: all 0.2s ease-in-out;
 }
 
+.dashboard-card.restricted {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+  border: 1px dashed var(--border-color) !important;
+  pointer-events: auto; /* Para permitir el click y mostrar el toast */
+}
+
+.dashboard-card.restricted:hover {
+  transform: none;
+  border-color: var(--border-color) !important;
+  box-shadow: none;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
