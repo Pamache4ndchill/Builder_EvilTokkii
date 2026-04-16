@@ -330,6 +330,9 @@ const CloudflareImageGenerator = () => {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
   const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
+  const [sessionUsername, setSessionUsername] = useState(localStorage.getItem('builder_username') || '');
+  const [needsUsername, setNeedsUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginError, setLoginError] = useState('');
 
@@ -382,7 +385,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from('whitelist')
-        .select('email')
+        .select('email, username')
         .eq('email', loginEmail.trim().toLowerCase())
         .single();
         
@@ -392,10 +395,17 @@ function App() {
         return;
       }
       
-      localStorage.setItem('builder_session', 'true');
       localStorage.setItem('builder_email', data.email);
       setSessionEmail(data.email);
-      setIsAuthenticated(true);
+      
+      if (!data.username) {
+        setNeedsUsername(true);
+      } else {
+        localStorage.setItem('builder_session', 'true');
+        localStorage.setItem('builder_username', data.username);
+        setSessionUsername(data.username);
+        setIsAuthenticated(true);
+      }
     } catch (err) {
       console.error(err);
       setLoginError('Ocurrió un error al verificar tu acceso.');
@@ -404,11 +414,39 @@ function App() {
     }
   };
 
+  const handleSetUsername = async (e) => {
+    e.preventDefault();
+    if (!newUsername.trim()) return;
+    setIsSubmitting(true);
+    
+    try {
+      const { error } = await supabase
+        .from('whitelist')
+        .update({ username: newUsername.trim() })
+        .eq('email', sessionEmail);
+        
+      if (error) throw error;
+      
+      localStorage.setItem('builder_session', 'true');
+      localStorage.setItem('builder_username', newUsername.trim());
+      setSessionUsername(newUsername.trim());
+      setNeedsUsername(false);
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error(err);
+      alert("Error guardando el nombre de usuario.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('builder_session');
     localStorage.removeItem('builder_email');
+    localStorage.removeItem('builder_username');
     setIsAuthenticated(false);
     setSessionEmail('');
+    setSessionUsername('');
     setView('home');
   };
 
@@ -702,6 +740,7 @@ function App() {
     
     const payload = {
       title: newsData.title,
+      author: sessionUsername,
       slug: newsData.title.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, ''),
       subtitle: newsData.subtitle || null,
       header_image: newsData.header_image_url,
@@ -742,42 +781,75 @@ function App() {
     setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
   };
 
-  if (!isAuthenticated) {
+    if (!isAuthenticated || needsUsername) {
     return (
       <div className="login-view">
         <div className="login-card animate-slide-down">
-          <div className="login-logo">
-            <Lock size={32} />
-          </div>
-          <h1 className="login-title">Builder Tokkii</h1>
-          <p className="login-subtitle">Ingresa tu correo autorizado para acceder al panel de control.</p>
-          
-          <form onSubmit={handleLogin}>
-            {loginError && (
-              <div className="error-message">
-                <AlertCircle size={18} />
-                {loginError}
+          {needsUsername ? (
+            <>
+              <div className="login-logo">
+                <Users size={32} />
               </div>
-            )}
-            <div className="form-group">
-              <input 
-                type="email" 
-                className="form-control" 
-                placeholder="correo@ejemplo.com"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required 
-                style={{ textAlign: 'center', marginBottom: '1rem' }}
-              />
-            </div>
-            <button 
-              type="submit" 
-              className="btn-submit" 
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Verificando...' : 'Entrar al Builder'}
-            </button>
-          </form>
+              <h1 className="login-title">¡Bienvenido!</h1>
+              <p className="login-subtitle">Parece que es tu primera vez aquí. Elige un nombre de usuario que aparecerá como autor en tus noticias.</p>
+              
+              <form onSubmit={handleSetUsername}>
+                <div className="form-group">
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder="Tu nombre de usuario o nick"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    required 
+                    style={{ textAlign: 'center', marginBottom: '1rem' }}
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="btn-submit" 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Guardando...' : 'Comenzar a Crear'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="login-logo">
+                <Lock size={32} />
+              </div>
+              <h1 className="login-title">Builder Tokkii</h1>
+              <p className="login-subtitle">Ingresa tu correo autorizado para acceder al panel de control.</p>
+              
+              <form onSubmit={handleLogin}>
+                {loginError && (
+                  <div className="error-message">
+                    <AlertCircle size={18} />
+                    {loginError}
+                  </div>
+                )}
+                <div className="form-group">
+                  <input 
+                    type="email" 
+                    className="form-control" 
+                    placeholder="correo@ejemplo.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    required 
+                    style={{ textAlign: 'center', marginBottom: '1rem' }}
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="btn-submit" 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Verificando...' : 'Entrar al Builder'}
+                </button>
+              </form>
+            </>
+          )}
           
           <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             Si no tienes acceso, contacta con el administrador.
@@ -874,7 +946,7 @@ function App() {
                     )}
                     <div className="news-item-title" style={{ paddingRight: '20px' }}>{item.titulo || item.title}</div>
                     <div className="news-item-date" style={{ textTransform: 'capitalize' }}>
-                      {view === 'view_twitch' ? 'Categoría Twitch' : view === 'create' ? 'Noticia' : (item.tipo || 'Objeto')} • {view === 'view_twitch' ? 'Activo' : new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}
+                      {view === 'view_twitch' ? 'Categoría Twitch' : view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : (item.tipo || 'Objeto')} • {view === 'view_twitch' ? 'Activo' : new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}
                     </div>
                   </div>
                 ))
@@ -895,7 +967,7 @@ function App() {
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}
                 title="Cerrar Sesión"
               >
-                <LogOut size={18} /> Salir ({sessionEmail})
+                <LogOut size={18} /> Salir ({sessionUsername})
               </button>
             </div>
             <p className="home-header-subtitle">
