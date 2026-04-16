@@ -342,7 +342,8 @@ function App() {
 
   const triggerToast = (message, type = 'bottom') => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: 'bottom' }), 2500);
+    const delay = type === 'center' ? 4000 : 2500;
+    setTimeout(() => setToast({ show: false, message: '', type: 'bottom' }), delay);
   };
 
   const showConfirm = (message, action) => {
@@ -802,7 +803,6 @@ function App() {
     fetchLibraryItems();
     setIsSubmitting(false);
     
-    resetItemForm(tipoItem);
     // Permanece en la vista actual para fluidez
   };
 
@@ -938,7 +938,7 @@ function App() {
       
       {toast.show && (
         <div 
-          className={toast.type === 'center' ? 'animate-modal-in' : 'animate-slide-up-fade'}
+          className={toast.type === 'center' ? 'animate-modal-center' : 'animate-slide-up-fade'}
           style={toast.type === 'center' ? {
             position: 'fixed',
             top: '50%',
@@ -947,17 +947,19 @@ function App() {
             background: 'var(--bg-card)',
             border: '2px solid var(--primary)',
             color: 'var(--text-main)',
-            padding: '2rem 3.5rem',
+            padding: '2.5rem 4rem',
             borderRadius: '24px',
-            fontSize: '1.2rem',
+            fontSize: '1.3rem',
             fontWeight: '700',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 20px rgba(168, 85, 247, 0.2)',
-            zIndex: 5000,
+            boxShadow: '0 20px 80px rgba(0,0,0,0.9), 0 0 30px rgba(168, 85, 247, 0.3)',
+            zIndex: 6000,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '15px',
-            textAlign: 'center'
+            gap: '20px',
+            textAlign: 'center',
+            width: '90%',
+            maxWidth: '500px'
           } : {
             position: 'fixed',
             bottom: '30px',
@@ -978,9 +980,8 @@ function App() {
           }}
         >
           {toast.type === 'center' && (
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
-               <Plus size={32} style={{ transform: 'rotate(45deg)' }} /> {/* Checkmark replacement or just X/Plus */}
-               <Save size={24} />
+            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '5px' }}>
+               <Save size={36} />
             </div>
           )}
           {toast.type !== 'center' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></div>}
