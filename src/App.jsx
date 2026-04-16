@@ -1292,7 +1292,7 @@ function App() {
                                         if(!error) fetchLibraryItems();
                                       }}
                                     >
-                                      <Trash2 size={14} /> Listo
+                                      <Trash2 size={14} /> Eliminar
                                     </button>
                                   </div>
                                 ))}
