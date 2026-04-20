@@ -572,16 +572,21 @@ function App() {
         .from('most_streamed')
         .update({ 
           title: item.title, 
-          image_url: item.image_url, 
+          image_url: item.image_url || '', 
           updated_at: new Date().toISOString() 
         })
         .eq('id', item.id);
       
       if (error) throw error;
-      triggerToast(`¡Juego "${item.title}" actualizado!`);
+      
+      triggerToast(`¡"${item.title}" actualizado correctamente!`);
+      
+      // Refrescar datos desde la DB para asegurar sincronización total
+      await fetchMostStreamed();
+      
     } catch (err) {
-      console.error(err);
-      alert("Error actualizando juego: " + err.message);
+      console.error("Error al guardar juego:", err);
+      alert("Error al persistir cambios: " + (err.message || "Error desconocido"));
     } finally {
       setSubmittingId(null);
     }
