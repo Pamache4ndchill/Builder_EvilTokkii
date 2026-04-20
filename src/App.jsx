@@ -544,8 +544,8 @@ function App() {
     }
   };
 
-  const fetchMostStreamed = async () => {
-    setIsLoadingMostStreamed(true);
+  const fetchMostStreamed = async (isSilent = false) => {
+    if (!isSilent) setIsLoadingMostStreamed(true);
     try {
       const { data, error } = await supabase
         .from('most_streamed')
@@ -555,7 +555,7 @@ function App() {
     } catch (err) {
       console.error("Error fetching most streamed:", err);
     } finally {
-      setIsLoadingMostStreamed(false);
+      if (!isSilent) setIsLoadingMostStreamed(false);
     }
   };
 
@@ -581,8 +581,8 @@ function App() {
       
       triggerToast(`¡"${item.title}" actualizado correctamente!`);
       
-      // Refrescar datos desde la DB para asegurar sincronización total
-      await fetchMostStreamed();
+      // Sincronización silenciosa en segundo plano
+      await fetchMostStreamed(true);
       
     } catch (err) {
       console.error("Error al guardar juego:", err);
