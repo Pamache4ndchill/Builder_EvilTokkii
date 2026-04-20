@@ -570,12 +570,12 @@ function App() {
     try {
       const { error } = await supabase
         .from('most_streamed')
-        .update({ 
+        .upsert({ 
+          id: item.id,
           title: item.title, 
           image_url: item.image_url || '', 
           updated_at: new Date().toISOString() 
-        })
-        .eq('id', item.id);
+        });
       
       if (error) throw error;
       
