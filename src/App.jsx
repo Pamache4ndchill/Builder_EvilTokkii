@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
@@ -401,6 +401,7 @@ function App() {
   const [newNorma, setNewNorma] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingId, setSubmittingId] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
@@ -415,6 +416,10 @@ function App() {
   const [twitchList, setTwitchList] = useState([]);
   const [selectedRewardName, setSelectedRewardName] = useState(null);
   const [isLoadingTwitch, setIsLoadingTwitch] = useState(false);
+
+  // Most Streamed Games State
+  const [mostStreamed, setMostStreamed] = useState([]);
+  const [isLoadingMostStreamed, setIsLoadingMostStreamed] = useState(false);
 
   // Validar sesión y username al cargar
   useEffect(() => {
@@ -516,8 +521,9 @@ function App() {
   };
 
   useEffect(() => {
-    if (view === 'create_content_item' || view === 'create' || view === 'view_twitch' || view === 'view_participations') {
+    if (view === 'create_content_item' || view === 'create' || view === 'view_twitch' || view === 'view_participations' || view === 'view_most_streamed') {
       fetchLibraryItems();
+      if (view === 'view_most_streamed') fetchMostStreamed();
     }
   }, [view, tipoItem]);
 
@@ -535,6 +541,49 @@ function App() {
       console.error("Error fetching library:", err);
     } finally {
       setIsLoadingLibrary(false);
+    }
+  };
+
+  const fetchMostStreamed = async () => {
+    setIsLoadingMostStreamed(true);
+    try {
+      const { data, error } = await supabase
+        .from('most_streamed')
+        .select('*')
+        .order('order_index', { ascending: true });
+      if (data) setMostStreamed(data);
+    } catch (err) {
+      console.error("Error fetching most streamed:", err);
+    } finally {
+      setIsLoadingMostStreamed(false);
+    }
+  };
+
+  const handleMostStreamedChange = (id, field, value) => {
+    setMostStreamed(prev => prev.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const saveMostStreamedItem = async (item) => {
+    setSubmittingId(item.id);
+    try {
+      const { error } = await supabase
+        .from('most_streamed')
+        .update({ 
+          title: item.title, 
+          image_url: item.image_url, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', item.id);
+      
+      if (error) throw error;
+      triggerToast(`¡Juego "${item.title}" actualizado!`);
+    } catch (err) {
+      console.error(err);
+      alert("Error actualizando juego: " + err.message);
+    } finally {
+      setSubmittingId(null);
     }
   };
 
@@ -1043,7 +1092,7 @@ function App() {
       )}
 
       {/* SIDEBAR ZONE */}
-      {view !== 'home' && (() => {
+      {view !== 'home' && view !== 'view_most_streamed' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : libraryItems;
@@ -1209,6 +1258,18 @@ function App() {
                 </div>
                 <h3 style={{ color: sessionPermissions === '*' || sessionPermissions === 'admin' ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
                 <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('admin') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                style={{ border: sessionPermissions === '*' || sessionPermissions === 'admin' ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_most_streamed', 'admin')}
+              >
+                <div className="icon-bg" style={{ background: sessionPermissions === '*' || sessionPermissions === 'admin' ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
+                  <Gamepad2 size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Lo mas Streameable</h3>
+                <p>Gestiona los 6 juegos destacados que aparecen en la sección principal de la web.</p>
               </div>
             </div>
           </div>
@@ -1479,6 +1540,86 @@ function App() {
                     </>
                   );
               })()}
+            </div>
+          </div>
+        ) : view === 'view_most_streamed' ? (
+          <div className="builder-view">
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Lo más Streameable
+              </h1>
+            </div>
+
+            <div className="card animate-slide-down" style={{ minHeight: '60vh' }}>
+              <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>
+                <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                  <Gamepad2 size={24} />
+                  Top 6 Juegos más Jugados
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '5px' }}>
+                  Estos juegos se muestran en la sección principal de la web. Recomendado: Máximo 6 juegos.
+                </p>
+              </div>
+
+              {isLoadingMostStreamed ? (
+                <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
+                  <LayoutTemplate size={48} opacity={0.3} style={{ marginBottom: '10px' }} />
+                  <br />
+                  Cargando juegos desde Supabase...
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                  {mostStreamed.map((item, index) => (
+                    <div key={item.id} className="card" style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border-color)', position: 'relative', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'var(--primary)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.8rem', zIndex: 2 }}>
+                        {index + 1}
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Título del Juego</label>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={item.title} 
+                          onChange={(e) => handleMostStreamedChange(item.id, 'title', e.target.value)} 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">URL de la Imagen (R2)</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input 
+                            type="text" 
+                            className="form-control" 
+                            value={item.image_url} 
+                            placeholder="Imagenes/Nombre.png"
+                            onChange={(e) => handleMostStreamedChange(item.id, 'image_url', e.target.value)} 
+                          />
+                        </div>
+                      </div>
+                      {item.image_url && (
+                        <div className="image-preview-wrapper" style={{ height: '120px', marginBottom: '15px', borderRadius: '8px', overflow: 'hidden' }}>
+                          <img 
+                            src={item.image_url.startsWith('http') ? getDisplayUrl(item.image_url) : `${CLOUDFLARE_R2_BASE_URL}/${item.image_url}`} 
+                            alt={item.title} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.classList.add('error'); }} 
+                          />
+                        </div>
+                      )}
+                      <button 
+                        className="btn-submit" 
+                        style={{ width: '100%', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} 
+                        onClick={() => saveMostStreamedItem(item)}
+                        disabled={submittingId === item.id}
+                      >
+                        {submittingId === item.id ? 'Guardando...' : <><Save size={16} /> Guardar Cambios</>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ) : (
