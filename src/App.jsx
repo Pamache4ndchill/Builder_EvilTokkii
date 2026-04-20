@@ -326,6 +326,75 @@ const CloudflareImageGenerator = () => {
     </div>
   );
 };
+const AdvancedImagePreview = ({ imageUrl }) => {
+  const [zoom, setZoom] = useState(1);
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(0);
+
+  if (!imageUrl) return null;
+
+  const displayUrl = getDisplayUrl(imageUrl);
+
+  const imageStyle = {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    transform: `scale(${zoom}) translate(${offsetX}px, ${offsetY}px)`,
+    transition: 'none'
+  };
+
+  return (
+    <div className="advanced-preview-grid">
+      {/* Guía Visual con Overlays */}
+      <div className="preview-card main-guide-container">
+        <h4>
+          Guía de Diseño y Zona Segura
+          <div style={{ display: 'flex', gap: '15px', fontSize: '0.7rem' }}>
+            <span style={{color: '#ff3e3e', display: 'flex', alignItems: 'center', gap: '4px', fontVariant: 'all-small-caps'}}><div style={{width:8, height:8, border:'1px dashed #ff3e3e'}}></div> Banner</span>
+            <span style={{color: '#2eff7e', display: 'flex', alignItems: 'center', gap: '4px', fontVariant: 'all-small-caps'}}><div style={{width:8, height:8, border:'1px dashed #2eff7e'}}></div> Casilla</span>
+          </div>
+        </h4>
+        <div className="guide-visualizer" style={{ background: '#0f172a' }}>
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+            <img src={displayUrl} alt="Guide Visualizer" style={imageStyle} onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.style.height = '100px'; }} />
+          </div>
+          {/* Safe Zone Overlay */}
+          <div className="guide-overlay-box guide-safe-rect" title="Zona Segura (450x400)"></div>
+          {/* Banner Overlay */}
+          <div className="guide-overlay-box guide-banner-rect" title="Recorte Banner (1200x400)"></div>
+          {/* Casilla Overlay */}
+          <div className="guide-overlay-box guide-casilla-rect" title="Recorte Casilla (450x350)"></div>
+        </div>
+
+        {/* Zoom & Pan Controls */}
+        <div className="preview-controls">
+          <div className="control-group">
+            <label>Zoom: {zoom.toFixed(2)}x</label>
+            <input type="range" min="0.5" max="3" step="0.01" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} />
+          </div>
+          <div className="control-group">
+            <label>Desplazar X: {offsetX}px</label>
+            <input type="range" min="-300" max="300" step="1" value={offsetX} onChange={(e) => setOffsetX(parseInt(e.target.value))} />
+          </div>
+          <div className="control-group">
+            <label>Desplazar Y: {offsetY}px</label>
+            <input type="range" min="-300" max="300" step="1" value={offsetY} onChange={(e) => setOffsetY(parseInt(e.target.value))} />
+          </div>
+          <button type="button" className="btn-reset" onClick={() => { setZoom(1); setOffsetX(0); setOffsetY(0); }}>Restablecer</button>
+        </div>
+        
+        <div className="guide-tip-card">
+          <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+            <li><strong>Subida:</strong> Mín. 1200px (Ancho) x 600-700px (Alto)</li>
+            <li><strong>Banner (Cabecera):</strong> 1200 x 400 px (3:1)</li>
+            <li><strong>Miniatura (Casilla):</strong> 450 x 350 px (9:7)</li>
+            <li><strong>Zona Segura:</strong> Centra lo vital en 450x400 px</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
@@ -1100,7 +1169,14 @@ function App() {
       {view !== 'home' && view !== 'view_most_streamed' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
-                           view === 'create' ? savedNews : libraryItems;
+                           view === 'create' ? savedNews : 
+                           libraryItems.filter(item => {
+                             const type = (item.tipo || '').toLowerCase().trim();
+                             const currentType = (tipoItem || '').toLowerCase().trim();
+                             if (currentType === 'sorteo') return type === 'sorteo';
+                             if (currentType === 'evento') return type === 'evento';
+                             return true;
+                           });
 
         const iconName = view === 'view_participations' ? <Users size={24} color="var(--primary)" /> :
                          view === 'view_twitch' ? <LayoutTemplate size={24} color="var(--primary)" /> :
@@ -1307,14 +1383,10 @@ function App() {
                   <label className="form-label">Fecha Estimada</label>
                   <input type="text" name="fecha" className="form-control" placeholder="Ej: 20 de Octubre 2026" value={itemData.fecha} onChange={handleItemChange} />
                 </div>
-                <div className="form-group">
+                 <div className="form-group">
                   <label className="form-label">Imagen principal (Pega el enlace de R2)</label>
                   <input type="url" name="imagen" className="form-control" placeholder={`${CLOUDFLARE_R2_BASE_URL}/imagen.png`} value={itemData.imagen} onChange={handleItemChange} required />
-                  {itemData.imagen && (
-                    <div className="image-preview-wrapper" style={{ marginTop: '10px' }}>
-                      <img src={getDisplayUrl(itemData.imagen)} alt="Preview" onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.classList.add('error'); }} />
-                    </div>
-                  )}
+                  <AdvancedImagePreview imageUrl={itemData.imagen} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Estado</label>
