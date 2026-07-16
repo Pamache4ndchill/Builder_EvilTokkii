@@ -2403,7 +2403,10 @@ function App() {
               Gestiona el contenido estructurado de la web. Selecciona una acción para comenzar.
             </p>
             
-            <div className="dashboard-grid">
+            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
+              Herramientas de la Web
+            </h2>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: '3rem', gap: '1.5rem' }}>
               <div 
                 className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
                 onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
@@ -2449,18 +2452,6 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_twitch', 'twitch')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch') ? '#A855F7' : 'var(--primary)' }}>
-                  <LayoutTemplate size={36} />
-                </div>
-                <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
-                <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
-              </div>
-
-              <div 
                 className={`dashboard-card ${!hasAccess('most_streamed') ? 'restricted' : ''}`} 
                 style={{ border: hasAccess('most_streamed') ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }} 
                 onClick={() => restrictedNavigate('view_most_streamed', 'most_streamed')}
@@ -2470,6 +2461,35 @@ function App() {
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Lo mas Streameable</h3>
                 <p>Gestiona los 6 juegos destacados que aparecen en la sección principal de la web.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('reports') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('reports') ? '1px solid rgba(239, 68, 68, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_reports', 'reports')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#EF4444' }}>
+                  <AlertCircle size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
+                <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
+              </div>
+            </div>
+
+            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: '#A855F7', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(168, 85, 247, 0.1)', paddingBottom: '8px' }}>
+              Herramientas Twitch
+            </h2>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+              <div 
+                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_twitch', 'twitch')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch') ? '#A855F7' : 'var(--primary)' }}>
+                  <LayoutTemplate size={36} />
+                </div>
+                <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
+                <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
               </div>
 
               <div 
@@ -2506,18 +2526,6 @@ function App() {
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
                 <p>Crea comandos personalizados y plantillas divertidas (ej: pelea) para tu chat de Twitch.</p>
-              </div>
-
-              <div 
-                className={`dashboard-card ${!hasAccess('reports') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('reports') ? '1px solid rgba(239, 68, 68, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_reports', 'reports')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#EF4444' }}>
-                  <AlertCircle size={36} />
-                </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
-                <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
               </div>
             </div>
           </div>
