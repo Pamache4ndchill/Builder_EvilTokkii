@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2 } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
@@ -400,7 +400,15 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
   const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
   const [sessionUsername, setSessionUsername] = useState(localStorage.getItem('builder_username') || '');
-  const [sessionPermissions, setSessionPermissions] = useState(localStorage.getItem('builder_permissions') || '*');
+  const [sessionPermissions, setSessionPermissions] = useState(() => {
+    const cached = localStorage.getItem('builder_permissions');
+    if (!cached) return '*';
+    try {
+      return JSON.parse(cached);
+    } catch {
+      return cached;
+    }
+  });
   const [needsUsername, setNeedsUsername] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
@@ -425,7 +433,46 @@ function App() {
 
   const hasAccess = (requiredPermission) => {
     if (sessionPermissions === '*') return true;
-    return sessionPermissions === requiredPermission;
+    if (typeof sessionPermissions === 'object' && sessionPermissions !== null) {
+      if (sessionPermissions.approved === false) return false;
+      if (sessionPermissions.permissions === '*') return true;
+
+      switch (requiredPermission) {
+        case 'news_only':
+          return !!sessionPermissions.access_news;
+        case 'events_only':
+          return !!sessionPermissions.access_events;
+        case 'giveaways_only':
+          return !!sessionPermissions.access_giveaways;
+        case 'participations':
+          return !!sessionPermissions.access_participations;
+        case 'twitch':
+          return !!sessionPermissions.access_twitch;
+        case 'most_streamed':
+          return !!sessionPermissions.access_most_streamed;
+        case 'scheduled_messages':
+          return !!sessionPermissions.access_scheduled_messages;
+        case 'song_request':
+          return !!sessionPermissions.access_song_request;
+        case 'commands':
+          return !!sessionPermissions.access_commands;
+        case 'reports':
+          return !!sessionPermissions.access_reports;
+        case 'admin':
+          return !!(
+            sessionPermissions.access_participations ||
+            sessionPermissions.access_twitch ||
+            sessionPermissions.access_most_streamed ||
+            sessionPermissions.access_scheduled_messages ||
+            sessionPermissions.access_song_request ||
+            sessionPermissions.access_commands ||
+            sessionPermissions.access_reports
+          );
+        default:
+          return false;
+      }
+    }
+    return false;
   };
 
   const restrictedNavigate = (targetView, requiredPermission) => {
@@ -445,7 +492,779 @@ function App() {
   };
 
   const [view, setView] = useState('home'); // 'home' or 'create'
+
+  // Web Reports States
+  const [userReports, setUserReports] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportFilter, setReportFilter] = useState('todos');
+  const [reportSearch, setReportSearch] = useState('');
   
+  // Song Request States
+  const [songRequests, setSongRequests] = useState([]);
+  const [currentSong, setCurrentSong] = useState(null);
+  const [manualQuery, setManualQuery] = useState('');
+  const [playerVolume, setPlayerVolume] = useState(() => Number(localStorage.getItem('song_player_volume')) || 50);
+  const [isPlayerEnabledInDashboard, setIsPlayerEnabledInDashboard] = useState(() => localStorage.getItem('dashboard_player_enabled') === 'true');
+  const [songRequestCommand, setSongRequestCommand] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+
+  useEffect(() => {
+    localStorage.setItem('song_request_command', songRequestCommand);
+  }, [songRequestCommand]);
+
+  const [allSongs, setAllSongs] = useState([]);
+  const [chatCommands, setChatCommands] = useState([]);
+  const [cmdFormName, setCmdFormName] = useState('');
+  const [cmdFormType, setCmdFormType] = useState('versus');
+  const [cmdFormDesc, setCmdFormDesc] = useState('');
+  const [cmdFormResponses, setCmdFormResponses] = useState(['']);
+
+  const fetchUserReports = async () => {
+    setLoadingReports(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.warn("Table user_reports might not exist yet or permission denied:", error.message);
+        return;
+      }
+      if (data) setUserReports(data);
+    } catch (err) {
+      console.error("Error fetching user reports:", err);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  const handleDeleteReport = async (id) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este reporte?")) return;
+    try {
+      const { error } = await supabase
+        .from('user_reports')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        triggerToast("⚠️ Error al eliminar reporte: " + error.message);
+      } else {
+        triggerToast("✅ Reporte eliminado.");
+        setUserReports(prev => prev.filter(r => r.id !== id));
+      }
+    } catch (err) {
+      console.error("Error deleting report:", err);
+    }
+  };
+
+  const fetchChatCommands = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_commands')
+        .select('*')
+        .order('command_name', { ascending: true });
+        
+      if (error) {
+        console.warn("Table chat_commands might not exist yet:", error.message);
+        return;
+      }
+      if (data) setChatCommands(data);
+    } catch (err) {
+      console.error("Error fetching chat commands:", err);
+    }
+  };
+
+  // Make fetchSongs component-level so we can trigger it instantly after mutations
+  const fetchSongs = async () => {
+    try {
+      // 1. Fetch ALL pending and playing songs
+      const { data: activeAndPending, error: activeErr } = await supabase
+        .from('song_requests')
+        .select('*')
+        .in('status', ['pending', 'playing'])
+        .order('created_at', { ascending: true });
+        
+      if (activeErr) throw activeErr;
+
+      // 2. Fetch the 10 most recent played/skipped songs for history
+      const { data: history, error: historyErr } = await supabase
+        .from('song_requests')
+        .select('*')
+        .in('status', ['played', 'skipped'])
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (historyErr) throw historyErr;
+
+      // Combine: history first (reversed so it flows chronologically), then active & pending
+      const combinedHistory = history ? [...history].reverse() : [];
+      const combined = [...combinedHistory, ...(activeAndPending || [])];
+
+      setAllSongs(combined);
+      setSongRequests((activeAndPending || []).filter(r => r.status === 'pending'));
+      
+      const active = (activeAndPending || []).find(r => r.status === 'playing');
+      if (active) {
+        setCurrentSong(active);
+      } else {
+        setCurrentSong(null);
+      }
+    } catch (err) {
+      console.error("Error fetching song requests:", err);
+    }
+  };
+
+  // Load YouTube Player API
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
+
+  // Fetch & Sync Song Requests from Supabase
+  useEffect(() => {
+    fetchSongs();
+    fetchChatCommands();
+
+    // Subscribe to realtime database changes
+    const channel = supabase
+      .channel('song_requests_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'song_requests' }, () => {
+        fetchSongs();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('song_player_volume', playerVolume);
+  }, [playerVolume]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard_player_enabled', isPlayerEnabledInDashboard ? 'true' : 'false');
+  }, [isPlayerEnabledInDashboard]);
+
+  const searchYouTube = async (query) => {
+    const urlRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = query.match(urlRegex);
+    if (match) {
+      const videoId = match[1];
+      try {
+        const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+        const data = await res.json();
+        return { videoId, title: data.title || 'Video de YouTube' };
+      } catch {
+        return { videoId, title: 'Video de YouTube' };
+      }
+    }
+    
+    // Invidious API Fallback Instances for searching without API Keys
+    const instances = [
+      'https://invidious.projectsegfau.lt',
+      'https://yewtu.be',
+      'https://vid.puffyan.us',
+      'https://invidious.flokinet.to'
+    ];
+    
+    for (const instance of instances) {
+      try {
+        const res = await fetch(`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            const firstResult = data.find(item => item.type === 'video');
+            if (firstResult) {
+              return { videoId: firstResult.videoId, title: firstResult.title };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed searching with instance ${instance}:`, e);
+      }
+    }
+    
+    throw new Error("No se pudo buscar la canción en YouTube. Intenta usar un enlace directo.");
+  };
+
+  const handleSongRequest = async (query, requester) => {
+    try {
+      addBotLog(`[Twitch Chat] Song Request por @${requester}: "${query}"`);
+      const song = await searchYouTube(query);
+      
+      // Check database to see if we need to auto-play (nothing playing or pending)
+      const { data: activeSongs } = await supabase
+        .from('song_requests')
+        .select('id')
+        .eq('status', 'playing');
+        
+      const { data: pendingSongs } = await supabase
+        .from('song_requests')
+        .select('id')
+        .eq('status', 'pending');
+
+      const isQueueEmpty = (!activeSongs || activeSongs.length === 0) && (!pendingSongs || pendingSongs.length === 0);
+      
+      const { error } = await supabase
+        .from('song_requests')
+        .insert([{ 
+          title: song.title, 
+          video_id: song.videoId, 
+          requested_by: requester, 
+          status: isQueueEmpty ? 'playing' : 'pending',
+          played_at: isQueueEmpty ? new Date().toISOString() : null
+        }]);
+        
+      if (error) throw error;
+      
+      enviarMensajeTwitch(`@${requester} ¡Canción añadida a la cola! 🎵 "${song.title}"`);
+      // Update local state instantly
+      fetchSongs();
+    } catch (err) {
+      addBotLog(`Error al procesar Song Request: ${err.message}`);
+      enviarMensajeTwitch(`@${requester} ⚠️ Error: ${err.message}`);
+    }
+  };
+
+  const handleGetActiveSong = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('song_requests')
+        .select('title, requested_by')
+        .eq('status', 'playing')
+        .order('played_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+        
+      if (data) {
+        enviarMensajeTwitch(`🎵 Reproduciendo ahora: "${data.title}" (pedida por @${data.requested_by})`);
+      } else {
+        enviarMensajeTwitch(`🎵 No hay ninguna canción reproduciéndose en este momento.`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const playNextSong = async () => {
+    try {
+      // Get first pending song
+      const { data, error } = await supabase
+        .from('song_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(1);
+        
+      if (error) throw error;
+      
+      // Update currently playing song to 'played'
+      if (currentSong) {
+        await supabase
+          .from('song_requests')
+          .update({ status: 'played' })
+          .eq('id', currentSong.id);
+      }
+      
+      if (data && data.length > 0) {
+        const next = data[0];
+        await supabase
+          .from('song_requests')
+          .update({ status: 'playing', played_at: new Date().toISOString() })
+          .eq('id', next.id);
+          
+        setCurrentSong(next);
+      } else {
+        setCurrentSong(null);
+      }
+    } catch (err) {
+      console.error("Error playing next song:", err);
+    }
+  };
+
+  const handleSkipSong = async () => {
+    if (!currentSong) return;
+    try {
+      await supabase
+        .from('song_requests')
+        .update({ status: 'skipped' })
+        .eq('id', currentSong.id);
+        
+      addBotLog(`Canción omitida: "${currentSong.title}"`);
+      enviarMensajeTwitch(`⏭️ Canción omitida: "${currentSong.title}"`);
+      playNextSong();
+    } catch (err) {
+      console.error("Error skipping song:", err);
+    }
+  };
+
+  const handleTogglePlayPause = async () => {
+    if (!currentSong) return;
+    const nextPlayState = currentSong.is_playing === false ? true : false;
+    
+    // Optimistic local state update
+    setCurrentSong(prev => ({ ...prev, is_playing: nextPlayState }));
+
+    try {
+      await supabase
+        .from('song_requests')
+        .update({ is_playing: nextPlayState })
+        .eq('id', currentSong.id);
+        
+      addBotLog(nextPlayState ? "Reproducción reanudada" : "Reproducción pausada");
+    } catch (err) {
+      console.error("Error updating play state:", err);
+    }
+  };
+
+  const handlePlaySpecificSong = async (song) => {
+    try {
+      // 1. Mark the currently playing song (if any) as 'played'
+      if (currentSong) {
+        await supabase
+          .from('song_requests')
+          .update({ status: 'played' })
+          .eq('id', currentSong.id);
+      }
+      
+      // 2. Mark all other pending songs created before this one as played to maintain queue logic
+      // This automatically puts skipped songs into history (crossed out)
+      const { error: skipError } = await supabase
+        .from('song_requests')
+        .update({ status: 'played' })
+        .eq('status', 'pending')
+        .lt('created_at', song.created_at);
+
+      if (skipError) throw skipError;
+
+      // 3. Mark all played/skipped songs created AFTER this one as 'pending' so they can be re-played
+      // This reactivates the rest of the queue from this song forward
+      const { error: resetError } = await supabase
+        .from('song_requests')
+        .update({ status: 'pending' })
+        .in('status', ['played', 'skipped'])
+        .gt('created_at', song.created_at);
+
+      if (resetError) throw resetError;
+      
+      // 4. Mark the selected song as 'playing'
+      await supabase
+        .from('song_requests')
+        .update({ status: 'playing', played_at: new Date().toISOString(), is_playing: true })
+        .eq('id', song.id);
+        
+      fetchSongs();
+      triggerToast(`▶️ Reproduciendo: ${song.title}`);
+    } catch (err) {
+      console.error("Error playing specific song:", err);
+    }
+  };
+
+  const handleReloadOBS = () => {
+    supabase.channel('obs_reload_channel').send({
+      type: 'broadcast',
+      event: 'reload_widget',
+      payload: { message: 'reload' }
+    });
+    triggerToast("🔄 Señal de recarga enviada a OBS.");
+  };
+
+  const handleDeleteSongFromQueue = async (id) => {
+    try {
+      await supabase
+        .from('song_requests')
+        .delete()
+        .eq('id', id);
+        
+      triggerToast("🗑️ Canción eliminada de la cola.");
+      // Refresh local queue state instantly
+      fetchSongs();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveChatCommand = async (commandName, templateType, description, responses) => {
+    try {
+      let cleanName = commandName.trim().toLowerCase();
+      if (!cleanName.startsWith('!')) {
+        cleanName = '!' + cleanName;
+      }
+      cleanName = cleanName.replace(/\s+/g, '');
+
+      if (!cleanName || cleanName === '!') {
+        triggerToast("⚠️ El nombre del comando no es válido.");
+        return false;
+      }
+
+      const filteredResponses = responses.filter(r => r.trim());
+      if (filteredResponses.length === 0) {
+        triggerToast("⚠️ Debes añadir al menos una respuesta válida.");
+        return false;
+      }
+
+      const payload = {
+        command_name: cleanName,
+        template_type: templateType,
+        description: description || '',
+        responses: filteredResponses.map(r => r.trim())
+      };
+
+      const existing = chatCommands.find(c => c.command_name === cleanName);
+      
+      let error;
+      if (existing) {
+        const { error: err } = await supabase
+          .from('chat_commands')
+          .update(payload)
+          .eq('id', existing.id);
+        error = err;
+      } else {
+        const { error: err } = await supabase
+          .from('chat_commands')
+          .insert([payload]);
+        error = err;
+      }
+
+      if (error) throw error;
+
+      triggerToast("💾 Comando guardado con éxito.");
+      fetchChatCommands();
+      return true;
+    } catch (err) {
+      console.error(err);
+      triggerToast(`⚠️ Error al guardar comando: ${err.message}`);
+      return false;
+    }
+  };
+
+  const handleDeleteChatCommand = async (id) => {
+    showConfirm("¿Estás seguro de que deseas eliminar este comando de chat?", async () => {
+      try {
+        const { error } = await supabase
+          .from('chat_commands')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        
+        triggerToast("🗑️ Comando eliminado.");
+        fetchChatCommands();
+      } catch (err) {
+        console.error(err);
+        triggerToast("⚠️ Error al eliminar el comando.");
+      }
+      closeConfirm();
+    });
+  };
+
+  const handleClearQueue = () => {
+    showConfirm("¿Deseas limpiar toda la cola de reproducción? Se borrarán todas las canciones de la base de datos.", async () => {
+      try {
+        const { error } = await supabase
+          .from('song_requests')
+          .delete()
+          .neq('status', 'nonexistent_status_placeholder');
+
+        if (error) throw error;
+
+        setCurrentSong(null);
+        setSongRequests([]);
+        triggerToast("🧹 Cola de reproducción limpiada.");
+      } catch (err) {
+        console.error(err);
+        triggerToast("⚠️ Error al limpiar la cola.");
+      }
+      closeConfirm();
+    });
+  };
+
+  const handleManualAdd = async (e) => {
+    e.preventDefault();
+    if (!manualQuery.trim()) return;
+    try {
+      const song = await searchYouTube(manualQuery);
+      
+      // Determine if we need to auto-play (if queue and current are empty)
+      const isQueueEmpty = !currentSong && songRequests.length === 0;
+
+      const { error } = await supabase
+        .from('song_requests')
+        .insert([{ 
+          title: song.title, 
+          video_id: song.videoId, 
+          requested_by: sessionUsername || 'Streamer', 
+          status: isQueueEmpty ? 'playing' : 'pending',
+          played_at: isQueueEmpty ? new Date().toISOString() : null
+        }]);
+        
+      if (error) throw error;
+      setManualQuery('');
+      triggerToast("🎵 Canción añadida manualmente!");
+      // Update local state instantly
+      fetchSongs();
+    } catch (err) {
+      triggerToast(`⚠️ Error: ${err.message}`);
+    }
+  };
+  
+  const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || '');
+  const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || '');
+  const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || 'eviltokkii');
+  const [isBotConnected, setIsBotConnected] = useState(false);
+  const [botLogs, setBotLogs] = useState([]);
+  const [scheduledMessages, setScheduledMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('twitch_scheduled_messages_v2');
+      if (saved) return JSON.parse(saved);
+      
+      const legacy = localStorage.getItem('twitch_scheduled_messages');
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        return parsed.map((txt, idx) => ({
+          id: Date.now() + idx,
+          text: typeof txt === 'string' ? txt : (txt.text || ''),
+          intervalMs: typeof txt === 'object' && txt.intervalMs ? txt.intervalMs : 300000,
+          active: true
+        }));
+      }
+      return [
+        { id: 1, text: "¡Hola! Recuerda seguir el canal y activar las notificaciones. 🔔", intervalMs: 300000, active: true }
+      ];
+    } catch (e) {
+      return [
+        { id: 1, text: "¡Hola! Recuerda seguir el canal y activar las notificaciones. 🔔", intervalMs: 300000, active: true }
+      ];
+    }
+  });
+  const [newScheduledMessage, setNewScheduledMessage] = useState('');
+  const [newScheduledInterval, setNewScheduledInterval] = useState(5); // default 5 minutes
+  const [newScheduledMinChat, setNewScheduledMinChat] = useState(20); // default 20 chat messages
+  const [instantMessage, setInstantMessage] = useState('');
+  const [showInstantModal, setShowInstantModal] = useState(false);
+  const [editingMsg, setEditingMsg] = useState(null);
+  const [editingMsgText, setEditingMsgText] = useState('');
+  const [editingMsgInterval, setEditingMsgInterval] = useState(5);
+  const [editingMsgMinChat, setEditingMsgMinChat] = useState(20);
+
+  const wsRef = useRef(null);
+  const intervalsRef = useRef([]);
+  const userMessagesCountRef = useRef(0);
+
+  const addBotLog = (text) => {
+    const time = new Date().toLocaleTimeString();
+    setBotLogs(prev => [`[${time}] ${text}`, ...prev.slice(0, 99)]);
+  };
+
+  const connectTwitchBot = () => {
+    if (!botOauth || !botUsername || !botChannel) {
+      triggerToast("⚠️ Por favor rellena todos los campos de configuración del bot.");
+      return;
+    }
+    
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    
+    addBotLog("Conectando a Twitch IRC...");
+    
+    try {
+      const ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        addBotLog("¡Conectado a Twitch IRC WebSocket!");
+        setIsBotConnected(true);
+        
+        const formattedOauth = botOauth.startsWith('oauth:') ? botOauth : 'oauth:' + botOauth;
+        ws.send(`PASS ${formattedOauth}`);
+        ws.send(`NICK ${botUsername.toLowerCase()}`);
+        ws.send(`JOIN #${botChannel.toLowerCase()}`);
+        addBotLog(`Autenticación enviada para el bot ${botUsername} en el canal #${botChannel}`);
+      };
+
+      ws.onmessage = (event) => {
+        const rawMessage = event.data;
+        
+        if (rawMessage.startsWith("PING")) {
+          ws.send("PONG :tmi.twitch.tv");
+          addBotLog("PING recibido -> PONG enviado (Keep-alive)");
+          return;
+        }
+        
+        if (rawMessage.includes("PRIVMSG")) {
+          const match = rawMessage.match(/:([^!]+)![^@]+@[^\s]+\s+PRIVMSG\s+#[^\s]+\s+:(.*)/);
+          if (match) {
+            const user = match[1];
+            const text = match[2];
+            addBotLog(`Chat - ${user}: ${text}`);
+            if (user.toLowerCase() !== botUsername.toLowerCase()) {
+              userMessagesCountRef.current += 1;
+            }
+
+            // Song Request Command Parsers
+            const cmdPrefix = songRequestCommand.trim() + " ";
+            if (text.startsWith(cmdPrefix) || text.startsWith("!songrequest ")) {
+              const query = text.slice(text.startsWith(cmdPrefix) ? cmdPrefix.length : 13).trim();
+              handleSongRequest(query, user);
+            } else if (text === "!song" || text === "!currentsong") {
+              handleGetActiveSong();
+            } else if (text === "!skip") {
+              if (user.toLowerCase() === botChannel.toLowerCase() || user.toLowerCase() === botUsername.toLowerCase()) {
+                handleSkipSong();
+              }
+            } else {
+              // Custom Commands checking
+              const tokens = text.trim().split(/\s+/);
+              const cmdWord = tokens[0].toLowerCase();
+              const matchedCmd = chatCommands.find(c => c.command_name.toLowerCase() === cmdWord);
+              if (matchedCmd && matchedCmd.responses && matchedCmd.responses.length > 0) {
+                let target = tokens[1] || '';
+                if (target.startsWith('@')) {
+                  target = target.slice(1);
+                }
+                if (!target) {
+                  target = 'alguien';
+                }
+
+                // Choose a random response from options
+                const resps = matchedCmd.responses;
+                const rIndex = Math.floor(Math.random() * resps.length);
+                let messageTemplate = resps[rIndex];
+
+                // Versus helper logic
+                const isUserWinner = Math.random() < 0.5;
+                const winner = isUserWinner ? user : target;
+                const loser = isUserWinner ? target : user;
+
+                // Numbers logic
+                const percentage = Math.floor(Math.random() * 101);
+                const level = Math.floor(Math.random() * 101);
+
+                // Dynamic replacements
+                const finalMessage = messageTemplate
+                  .replace(/{user}/g, `@${user}`)
+                  .replace(/{caller}/g, `@${user}`)
+                  .replace(/{target}/g, `@${target}`)
+                  .replace(/{winner}/g, `@${winner}`)
+                  .replace(/{loser}/g, `@${loser}`)
+                  .replace(/{percentage}/g, `${percentage}`)
+                  .replace(/{level}/g, `${level}`);
+
+                enviarMensajeTwitch(finalMessage);
+              }
+            }
+          }
+        } else if (rawMessage.includes("366")) {
+          addBotLog(`¡Unido con éxito al chat del canal #${botChannel}!`);
+        } else if (rawMessage.includes("NOTICE") || rawMessage.includes("421") || rawMessage.includes("login failed")) {
+          addBotLog(`Twitch: ${rawMessage.trim()}`);
+        }
+      };
+
+      ws.onclose = () => {
+        setIsBotConnected(false);
+        addBotLog("Conexión con Twitch IRC cerrada.");
+      };
+
+      ws.onerror = (error) => {
+        addBotLog(`Error de WebSocket.`);
+      };
+    } catch (e) {
+      addBotLog(`Error al inicializar WebSocket: ${e.message}`);
+    }
+  };
+
+  const clearAllIntervals = () => {
+    if (intervalsRef.current) {
+      intervalsRef.current.forEach(timer => clearInterval(timer));
+      intervalsRef.current = [];
+    }
+  };
+
+  const disconnectTwitchBot = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    clearAllIntervals();
+    setIsBotConnected(false);
+    addBotLog("Bot desconectado manualmente.");
+  };
+
+  const enviarMensajeTwitch = (texto) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${texto}`);
+      addBotLog(`Mensaje enviado: ${texto}`);
+    } else {
+      addBotLog("Error: El WebSocket no está abierto. Conéctate primero.");
+      triggerToast("⚠️ Conéctate a Twitch primero.");
+    }
+  };
+
+  useEffect(() => {
+    clearAllIntervals();
+    userMessagesCountRef.current = 0;
+    
+    if (isBotConnected && scheduledMessages.length > 0) {
+      addBotLog("Iniciando programadores independientes con control de actividad...");
+      
+      scheduledMessages.forEach(msg => {
+        if (msg.active && msg.text && msg.intervalMs > 0) {
+          let lastSentCount = 0;
+          const threshold = msg.minChatMessages !== undefined ? msg.minChatMessages : 20;
+          
+          addBotLog(`Mensaje activo: "${msg.text.substring(0, 20)}..." cada ${msg.intervalMs / 60000} min (req. ${threshold} msgs de chat)`);
+          
+          const timer = setInterval(() => {
+            const currentCount = userMessagesCountRef.current;
+            if (currentCount - lastSentCount >= threshold) {
+              enviarMensajeTwitch(msg.text);
+              lastSentCount = currentCount;
+            } else {
+              addBotLog(`[Espera] Omitido: "${msg.text.substring(0, 15)}..." por poco tráfico (${currentCount - lastSentCount}/${threshold} mensajes recibidos)`);
+            }
+          }, msg.intervalMs);
+          intervalsRef.current.push(timer);
+        }
+      });
+    }
+    
+    return () => {
+      clearAllIntervals();
+    };
+  }, [isBotConnected, scheduledMessages, botChannel]);
+
+  useEffect(() => {
+    localStorage.setItem('twitch_bot_oauth', botOauth);
+  }, [botOauth]);
+
+  useEffect(() => {
+    localStorage.setItem('twitch_bot_username', botUsername);
+  }, [botUsername]);
+
+  useEffect(() => {
+    localStorage.setItem('twitch_bot_channel', botChannel);
+  }, [botChannel]);
+
+  useEffect(() => {
+    localStorage.setItem('twitch_scheduled_messages_v2', JSON.stringify(scheduledMessages));
+  }, [scheduledMessages]);
+
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      clearAllIntervals();
+    };
+  }, []);
+
   const [libraryItems, setLibraryItems] = useState([]); // Base de datos (Eventos/Sorteos)
   const [savedNews, setSavedNews] = useState([]); // Caché local para Noticias
 
@@ -496,16 +1315,20 @@ function App() {
       if (isAuthenticated && sessionEmail) {
         const { data, error } = await supabase
           .from('whitelist')
-          .select('username, permissions')
+          .select('*')
           .eq('email', sessionEmail)
-          .single();
+          .maybeSingle();
         
         if (!error && data) {
+          if (!data.approved) {
+            handleLogout();
+            return;
+          }
           if (!data.username) setNeedsUsername(true);
           else setSessionUsername(data.username);
           
-          setSessionPermissions(data.permissions || '*');
-          localStorage.setItem('builder_permissions', data.permissions || '*');
+          setSessionPermissions(data);
+          localStorage.setItem('builder_permissions', JSON.stringify(data));
         }
       }
     };
@@ -518,22 +1341,62 @@ function App() {
     setLoginError('');
     
     try {
+      const emailClean = loginEmail.trim().toLowerCase();
       const { data, error } = await supabase
         .from('whitelist')
-        .select('email, username, permissions')
-        .eq('email', loginEmail.trim().toLowerCase())
-        .single();
+        .select('*')
+        .eq('email', emailClean)
+        .maybeSingle();
         
-      if (error || !data) {
-        setLoginError('Vaya, este correo no parece tener permiso de acceso.');
+      if (error) {
+        console.error("Database error during login:", error);
+        setLoginError('Ocurrió un error al verificar tu acceso.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // If user is NOT in the whitelist, register them as pending approval
+      if (!data) {
+        const { error: insertError } = await supabase
+          .from('whitelist')
+          .insert([
+            {
+              email: emailClean,
+              approved: false,
+              access_news: false,
+              access_events: false,
+              access_giveaways: false,
+              access_participations: false,
+              access_twitch: false,
+              access_most_streamed: false,
+              access_scheduled_messages: false,
+              access_song_request: false,
+              access_commands: false,
+              access_reports: false
+            }
+          ]);
+          
+        if (insertError) {
+          console.error("Error creating whitelist request:", insertError);
+          setLoginError('No se pudo registrar tu solicitud de acceso.');
+        } else {
+          setLoginError('Tu correo ha sido registrado para aprobación. Por favor, espera a que el administrador apruebe tu acceso.');
+        }
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // If they are in the whitelist but NOT approved
+      if (!data.approved) {
+        setLoginError('Tu cuenta está pendiente de aprobación por el administrador.');
         setIsSubmitting(false);
         return;
       }
       
       localStorage.setItem('builder_email', data.email);
-      localStorage.setItem('builder_permissions', data.permissions || '*');
+      localStorage.setItem('builder_permissions', JSON.stringify(data));
       setSessionEmail(data.email);
-      setSessionPermissions(data.permissions || '*');
+      setSessionPermissions(data);
       
       if (!data.username) {
         setNeedsUsername(true);
@@ -664,6 +1527,8 @@ function App() {
   useEffect(() => {
     if (view === 'view_participations') {
       fetchParticipationsAndEvents();
+    } else if (view === 'view_reports') {
+      fetchUserReports();
     }
   }, [view]);
 
@@ -977,7 +1842,10 @@ function App() {
     setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
   };
 
-    if (!isAuthenticated || needsUsername) {
+    const params = new URLSearchParams(window.location.search);
+    const isOverlay = params.get('overlay') === 'true';
+
+    if ((!isAuthenticated || needsUsername) && !isOverlay) {
     return (
       <div className="login-view">
         <div className="login-card animate-slide-down">
@@ -1055,9 +1923,17 @@ function App() {
     );
   }
 
+  // Handle Overlay Route
+  const params2 = new URLSearchParams(window.location.search);
+  const isOverlay2 = params2.get('overlay') === 'true';
+
+  if (isOverlay2) {
+    return <SongRequestOverlay currentSong={currentSong} volume={playerVolume} onEnded={playNextSong} />;
+  }
+
   return (
     <div className="app-layout">
-      {view !== 'home' && <CloudflareImageGenerator />}
+      {view !== 'home' && view !== 'view_song_request' && view !== 'view_reports' && <CloudflareImageGenerator />}
       
       {toast.show && (
         <div 
@@ -1165,11 +2041,206 @@ function App() {
         </div>
       )}
 
+      {editingMsg && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(2, 6, 23, 0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000
+          }}
+        >
+          <div 
+            className="login-card animate-modal-in" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '500px', 
+              padding: '2rem', 
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+              margin: '0 20px',
+              textAlign: 'left'
+            }}
+          >
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <MessageSquare size={24} color="var(--primary)" />
+              {editingMsg.id === 'new' ? 'Nuevo Mensaje Programado' : 'Editar Mensaje Programado'}
+            </h2>
+            
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Texto del Mensaje</label>
+              <textarea 
+                className="form-control" 
+                rows={3}
+                placeholder="Escribe el contenido del mensaje automático..."
+                value={editingMsgText}
+                onChange={(e) => setEditingMsgText(e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Intervalo (Minutos)</label>
+              <input 
+                type="number" 
+                min="1"
+                className="form-control"
+                value={editingMsgInterval}
+                onChange={(e) => setEditingMsgInterval(Math.max(1, parseInt(e.target.value, 10)))}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Mínimo de mensajes de chat (otros usuarios)</label>
+              <input 
+                type="number" 
+                min="0"
+                className="form-control"
+                value={editingMsgMinChat}
+                onChange={(e) => setEditingMsgMinChat(Math.max(0, parseInt(e.target.value, 10)))}
+              />
+              <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                El mensaje se enviará si se ha alcanzado el tiempo programado Y además se han recibido esta cantidad de mensajes de chat de otros usuarios desde el envío anterior.
+              </small>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '2rem' }}>
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', flex: 1 }}
+                onClick={() => setEditingMsg(null)}
+              >
+                Cancelar
+              </button>
+              {editingMsg.id !== 'new' && (
+                <button 
+                  className="btn-submit" 
+                  style={{ background: '#ef4444', color: 'white', flex: 1 }}
+                  onClick={() => {
+                    setScheduledMessages(scheduledMessages.filter(m => m.id !== editingMsg.id));
+                    setEditingMsg(null);
+                  }}
+                >
+                  Eliminar
+                </button>
+              )}
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--primary)', color: 'white', flex: 1 }}
+                onClick={() => {
+                  if (editingMsgText.trim()) {
+                    if (editingMsg.id === 'new') {
+                      setScheduledMessages([
+                        ...scheduledMessages,
+                        {
+                          id: Date.now(),
+                          text: editingMsgText.trim(),
+                          intervalMs: editingMsgInterval * 60000,
+                          minChatMessages: editingMsgMinChat,
+                          active: true
+                        }
+                      ]);
+                    } else {
+                      setScheduledMessages(scheduledMessages.map(m => 
+                        m.id === editingMsg.id 
+                          ? { ...m, text: editingMsgText.trim(), intervalMs: editingMsgInterval * 60000, minChatMessages: editingMsgMinChat } 
+                          : m
+                      ));
+                    }
+                    setEditingMsg(null);
+                  }
+                }}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInstantModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(2, 6, 23, 0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000
+          }}
+        >
+          <div 
+            className="login-card animate-modal-in" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '500px', 
+              padding: '2rem', 
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+              margin: '0 20px',
+              textAlign: 'left'
+            }}
+          >
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Send size={24} color="var(--primary)" />
+              Enviar mensaje ahora
+            </h2>
+            
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Contenido del Mensaje</label>
+              <textarea 
+                className="form-control" 
+                rows={4}
+                placeholder="Escribe el mensaje que se enviará instantáneamente al chat..."
+                value={instantMessage}
+                onChange={(e) => setInstantMessage(e.target.value)}
+                style={{ resize: 'vertical' }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '2rem' }}>
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', flex: 1 }}
+                onClick={() => {
+                  setShowInstantModal(false);
+                  setInstantMessage('');
+                }}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--primary)', color: 'white', flex: 1 }}
+                onClick={() => {
+                  if (instantMessage.trim()) {
+                    enviarMensajeTwitch(instantMessage);
+                    setShowInstantModal(false);
+                    setInstantMessage('');
+                  }
+                }}
+              >
+                Enviar Mensaje
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SIDEBAR ZONE */}
-      {view !== 'home' && view !== 'view_most_streamed' && (() => {
+      {view !== 'home' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
+                           view === 'view_scheduled_messages' ? scheduledMessages :
+                           view === 'view_commands' ? chatCommands :
                            libraryItems.filter(item => {
                              const type = (item.tipo || '').toLowerCase().trim();
                              const currentType = (tipoItem || '').toLowerCase().trim();
@@ -1181,12 +2252,16 @@ function App() {
         const iconName = view === 'view_participations' ? <Users size={24} color="var(--primary)" /> :
                          view === 'view_twitch' ? <LayoutTemplate size={24} color="var(--primary)" /> :
                          view === 'create' ? <Newspaper size={24} color="var(--primary)" /> : 
+                         view === 'view_scheduled_messages' ? <MessageSquare size={24} color="var(--primary)" /> :
+                         view === 'view_commands' ? <Settings size={24} color="var(--primary)" /> :
                          tipoItem === 'sorteo' ? <Gift size={24} color="var(--primary)" /> : 
                          <Calendar size={24} color="var(--primary)" />;
 
         const titleText = view === 'view_participations' ? 'Librería de Eventos' :
                           view === 'view_twitch' ? 'Canjes por Tipo' :
                           view === 'create' ? 'Noticias' : 
+                          view === 'view_scheduled_messages' ? 'Mensajes Programados' :
+                          view === 'view_commands' ? 'Comandos Creados' :
                           tipoItem === 'sorteo' ? 'Sorteos' : 'Eventos';
 
         return (
@@ -1194,16 +2269,26 @@ function App() {
             <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {iconName}
-                <h2>{titleText} ({(activeList || []).length})</h2>
+                <h2 style={{ whiteSpace: 'nowrap', fontSize: '1.1rem', margin: 0 }}>{titleText} ({(activeList || []).length})</h2>
               </div>
               {view !== 'view_participations' && view !== 'view_twitch' && (
                 <button 
                   className="btn-add" 
-                  title={`Crear nuevo ${tipoItem}`}
+                  title={view === 'view_scheduled_messages' ? "Crear nuevo mensaje" : view === 'view_commands' ? "Crear nuevo comando" : `Crear nuevo ${tipoItem}`}
                   onClick={() => {
                     setEditingItemId(null);
                     if (view === 'create') {
                       setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
+                    } else if (view === 'view_scheduled_messages') {
+                      setEditingMsg({ id: 'new', text: '', intervalMs: 300000, active: true, minChatMessages: 20 });
+                      setEditingMsgText('');
+                      setEditingMsgInterval(5);
+                      setEditingMsgMinChat(20);
+                    } else if (view === 'view_commands') {
+                      setCmdFormName('');
+                      setCmdFormDesc('');
+                      setCmdFormType('versus');
+                      setCmdFormResponses(['']);
                     } else {
                       resetItemForm(tipoItem);
                     }
@@ -1215,7 +2300,7 @@ function App() {
               )}
             </div>
             <div className="sidebar-content">
-              {isLoadingLibrary && view !== 'create' ? (
+              {isLoadingLibrary && view !== 'create' && view !== 'view_scheduled_messages' ? (
                 <div className="empty-sidebar" style={{ opacity: 0.6, transition: 'opacity 0.2s' }}>
                   <div style={{ marginBottom: '10px' }}><LayoutTemplate size={40} /></div>
                   Cargando librería en vivo...
@@ -1226,40 +2311,74 @@ function App() {
                   Aún no hay registros de {titleText.toLowerCase()}.
                 </div>
               ) : (
-                (activeList || []).map(item => (
-                  <div 
-                    key={item.id} 
-                    className={`news-item animate-slide-down ${ (selectedEventId === item.id || selectedRewardName === item.id) ? 'active' : ''}`} 
-                    style={{ 
-                      cursor: 'pointer',
-                      borderLeft: (selectedEventId === item.id || selectedRewardName === item.id) ? '4px solid var(--primary)' : 'none',
-                      backgroundColor: (selectedEventId === item.id || selectedRewardName === item.id) ? 'var(--bg-card-hover)' : 'var(--bg-card)'
-                    }} 
-                    onClick={() => { 
-                      if (view === 'view_participations') {
-                        setSelectedEventId(item.id);
-                      } else if (view === 'view_twitch') {
-                        setSelectedRewardName(item.id);
-                      } else {
-                        handleEditItem(item.id, view === 'create' ? 'noticia' : null);
-                      }
-                    }}
-                  >
-                    {view !== 'view_participations' && view !== 'view_twitch' && (
-                      <button 
-                        className="btn-delete-news" 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
-                        title={view === 'create' ? "Eliminar" : "Eliminar de Supabase"}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                    <div className="news-item-title" style={{ paddingRight: '20px' }}>{item.titulo || item.title}</div>
-                    <div className="news-item-date" style={{ textTransform: 'capitalize' }}>
-                      {view === 'view_twitch' ? 'Categoría Twitch' : view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : (item.tipo || 'Objeto')} • {view === 'view_twitch' ? 'Activo' : new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}
+                (activeList || []).map(item => {
+                  const isActive = selectedEventId === item.id || 
+                                   selectedRewardName === item.id || 
+                                   (view === 'view_scheduled_messages' && editingMsg && editingMsg.id === item.id) ||
+                                   (view === 'view_commands' && cmdFormName === item.command_name);
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`news-item animate-slide-down ${isActive ? 'active' : ''}`} 
+                      style={{ 
+                        cursor: 'pointer',
+                        borderLeft: isActive ? '4px solid var(--primary)' : 'none',
+                        backgroundColor: isActive ? 'var(--bg-card-hover)' : 'var(--bg-card)'
+                      }} 
+                      onClick={() => { 
+                        if (view === 'view_participations') {
+                          setSelectedEventId(item.id);
+                        } else if (view === 'view_twitch') {
+                          setSelectedRewardName(item.id);
+                        } else if (view === 'view_scheduled_messages') {
+                          setEditingMsg(item);
+                          setEditingMsgText(item.text);
+                          setEditingMsgInterval(item.intervalMs / 60000);
+                          setEditingMsgMinChat(item.minChatMessages !== undefined ? item.minChatMessages : 20);
+                        } else if (view === 'view_commands') {
+                          setCmdFormName(item.command_name);
+                          setCmdFormType(item.template_type);
+                          setCmdFormDesc(item.description || '');
+                          setCmdFormResponses(item.responses);
+                        } else {
+                          handleEditItem(item.id, view === 'create' ? 'noticia' : null);
+                        }
+                      }}
+                    >
+                      {view !== 'view_participations' && view !== 'view_twitch' && (
+                        <button 
+                          className="btn-delete-news" 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            if (view === 'view_scheduled_messages') {
+                              setScheduledMessages(scheduledMessages.filter(m => m.id !== item.id));
+                              if (editingMsg && editingMsg.id === item.id) setEditingMsg(null);
+                            } else if (view === 'view_commands') {
+                              handleDeleteChatCommand(item.id);
+                            } else {
+                              handleDeleteItem(item.id); 
+                            }
+                          }}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                      <div className="news-item-title" style={{ paddingRight: '20px' }}>
+                        {item.titulo || item.title || item.text || item.command_name}
+                      </div>
+                      <div className="news-item-date" style={{ textTransform: 'capitalize' }}>
+                        {view === 'view_twitch' ? 'Categoría Twitch' : 
+                         view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : 
+                         view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
+                         view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
+                         (item.tipo || 'Objeto')} 
+                         {view !== 'view_twitch' && view !== 'view_commands' && ` • ${new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}`}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </aside>
@@ -1286,7 +2405,7 @@ function App() {
             
             <div className="dashboard-grid">
               <div 
-                className={`dashboard-card ${!hasAccess('news_only') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
                 onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
               >
                 <div className="icon-bg">
@@ -1297,7 +2416,7 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('events_only') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                className={`dashboard-card ${!hasAccess('events_only') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('create_content_item_event', 'events_only')}
               >
                 <div className="icon-bg">
@@ -1308,7 +2427,7 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('giveaways_only') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
+                className={`dashboard-card ${!hasAccess('giveaways_only') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('create_content_item_sorteo', 'giveaways_only')}
               >
                 <div className="icon-bg">
@@ -1319,8 +2438,8 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('admin') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('view_participations', 'admin')}
+                className={`dashboard-card ${!hasAccess('participations') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_participations', 'participations')}
               >
                 <div className="icon-bg">
                   <Users size={36} />
@@ -1330,27 +2449,75 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('admin') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
-                style={{ border: sessionPermissions === '*' || sessionPermissions === 'admin' ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_twitch', 'admin')}
+                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_twitch', 'twitch')}
               >
-                <div className="icon-bg" style={{ background: sessionPermissions === '*' || sessionPermissions === 'admin' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: sessionPermissions === '*' || sessionPermissions === 'admin' ? '#A855F7' : 'var(--primary)' }}>
+                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch') ? '#A855F7' : 'var(--primary)' }}>
                   <LayoutTemplate size={36} />
                 </div>
-                <h3 style={{ color: sessionPermissions === '*' || sessionPermissions === 'admin' ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
+                <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
                 <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('admin') && sessionPermissions !== '*' ? 'restricted' : ''}`} 
-                style={{ border: sessionPermissions === '*' || sessionPermissions === 'admin' ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_most_streamed', 'admin')}
+                className={`dashboard-card ${!hasAccess('most_streamed') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('most_streamed') ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_most_streamed', 'most_streamed')}
               >
-                <div className="icon-bg" style={{ background: sessionPermissions === '*' || sessionPermissions === 'admin' ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
+                <div className="icon-bg" style={{ background: hasAccess('most_streamed') ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
                   <Gamepad2 size={36} />
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Lo mas Streameable</h3>
                 <p>Gestiona los 6 juegos destacados que aparecen en la sección principal de la web.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('scheduled_messages') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('scheduled_messages') ? '1px solid rgba(59, 130, 246, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_scheduled_messages', 'scheduled_messages')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('scheduled_messages') ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
+                  <MessageSquare size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Mensajes programados</h3>
+                <p>Programa mensajes automatizados para el chat de Twitch de EvilTokkii.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('song_request') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('song_request') ? '1px solid rgba(245, 158, 11, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_song_request', 'song_request')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('song_request') ? 'rgba(245, 158, 11, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#F59E0B' }}>
+                  <Play size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Song Request</h3>
+                <p>Gestiona la cola de canciones pedidas por el chat y visualiza el reproductor.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('commands') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('commands') ? '1px solid rgba(16, 185, 129, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_commands', 'commands')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('commands') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
+                  <Settings size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
+                <p>Crea comandos personalizados y plantillas divertidas (ej: pelea) para tu chat de Twitch.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('reports') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('reports') ? '1px solid rgba(239, 68, 68, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_reports', 'reports')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#EF4444' }}>
+                  <AlertCircle size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
+                <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
               </div>
             </div>
           </div>
@@ -1699,6 +2866,841 @@ function App() {
               )}
             </div>
           </div>
+        ) : view === 'view_scheduled_messages' ? (
+          <div className="builder-view">
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Mensajes Programados (Twitch Bot)
+              </h1>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              
+              {/* Left Column: Configuration & Status */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="card animate-slide-down" style={{ animationDelay: '0.1s' }}>
+                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0 }}>
+                    <Settings size={20} />
+                    Configuración del Bot
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+                    Introduce los datos de tu cuenta bot de Twitch para poder interactuar en el chat.
+                  </p>
+
+                  <div className="form-group">
+                    <label className="form-label">Twitch OAuth Token</label>
+                    <input 
+                      type="password" 
+                      className="form-control" 
+                      placeholder="oauth:xxxx..."
+                      value={botOauth}
+                      onChange={(e) => setBotOauth(e.target.value)}
+                    />
+                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                      Consigue tu token en <a href="https://twitchtokengenerator.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>twitchtokengenerator.com</a>
+                    </small>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Usuario del Bot</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Nombre de la cuenta bot"
+                      value={botUsername}
+                      onChange={(e) => setBotUsername(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Canal de Destino</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Nombre del canal (ej: eviltokkii)"
+                      value={botChannel}
+                      onChange={(e) => setBotChannel(e.target.value)}
+                    />
+                  </div>
+
+
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    {!isBotConnected ? (
+                      <button 
+                        className="btn-submit" 
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#22C55E' }}
+                        onClick={connectTwitchBot}
+                      >
+                        <Play size={18} /> Conectar Bot
+                      </button>
+                    ) : (
+                      <button 
+                        className="btn-submit" 
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#EF4444' }}
+                        onClick={disconnectTwitchBot}
+                      >
+                        <Square size={18} /> Desconectar Bot
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="card animate-slide-down" style={{ animationDelay: '0.2s' }}>
+                  <button 
+                    className="btn-submit" 
+                    style={{ width: '100%', padding: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '1.1rem', background: 'var(--primary)' }}
+                    onClick={() => {
+                      if (!isBotConnected) {
+                        triggerToast("⚠️ Conéctate a Twitch primero.");
+                      } else {
+                        setShowInstantModal(true);
+                      }
+                    }}
+                  >
+                    <Send size={20} /> Enviar mensaje ahora
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Scheduled Messages & Logs */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+
+                <div className="card animate-slide-down" style={{ animationDelay: '0.2s', height: '475px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                      Consola de Eventos
+                    </h2>
+                    <button 
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}
+                      onClick={() => setBotLogs([])}
+                    >
+                      Limpiar consola
+                    </button>
+                  </div>
+                  
+                  <div style={{ 
+                    background: '#0F172A', 
+                    border: '1px solid var(--border-color)', 
+                    borderRadius: '8px', 
+                    padding: '12px', 
+                    fontFamily: 'monospace', 
+                    fontSize: '0.85rem', 
+                    color: '#38BDF8', 
+                    height: '370px', 
+                    overflowY: 'auto',
+                    boxSizing: 'border-box'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '4px' }}>
+                      {botLogs.map((log, index) => (
+                        <div key={index} style={{ whiteSpace: 'pre-wrap' }}>{log}</div>
+                      ))}
+                    </div>
+                    {botLogs.length === 0 && (
+                      <div style={{ color: '#64748B', fontStyle: 'italic' }}>Esperando eventos del bot de Twitch...</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        ) : view === 'view_commands' ? (
+          <div className="builder-view" style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Creador de Comandos
+              </h1>
+            </div>
+
+            <div className="card animate-slide-down" style={{ animationDelay: '0.15s', margin: 0 }}>
+              <h2 style={{ color: 'var(--primary)', marginTop: 0, fontSize: '1.25rem' }}>
+                Configurar Comando
+              </h2>
+              
+              <div className="form-group">
+                <label className="form-label">Nombre del Comando (Ej: !pelea o !abrazo)</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Escribe el comando iniciando con !"
+                  value={cmdFormName}
+                  onChange={(e) => setCmdFormName(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Descripción del Comando</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Para qué sirve el comando..."
+                  value={cmdFormDesc}
+                  onChange={(e) => setCmdFormDesc(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tipo de Plantilla Interactiva</label>
+                <select 
+                  className="form-control"
+                  value={cmdFormType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCmdFormType(val);
+                    // Autofill template responses
+                    if (val === 'versus') {
+                      setCmdFormResponses(["{user} reta a {target} a una dura pelea de espadas. ¡Tras chocar acero, {winner} vence heroicamente dejando a {loser} en el suelo!"]);
+                    } else if (val === 'action') {
+                      setCmdFormResponses(["{user} le da un fuerte y cálido abrazo a {target}! <3"]);
+                    } else if (val === 'random') {
+                      setCmdFormResponses(["Sí, definitivamente.", "No, no lo creo.", "Tal vez, pregunta de nuevo.", "Es muy probable!"]);
+                    } else if (val === 'love') {
+                      setCmdFormResponses(["¡El termómetro del amor dice que {user} y {target} son un {percentage}% compatibles! ❤️"]);
+                    } else if (val === 'roulette') {
+                      setCmdFormResponses(["🔫 {user} jala del gatillo... ¡CLIC! El tambor gira y el arma no se dispara. Te has salvado. 😌", "🔫 {user} jala del gatillo... ¡BANG! El arma se dispara y caes eliminado del combate. 💀"]);
+                    } else if (val === 'level') {
+                      setCmdFormResponses(["Escaneando a {target}... ¡Nivel de toxicidad detectado: {level}%! ☢️", "Escaneando a {target}... ¡Nivel de guapeza detectado: {level}%! 😎"]);
+                    }
+                  }}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '10px' }}
+                >
+                  <option value="versus">⚔️ Versus (Pelea / Duelo con Ganador Aleatorio)</option>
+                  <option value="action">❤️ Acción Simple (Abrazo / Saludo entre usuarios)</option>
+                  <option value="random">🔮 Decisión Aleatoria (8ball / Respuestas aleatorias)</option>
+                  <option value="love">💖 Medidor de Amor (Porcentaje de afinidad entre usuarios)</option>
+                  <option value="roulette">🔫 Ruleta Rusa (Tensión y supervivencia con frases aleatorias)</option>
+                  <option value="level">📊 Medidor de Nivel (Estadísticas locas 0-100%)</option>
+                </select>
+              </div>
+
+              {/* Variables Helper Box */}
+              <div style={{ 
+                background: 'rgba(168, 85, 247, 0.05)', 
+                border: '1px dashed rgba(168, 85, 247, 0.2)', 
+                borderRadius: '8px', 
+                padding: '12px', 
+                marginBottom: '15px', 
+                fontSize: '0.8rem', 
+                color: 'var(--text-muted)',
+                lineHeight: '1.4'
+              }}>
+                <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>Variables disponibles para la frase:</strong>
+                {cmdFormType === 'versus' && (
+                  <>
+                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El streamer o usuario que envía el comando.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: La persona que fue etiquetada tras el comando.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{winner}"}</code>: Ganador del duelo elegido de forma aleatoria (50% de probabilidad).<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{loser}"}</code>: Perdedor del duelo (el que no salió elegido ganador).
+                  </>
+                )}
+                {cmdFormType === 'action' && (
+                  <>
+                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que envía el comando.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: La persona etiquetada que recibe la acción.
+                  </>
+                )}
+                {cmdFormType === 'random' && (
+                  <>
+                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que consulta al bot.<br />
+                    Escribe múltiples respuestas abajo y el bot elegirá una de ellas al azar para responder a la pregunta.
+                  </>
+                )}
+                {cmdFormType === 'love' && (
+                  <>
+                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que envía el comando.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: La pareja o persona elegida.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{percentage}"}</code>: Porcentaje aleatorio entre 0% y 100%.
+                  </>
+                )}
+                {cmdFormType === 'roulette' && (
+                  <>
+                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El valiente que arriesga su vida en el chat.<br />
+                    Escribe los resultados (ej: uno de salvado y otro de eliminado) en la lista de frases posibles.
+                  </>
+                )}
+                {cmdFormType === 'level' && (
+                  <>
+                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que realiza el escaneo.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: El usuario analizado.<br />
+                    • <code style={{ color: '#E9D5FF' }}>{"{level}"}</code>: Porcentaje del nivel medido (0-100%).
+                  </>
+                )}
+              </div>
+
+              {/* Responses list */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Frases / Respuestas posibles</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setCmdFormResponses([...cmdFormResponses, ''])}
+                    style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                  >
+                    + Añadir Frase
+                  </button>
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {cmdFormResponses.map((resp, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '8px' }}>
+                      <textarea 
+                        className="form-control" 
+                        placeholder="Escribe la frase utilizando las variables..."
+                        value={resp}
+                        onChange={(e) => {
+                          const newResps = [...cmdFormResponses];
+                          newResps[i] = e.target.value;
+                          setCmdFormResponses(newResps);
+                        }}
+                        rows={2}
+                        style={{ flex: 1, resize: 'vertical', minHeight: '55px', fontSize: '0.85rem', padding: '8px' }}
+                      />
+                      {cmdFormResponses.length > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => setCmdFormResponses(cmdFormResponses.filter((_, idx) => idx !== i))}
+                          style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0 10px', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                          X
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button 
+                  type="button" 
+                  className="btn-submit" 
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', marginTop: 0 }}
+                  onClick={() => {
+                    setCmdFormName('');
+                    setCmdFormDesc('');
+                    setCmdFormType('versus');
+                    setCmdFormResponses(['']);
+                  }}
+                >
+                  Limpiar
+                </button>
+                <button 
+                  type="button" 
+                  className="btn-submit"
+                  style={{ marginTop: 0 }}
+                  onClick={async () => {
+                    const success = await handleSaveChatCommand(cmdFormName, cmdFormType, cmdFormDesc, cmdFormResponses);
+                    if (success) {
+                      setCmdFormName('');
+                      setCmdFormDesc('');
+                      setCmdFormResponses(['']);
+                    }
+                  }}
+                >
+                  Guardar Comando
+                </button>
+              </div>
+
+            </div>
+          </div>
+        ) : view === 'view_reports' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Bandeja de Reportes Web
+              </h1>
+            </div>
+
+            <div className="card animate-slide-down" style={{ padding: '20px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {['todos', 'bug', 'sugerencia', 'cambio'].map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      className={`btn-add ${reportFilter === type ? 'active' : ''}`}
+                      onClick={() => setReportFilter(type)}
+                      style={{
+                        padding: '6px 12px',
+                        background: reportFilter === type ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
+                        border: reportFilter === type ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: 'var(--text-main)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        textTransform: 'capitalize'
+                      }}
+                    >
+                      {type === 'todos' ? 'Todos' : type === 'bug' ? '🐛 Bugs' : type === 'sugerencia' ? '💡 Sugerencias' : '🔄 Cambios'}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Buscar en descripción..."
+                    value={reportSearch}
+                    onChange={(e) => setReportSearch(e.target.value)}
+                    style={{ width: '250px', margin: 0, padding: '6px 12px', fontSize: '0.9rem' }}
+                  />
+                  <button
+                    onClick={fetchUserReports}
+                    className="btn-submit"
+                    style={{ width: 'auto', padding: '6px 16px', margin: 0 }}
+                    disabled={loadingReports}
+                  >
+                    {loadingReports ? 'Cargando...' : 'Actualizar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {loadingReports ? (
+              <div className="card text-center" style={{ padding: '40px' }}>
+                <p style={{ color: 'var(--text-muted)' }}>Cargando reportes desde la base de datos...</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                {userReports
+                  .filter(r => reportFilter === 'todos' || r.report_type === reportFilter)
+                  .filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase()))
+                  .map((report) => (
+                    <div 
+                      key={report.id} 
+                      className="card animate-slide-down" 
+                      style={{ 
+                        padding: '20px', 
+                        borderLeft: `5px solid ${
+                          report.report_type === 'bug' ? '#EF4444' : 
+                          report.report_type === 'sugerencia' ? '#10B981' : 
+                          '#F59E0B'
+                        }`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            textTransform: 'uppercase',
+                            background: report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                            color: report.report_type === 'bug' ? '#EF4444' : report.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
+                            border: `1px solid ${report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                          }}>
+                            {report.report_type === 'bug' ? '🐛 Bug' : report.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
+                          </span>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            ID Usuario: <code style={{ color: 'var(--text-main)', background: 'rgba(255,255,255,0.05)', padding: '2px 4px', borderRadius: '4px' }} title={report.user_id}>{report.user_id.substring(0, 8)}...</code>
+                          </span>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {new Date(report.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <button
+                          className="btn-delete-news"
+                          onClick={() => handleDeleteReport(report.id)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            color: '#EF4444',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Eliminar Reporte"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: 'var(--text-main)', 
+                        background: 'rgba(15, 23, 42, 0.3)', 
+                        padding: '12px 16px', 
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.03)',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.5'
+                      }}>
+                        {report.description}
+                      </div>
+                    </div>
+                  ))}
+
+                {userReports.filter(r => reportFilter === 'todos' || r.report_type === reportFilter).filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase())).length === 0 && (
+                  <div className="card text-center" style={{ padding: '30px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    No se encontraron reportes que coincidan con la búsqueda o filtro.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : view === 'view_song_request' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Song Request Widget (Twitch)
+              </h1>
+            </div>
+
+            {/* Top Row: 3 equal-height Columns */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px', alignItems: 'stretch' }}>
+              
+              {/* Column 1: Player Card */}
+              <div className="card animate-slide-down" style={{ animationDelay: '0.1s', display: 'flex', flexDirection: 'column', margin: 0, justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, fontSize: '1.25rem' }}>
+                    <Play size={18} />
+                    Reproductor Activo
+                  </h2>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isPlayerEnabledInDashboard} 
+                        onChange={(e) => setIsPlayerEnabledInDashboard(e.target.checked)}
+                      />
+                      Reproducir en este panel
+                    </label>
+                  </div>
+
+                  {currentSong ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ 
+                        height: isPlayerEnabledInDashboard ? '150px' : '50px', 
+                        background: '#000', 
+                        borderRadius: '8px', 
+                        overflow: 'hidden', 
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '1px solid rgba(168, 85, 247, 0.2)'
+                      }}>
+                        {isPlayerEnabledInDashboard ? (
+                          <YoutubePlayer videoId={currentSong.video_id} onEnded={playNextSong} volume={playerVolume} isPlaying={currentSong.is_playing !== false} />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            <Wifi size={14} color="#22C55E" />
+                            {currentSong.is_playing !== false ? 'Reproduciendo en OBS' : 'Pausado en OBS'}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minWidth: 0 }}>
+                        <div style={{ overflow: 'hidden', marginRight: '5px', minWidth: 0, flex: 1 }}>
+                          <h4 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {currentSong.title}
+                          </h4>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Por: <strong>@{currentSong.requested_by}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Playback Control Bar */}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', marginTop: '5px' }}>
+                        <button 
+                          onClick={handleTogglePlayPause}
+                          style={{
+                            background: 'var(--primary)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 10px rgba(168, 85, 247, 0.3)'
+                          }}
+                          title={currentSong.is_playing !== false ? "Pausar" : "Reproducir"}
+                        >
+                          {currentSong.is_playing !== false ? <Pause size={18} /> : <Play size={18} />}
+                        </button>
+
+                        <button 
+                          onClick={handleSkipSong}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer'
+                          }}
+                          title="Siguiente Canción"
+                        >
+                          <SkipForward size={18} />
+                        </button>
+                      </div>
+
+                      {/* Volume Slider */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          value={playerVolume} 
+                          onChange={(e) => setPlayerVolume(Number(e.target.value))} 
+                          style={{ flex: 1, accentColor: 'var(--primary)', height: '4px' }}
+                        />
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, width: '25px', textAlign: 'right' }}>{playerVolume}%</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      padding: '20px 10px', 
+                      textAlign: 'center', 
+                      background: 'rgba(15, 23, 42, 0.3)', 
+                      borderRadius: '8px', 
+                      border: '1px dashed var(--border-color)',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.8rem'
+                    }}>
+                      Sin reproducción activa.
+                      <button 
+                        className="btn-add" 
+                        onClick={playNextSong}
+                        style={{ margin: '8px auto 0 auto', display: 'block', height: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}
+                        disabled={songRequests.length === 0}
+                      >
+                        Iniciar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 2: OBS Setup Card */}
+              <div className="card animate-slide-down" style={{ 
+                animationDelay: '0.2s', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                margin: 0, 
+                justifyContent: 'space-between'
+              }}>
+                <div>
+                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 0, fontSize: '1.25rem' }}>
+                    <LayoutTemplate size={18} />
+                    Integración OBS
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4', marginBottom: '8px' }}>
+                    Para reproducir el audio en directo y mostrar el widget animado:
+                  </p>
+                  <ol style={{ color: 'var(--text-muted)', fontSize: '0.8rem', paddingLeft: '18px', margin: '0 0 10px 0', lineHeight: '1.4' }}>
+                    <li style={{ marginBottom: '4px' }}>Copia la URL: <code style={{ color: '#E9D5FF', background: 'rgba(168, 85, 247, 0.1)', padding: '2px 4px', borderRadius: '4px', display: 'inline-block', fontSize: '0.7rem', wordBreak: 'break-all', marginTop: '1px' }}>{`${window.location.origin}/?overlay=true`}</code></li>
+                    <li style={{ marginBottom: '4px' }}>En OBS, añade una fuente de <strong>Navegador</strong>.</li>
+                    <li>Activa <strong>"Controlar audio mediante OBS"</strong>.</li>
+                  </ol>
+                  <div className="form-group" style={{ marginTop: '10px' }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '2px', display: 'block' }}>Comando personalizado chat</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Ej: !sr o !pedir"
+                      value={songRequestCommand}
+                      onChange={(e) => setSongRequestCommand(e.target.value)}
+                      style={{ fontSize: '0.8rem', padding: '6px' }}
+                    />
+                  </div>
+                </div>
+                <button 
+                  className="btn-add"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/?overlay=true`);
+                    triggerToast("📋 Enlace copiado al portapapeles");
+                  }}
+                  style={{ width: '100%', height: 'auto', padding: '8px', fontSize: '0.8rem', marginTop: '10px' }}
+                >
+                  <Copy size={14} /> Copiar URL del Widget
+                </button>
+                <button 
+                  className="btn-submit"
+                  onClick={handleReloadOBS}
+                  style={{ width: '100%', height: 'auto', padding: '8px', fontSize: '0.8rem', marginTop: '10px', background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', border: '1px solid rgba(168, 85, 247, 0.2)' }}
+                >
+                  Forzar Recarga de OBS
+                </button>
+              </div>
+
+              {/* Column 3: Manual Add Card */}
+              <div className="card animate-slide-down" style={{ animationDelay: '0.15s', display: 'flex', flexDirection: 'column', margin: 0, justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 0, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>
+                    <Plus size={18} />
+                    Añadir Manualmente
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4', marginBottom: '10px' }}>
+                    Introduce el nombre de la canción o pega el link de YouTube directamente:
+                  </p>
+                  <form onSubmit={handleManualAdd} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Canción o URL de YouTube..."
+                      value={manualQuery}
+                      onChange={(e) => setManualQuery(e.target.value)}
+                      style={{ fontSize: '0.85rem', padding: '8px' }}
+                    />
+                    <button type="submit" className="btn-submit" style={{ width: '100%', marginTop: '5px', padding: '8px', fontSize: '0.85rem' }}>
+                      Añadir a la Cola
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Bottom Row: Song Queue (Full Width, Fixed Height) */}
+            <div className="card animate-slide-down" style={{ 
+              animationDelay: '0.25s', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              height: '350px',
+              margin: 0
+            }}>
+              <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 0, fontSize: '1.25rem', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <List size={18} />
+                  Cola de Reproducción ({songRequests.length})
+                </div>
+                {songRequests.length > 0 && (
+                  <button 
+                    onClick={handleClearQueue}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      color: '#EF4444',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      height: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    title="Limpiar toda la cola"
+                  >
+                    <Trash2 size={14} /> Limpiar Cola
+                  </button>
+                )}
+              </h2>
+              
+              <div style={{ 
+                flex: 1, 
+                overflowY: 'auto', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '8px',
+                paddingRight: '5px',
+                marginTop: '10px'
+              }}>
+                {allSongs.map((song, index) => {
+                  const isPlaying = song.status === 'playing';
+                  const isDone = song.status === 'played' || song.status === 'skipped';
+                  
+                  return (
+                    <div key={song.id} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      background: isPlaying ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      borderRadius: '6px',
+                      border: isPlaying ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+                      minWidth: 0,
+                      opacity: isDone ? 0.5 : 1
+                    }}>
+                      <div style={{ overflow: 'hidden', marginRight: '8px', minWidth: 0, flex: 1 }}>
+                        <div style={{ 
+                          fontSize: '0.85rem', 
+                          fontWeight: 600, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          textDecoration: isDone ? 'line-through' : 'none'
+                        }}>
+                          {index + 1}. {song.title}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          Por: @{song.requested_by} • <span style={{ textTransform: 'uppercase', fontSize: '0.65rem', color: isPlaying ? '#A855F7' : '#94A3B8' }}>{song.status}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                        {!isPlaying && (
+                          <button 
+                            onClick={() => handlePlaySpecificSong(song)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#22C55E',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title="Reproducir ahora"
+                          >
+                            <Play size={14} />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDeleteSongFromQueue(song.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#EF4444',
+                            cursor: 'pointer',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                          title="Eliminar de la cola"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {songRequests.length === 0 && (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', padding: '15px', fontSize: '0.8rem' }}>
+                    No hay canciones pendientes en la cola. ¡Usa tu comando en el chat para pedir canciones!
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="builder-view">
             <div className="builder-header animate-slide-down">
@@ -1847,5 +3849,192 @@ function App() {
     </div>
   );
 }
+
+// YouTube Iframe Player Wrapper Component
+const YoutubePlayer = ({ videoId, onEnded, volume = 50, isPlaying = true }) => {
+  const playerRef = useRef(null);
+  const containerId = useRef(`yt-player-${Math.random().toString(36).substr(2, 9)}`);
+
+  useEffect(() => {
+    let player;
+    const initPlayer = () => {
+      player = new window.YT.Player(containerId.current, {
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          autoplay: isPlaying ? 1 : 0,
+          controls: 1,
+          modestbranding: 1,
+          rel: 0
+        },
+        events: {
+          onReady: (event) => {
+            event.target.setVolume(volume);
+            if (isPlaying) {
+              event.target.playVideo();
+            } else {
+              event.target.pauseVideo();
+            }
+          },
+          onStateChange: (event) => {
+            if (event.data === 0) { // YT.PlayerState.ENDED is 0
+              onEnded();
+            }
+          }
+        }
+      });
+      playerRef.current = player;
+    };
+
+    if (window.YT && window.YT.Player) {
+      initPlayer();
+    } else {
+      window.onYouTubeIframeAPIReady = () => {
+        initPlayer();
+      };
+    }
+
+    return () => {
+      if (player) {
+        try {
+          player.destroy();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+  }, [videoId]);
+
+  useEffect(() => {
+    if (playerRef.current && typeof playerRef.current.setVolume === 'function') {
+      playerRef.current.setVolume(volume);
+    }
+  }, [volume]);
+
+  useEffect(() => {
+    if (playerRef.current) {
+      if (isPlaying && typeof playerRef.current.playVideo === 'function') {
+        playerRef.current.playVideo();
+      } else if (!isPlaying && typeof playerRef.current.pauseVideo === 'function') {
+        playerRef.current.pauseVideo();
+      }
+    }
+  }, [isPlaying]);
+
+  return <div style={{ width: '100%', height: '100%' }} id={containerId.current}></div>;
+};
+
+// Sleek Stream overlay widget for OBS browser source
+const SongRequestOverlay = ({ currentSong, volume, onEnded }) => {
+  const isPlaying = currentSong ? (currentSong.is_playing !== false) : false;
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('obs_reload_channel')
+      .on('broadcast', { event: 'reload_widget' }, () => {
+        window.location.reload(true); // force reload bypassing cache
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  return (
+    <div style={{
+      width: '100vw',
+      height: '100vh',
+      background: 'transparent',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      overflow: 'hidden',
+      fontFamily: 'system-ui, sans-serif',
+      color: '#fff',
+      padding: '20px',
+      boxSizing: 'border-box'
+    }}>
+      {currentSong && (
+        <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0.01, pointerEvents: 'none' }}>
+          <YoutubePlayer videoId={currentSong.video_id} onEnded={onEnded} volume={volume} isPlaying={isPlaying} />
+        </div>
+      )}
+      
+      {currentSong ? (
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(168, 85, 247, 0.4)',
+          borderRadius: '16px',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(168, 85, 247, 0.2)',
+          maxWidth: '450px',
+          animation: 'slideIn 0.5s ease-out'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            overflow: 'hidden',
+            border: '2px solid #A855F7',
+            animation: isPlaying ? 'spin 10s linear infinite' : 'none',
+            flexShrink: 0,
+            background: '#000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <img 
+              src={`https://img.youtube.com/vi/${currentSong.video_id}/mqdefault.jpg`} 
+              alt="cover" 
+              style={{ width: '140%', height: '140%', objectFit: 'cover' }} 
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
+            <span style={{ fontSize: '0.8rem', color: '#A855F7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              {isPlaying ? 'Sonando ahora' : 'Pausado'}
+            </span>
+            <span style={{ fontSize: '1.05rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentSong.title}</span>
+            <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Pedida por: <strong style={{ color: '#E9D5FF' }}>@{currentSong.requested_by}</strong></span>
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.5)',
+          backdropFilter: 'blur(8px)',
+          border: '1px dashed rgba(148, 163, 184, 0.3)',
+          borderRadius: '16px',
+          padding: '16px 24px',
+          fontSize: '0.9rem',
+          color: '#94A3B8',
+          animation: 'pulse 2s infinite'
+        }}>
+          Sin canciones en cola. ¡Usa tu comando en el chat!
+        </div>
+      )}
+      
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 1; }
+          100% { opacity: 0.6; }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 export default App;
