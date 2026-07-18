@@ -2,7 +2,7 @@
 -- Ejecuta esto en el SQL Editor de tu Dashboard de Supabase.
 
 CREATE TABLE IF NOT EXISTS public.minigames_content (
-    game_type VARCHAR PRIMARY KEY, -- 'overwatch', 'dbd', 'flags', 'games', 'scramble', 'music'
+    game_type VARCHAR PRIMARY KEY, -- 'overwatch', 'dbd', 'flags', 'games', 'scramble', 'music', 'disney'
     data JSONB NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
