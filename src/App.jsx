@@ -32,7 +32,7 @@ function getDbdPerkImageUrl(apiPath) {
   const rawBaseName = parts[parts.length - 1].replace('.png', ''); // e.g. iconPerks_Terminus
   
   if (DOWNLOADED_PERKS.has(rawBaseName)) {
-    return `/Imagenes/Perks/${rawBaseName}.png`;
+    return `Imagenes/Perks/${rawBaseName}.png`;
   }
 
   let baseName = rawBaseName;
