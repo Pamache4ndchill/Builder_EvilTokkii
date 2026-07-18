@@ -1,31 +1,35 @@
--- 1. Crear la tabla 'user_reports'
+-- Script SQL para la tabla de Reportes de Usuario (user_reports)
+-- Ejecutar en el Editor SQL de Supabase
+
+-- 1. Crear la tabla si no existe (con soporte para imágenes)
 CREATE TABLE IF NOT EXISTS public.user_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    report_type TEXT NOT NULL CHECK (report_type IN ('bug', 'sugerencia', 'cambio')),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    report_type VARCHAR(50) NOT NULL, -- 'bug', 'sugerencia', 'cambio'
     description TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    images JSONB DEFAULT '[]'::jsonb, -- Array de URLs de imágenes en Cloudflare R2
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Habilitar la seguridad a nivel de fila (Row Level Security - RLS)
+-- 2. Habilitar RLS (Row Level Security)
 ALTER TABLE public.user_reports ENABLE ROW LEVEL SECURITY;
 
--- 3. Crear Políticas de Seguridad RLS
-
--- Permitir insertar sus propios reportes a usuarios autenticados
-CREATE POLICY "Permitir insertar reportes a usuarios autenticados" 
+-- 3. Política para permitir a usuarios autenticados insertar sus propios reportes
+DROP POLICY IF EXISTS "Users can insert their own reports" ON public.user_reports;
+CREATE POLICY "Users can insert their own reports" 
 ON public.user_reports 
 FOR INSERT 
 TO authenticated 
 WITH CHECK (auth.uid() = user_id);
 
--- Permitir a los usuarios visualizar sus propios reportes enviados
-CREATE POLICY "Permitir ver sus propios reportes" 
+-- 4. Política para permitir a usuarios autenticados leer únicamente sus propios reportes
+DROP POLICY IF EXISTS "Users can view their own reports" ON public.user_reports;
+CREATE POLICY "Users can view their own reports" 
 ON public.user_reports 
 FOR SELECT 
 TO authenticated 
 USING (auth.uid() = user_id);
 
--- 4. Otorgar permisos a los roles de la API de Supabase
+-- 5. Otorgar permisos a los roles de la API de Supabase
 GRANT ALL ON public.user_reports TO authenticated;
 GRANT ALL ON public.user_reports TO service_role;

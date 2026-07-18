@@ -440,6 +440,8 @@ function App() {
       switch (requiredPermission) {
         case 'news_only':
           return !!sessionPermissions.access_news;
+        case 'events_and_giveaways':
+          return !!(sessionPermissions.access_events || sessionPermissions.access_giveaways);
         case 'events_only':
           return !!sessionPermissions.access_events;
         case 'giveaways_only':
@@ -482,6 +484,9 @@ function App() {
         setView('create_content_item');
       } else if (targetView === 'create_content_item_sorteo') {
         resetItemForm('sorteo');
+        setView('create_content_item');
+      } else if (targetView === 'create_content_item') {
+        resetItemForm('evento');
         setView('create_content_item');
       } else {
         setView(targetView);
@@ -1283,7 +1288,9 @@ function App() {
     imagen: '',
     estado: 'proximo',
     premios: '',
-    normas: []
+    normas: [],
+    requiere_participacion: true,
+    fecha_fin: ''
   });
   const [tipoItem, setTipoItem] = useState('evento');
   const [newNorma, setNewNorma] = useState('');
@@ -1642,7 +1649,18 @@ function App() {
     setEditingItemId(null);
     setTipoItem(tipo);
     setNewNorma('');
-    setItemData({ titulo: '', descripcion: '', detalles: '', fecha: '', imagen: '', estado: 'proximo', premios: '', normas: [] });
+    setItemData({ 
+      titulo: '', 
+      descripcion: '', 
+      detalles: '', 
+      fecha: '', 
+      imagen: '', 
+      estado: 'proximo', 
+      premios: '', 
+      normas: [],
+      requiere_participacion: true,
+      fecha_fin: ''
+    });
   };
 
   const handleEditItem = async (id, itemTypeHint = null) => {
@@ -1684,7 +1702,9 @@ function App() {
       imagen: itemData.imagen || '',
       estado: itemData.estado || 'proximo',
       premios: itemData.premios || '',
-      normas: itemData.normas || []
+      normas: itemData.normas || [],
+      requiere_participacion: itemData.requiere_participacion !== false,
+      fecha_fin: itemData.fecha_fin ? itemData.fecha_fin.substring(0, 16) : ''
     });
     setNewNorma('');
     setView('create_content_item');
@@ -1754,7 +1774,9 @@ function App() {
       imagen: itemData.imagen,
       estado: itemData.estado,
       premios: itemData.premios,
-      normas: itemData.normas
+      normas: itemData.normas,
+      requiere_participacion: itemData.requiere_participacion,
+      fecha_fin: itemData.fecha_fin ? new Date(itemData.fecha_fin).toISOString() : null
     };
 
     if (editingItemId) {
@@ -1933,7 +1955,7 @@ function App() {
 
   return (
     <div className="app-layout">
-      {view !== 'home' && view !== 'view_song_request' && view !== 'view_reports' && <CloudflareImageGenerator />}
+      {view === 'create' && <CloudflareImageGenerator />}
       
       {toast.show && (
         <div 
@@ -2242,6 +2264,7 @@ function App() {
                            view === 'view_scheduled_messages' ? scheduledMessages :
                            view === 'view_commands' ? chatCommands :
                            libraryItems.filter(item => {
+                             if (view === 'create_content_item') return true;
                              const type = (item.tipo || '').toLowerCase().trim();
                              const currentType = (tipoItem || '').toLowerCase().trim();
                              if (currentType === 'sorteo') return type === 'sorteo';
@@ -2254,6 +2277,7 @@ function App() {
                          view === 'create' ? <Newspaper size={24} color="var(--primary)" /> : 
                          view === 'view_scheduled_messages' ? <MessageSquare size={24} color="var(--primary)" /> :
                          view === 'view_commands' ? <Settings size={24} color="var(--primary)" /> :
+                         view === 'create_content_item' ? <LayoutTemplate size={24} color="var(--primary)" /> :
                          tipoItem === 'sorteo' ? <Gift size={24} color="var(--primary)" /> : 
                          <Calendar size={24} color="var(--primary)" />;
 
@@ -2262,6 +2286,7 @@ function App() {
                           view === 'create' ? 'Noticias' : 
                           view === 'view_scheduled_messages' ? 'Mensajes Programados' :
                           view === 'view_commands' ? 'Comandos Creados' :
+                          view === 'create_content_item' ? 'Sorteos y Eventos' :
                           tipoItem === 'sorteo' ? 'Sorteos' : 'Eventos';
 
         return (
@@ -2300,7 +2325,7 @@ function App() {
               )}
             </div>
             <div className="sidebar-content">
-              {isLoadingLibrary && view !== 'create' && view !== 'view_scheduled_messages' ? (
+              {isLoadingLibrary && (activeList || []).length === 0 && view !== 'create' && view !== 'view_scheduled_messages' ? (
                 <div className="empty-sidebar" style={{ opacity: 0.6, transition: 'opacity 0.2s' }}>
                   <div style={{ marginBottom: '10px' }}><LayoutTemplate size={40} /></div>
                   Cargando librería en vivo...
@@ -2368,13 +2393,45 @@ function App() {
                       <div className="news-item-title" style={{ paddingRight: '20px' }}>
                         {item.titulo || item.title || item.text || item.command_name}
                       </div>
-                      <div className="news-item-date" style={{ textTransform: 'capitalize' }}>
-                        {view === 'view_twitch' ? 'Categoría Twitch' : 
-                         view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : 
-                         view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
-                         view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
-                         (item.tipo || 'Objeto')} 
-                         {view !== 'view_twitch' && view !== 'view_commands' && ` • ${new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}`}
+                      <div className="news-item-date" style={{ textTransform: 'capitalize', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div>
+                          {view === 'view_twitch' ? 'Categoría Twitch' : 
+                           view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : 
+                           view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
+                           view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
+                           (item.tipo || 'Objeto')} 
+                           {view !== 'view_twitch' && view !== 'view_commands' && ` • ${new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}`}
+                        </div>
+                        {(view === 'create_content_item' || view === 'view_participations') && item.tipo && (
+                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '2px' }}>
+                            <span style={{
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              fontSize: '0.7rem',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase',
+                              backgroundColor: item.tipo === 'sorteo' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                              color: item.tipo === 'sorteo' ? '#e9d5ff' : '#bfdbfe',
+                              border: item.tipo === 'sorteo' ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)'
+                            }}>
+                              {item.tipo}
+                            </span>
+                            {item.estado === 'terminado' && (
+                              <span style={{
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase',
+                                backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                                color: '#fca5a5',
+                                border: '1px solid rgba(239, 68, 68, 0.4)'
+                              }}>
+                                Terminado
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -2419,25 +2476,14 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('events_only') ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('create_content_item_event', 'events_only')}
+                className={`dashboard-card ${!hasAccess('events_and_giveaways') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('create_content_item', 'events_and_giveaways')}
               >
                 <div className="icon-bg">
                   <Calendar size={36} />
                 </div>
-                <h3>Crear Evento</h3>
-                <p>Configura nuevos eventos interactivos con sus normas, detalles, premios y fechas.</p>
-              </div>
-
-              <div 
-                className={`dashboard-card ${!hasAccess('giveaways_only') ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('create_content_item_sorteo', 'giveaways_only')}
-              >
-                <div className="icon-bg">
-                  <Gift size={36} />
-                </div>
-                <h3>Crear Sorteo</h3>
-                <p>Genera nuevos sorteos para la comunidad, definiendo las condiciones y recompensas.</p>
+                <h3>Crear Sorteo o Evento</h3>
+                <p>Configura sorteos y eventos interactivos en un creador unificado con normas, premios y fechas.</p>
               </div>
 
               <div 
@@ -2543,8 +2589,32 @@ function App() {
             <form onSubmit={handleItemSubmit}>
               <div className="card animate-slide-down" style={{ animationDelay: '0.1s' }}>
                 <div className="form-group">
+                  <label className="form-label">Tipo de Publicación</label>
+                  <select 
+                    className="form-control" 
+                    value={tipoItem} 
+                    onChange={(e) => setTipoItem(e.target.value)}
+                  >
+                    <option value="evento">Evento</option>
+                    <option value="sorteo">Sorteo</option>
+                  </select>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Título del {tipoItem}</label>
                   <input type="text" name="titulo" className="form-control" value={itemData.titulo} onChange={handleItemChange} required />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '15px 0 20px 0' }}>
+                  <input 
+                    type="checkbox" 
+                    id="requiere_participacion" 
+                    name="requiere_participacion" 
+                    checked={itemData.requiere_participacion} 
+                    onChange={(e) => setItemData(prev => ({ ...prev, requiere_participacion: e.target.checked }))} 
+                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                  />
+                  <label htmlFor="requiere_participacion" className="form-label" style={{ margin: 0, cursor: 'pointer', userSelect: 'none' }}>
+                    Permitir participación (Mostrar botón de inscripción)
+                  </label>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Descripción Breve</label>
@@ -2555,8 +2625,21 @@ function App() {
                   <AutoResizeTextarea name="detalles" className="form-control" value={itemData.detalles} onChange={handleItemChange} rows={3} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Fecha Estimada</label>
-                  <input type="text" name="fecha" className="form-control" placeholder="Ej: 20 de Octubre 2026" value={itemData.fecha} onChange={handleItemChange} />
+                  <label className="form-label">Fecha Estimada (Texto)</label>
+                  <input type="text" name="fecha" className="form-control" placeholder="Ej: Este Sábado, 20:00 Horas" value={itemData.fecha} onChange={handleItemChange} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Fecha y Hora de Finalización (Expiración Automática)</label>
+                  <input 
+                    type="datetime-local" 
+                    name="fecha_fin" 
+                    className="form-control" 
+                    value={itemData.fecha_fin} 
+                    onChange={handleItemChange} 
+                  />
+                  <small style={{ color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                    Al superar esta fecha y hora, el elemento se marcará automáticamente como terminado.
+                  </small>
                 </div>
                  <div className="form-group">
                   <label className="form-label">Imagen principal (Pega el enlace de R2)</label>
@@ -2564,10 +2647,11 @@ function App() {
                   <AdvancedImagePreview imageUrl={itemData.imagen} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Estado</label>
+                  <label className="form-label">Estado Inicial</label>
                   <select name="estado" className="form-control" value={itemData.estado} onChange={handleItemChange}>
                     <option value="activo">Activo</option>
                     <option value="proximo">Próximo</option>
+                    <option value="terminado">Terminado</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -3350,6 +3434,39 @@ function App() {
                       }}>
                         {report.description}
                       </div>
+                      
+                      {report.images && Array.isArray(report.images) && report.images.length > 0 && (
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
+                          {report.images.map((imgUrl, index) => (
+                            <a 
+                              key={index} 
+                              href={imgUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ 
+                                display: 'block', 
+                                border: '1px solid rgba(255, 255, 255, 0.1)', 
+                                borderRadius: '6px', 
+                                overflow: 'hidden',
+                                transition: 'transform 0.2s',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                            >
+                              <img 
+                                src={imgUrl} 
+                                alt={`Reporte Adjunto ${index + 1}`} 
+                                style={{ 
+                                  maxHeight: '150px', 
+                                  maxWidth: '250px', 
+                                  objectFit: 'cover', 
+                                  display: 'block' 
+                                }} 
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
 
