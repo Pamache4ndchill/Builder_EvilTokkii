@@ -29,7 +29,7 @@ const getDisplayUrl = (url) => {
 function getDbdPerkImageUrl(apiPath) {
   if (!apiPath) return '';
   const parts = apiPath.split('/');
-  const rawBaseName = parts[parts.length - 1]; // e.g. iconPerks_Terminus
+  const rawBaseName = parts[parts.length - 1].replace('.png', ''); // e.g. iconPerks_Terminus
   
   if (DOWNLOADED_PERKS.has(rawBaseName)) {
     return `/Imagenes/Perks/${rawBaseName}.png`;
@@ -2317,7 +2317,7 @@ function App() {
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label">Ruta de Imagen API</label>
+                  <label className="form-label">Ruta de la Imagen Local</label>
                   <input 
                     type="text" 
                     className="form-control"

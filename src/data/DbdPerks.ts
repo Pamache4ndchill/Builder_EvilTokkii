@@ -8,1576 +8,1576 @@ export const DBD_PERKS: DbdPerk[] = [
   {
     "name": "As en la manga",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_aceInTheHole"
+    "image": "/Imagenes/Perks/iconPerks_aceInTheHole.png"
   },
   {
     "name": "Adrenalina",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_adrenaline"
+    "image": "/Imagenes/Perks/iconPerks_adrenaline.png"
   },
   {
     "name": "Cuidados posteriores",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kenya/iconPerks_aftercare"
+    "image": "/Imagenes/Perks/iconPerks_aftercare.png"
   },
   {
     "name": "Agitación",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_agitation"
+    "image": "/Imagenes/Perks/iconPerks_agitation.png"
   },
   {
     "name": "Alerta",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC4/iconPerks_alert"
+    "image": "/Imagenes/Perks/iconPerks_alert.png"
   },
   {
     "name": "A cualquier precio",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sweden/iconPerks_anyMeansNecessary"
+    "image": "/Imagenes/Perks/iconPerks_anyMeansNecessary.png"
   },
   {
     "name": "Autodidacta",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Haiti/iconPerks_autodidact"
+    "image": "/Imagenes/Perks/iconPerks_autodidact.png"
   },
   {
     "name": "Niñera",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_babySitter"
+    "image": "/Imagenes/Perks/iconPerks_babySitter.png"
   },
   {
     "name": "Caída equilibrada",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_balancedLanding"
+    "image": "/Imagenes/Perks/iconPerks_balancedLanding.png"
   },
   {
     "name": "Desconcierto",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Guam/iconPerks_bamboozle"
+    "image": "/Imagenes/Perks/iconPerks_bamboozle.png"
   },
   {
     "name": "Barbacoa y chile",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Cannibal/iconPerks_BBQAndChili"
+    "image": "/Imagenes/Perks/iconPerks_BBQAndChili.png"
   },
   {
     "name": "Bestia de presa",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC5/iconPerks_BeastOfPrey"
+    "image": "/Imagenes/Perks/iconPerks_BeastOfPrey.png"
   },
   {
     "name": "Mejor juntos",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_betterTogether"
+    "image": "/Imagenes/Perks/iconPerks_betterTogether.png"
   },
   {
     "name": "Murmullo amargo",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_bitterMurmur"
+    "image": "/Imagenes/Perks/iconPerks_bitterMurmur.png"
   },
   {
     "name": "Eco de sangre",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sweden/iconPerks_bloodEcho"
+    "image": "/Imagenes/Perks/iconPerks_bloodEcho.png"
   },
   {
     "name": "Sabueso de sangre",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_bloodhound"
+    "image": "/Imagenes/Perks/iconPerks_bloodhound.png"
   },
   {
     "name": "Pacto de sangre",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wales/iconPerks_bloodPact"
+    "image": "/Imagenes/Perks/iconPerks_bloodPact.png"
   },
   {
     "name": "Guardián de sangre",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/England/iconPerks_bloodWarden"
+    "image": "/Imagenes/Perks/iconPerks_bloodWarden.png"
   },
   {
     "name": "Hervor",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kate/iconPerks_boilOver"
+    "image": "/Imagenes/Perks/iconPerks_boilOver.png"
   },
   {
     "name": "Vínculo",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_bond"
+    "image": "/Imagenes/Perks/iconPerks_bond.png"
   },
   {
     "name": "Shattered Hope",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_BoonDestroyer"
+    "image": "/Imagenes/Perks/iconPerks_BoonDestroyer.png"
   },
   {
     "name": "Tiempo prestado",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/L4D/iconPerks_borrowedTime"
+    "image": "/Imagenes/Perks/iconPerks_borrowedTime.png"
   },
   {
     "name": "Conocimientos de botánica",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_botanyKnowledge"
+    "image": "/Imagenes/Perks/iconPerks_botanyKnowledge.png"
   },
   {
     "name": "Derrumbe",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kenya/iconPerks_breakdown"
+    "image": "/Imagenes/Perks/iconPerks_breakdown.png"
   },
   {
     "name": "Evasión",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sweden/iconPerks_breakout"
+    "image": "/Imagenes/Perks/iconPerks_breakout.png"
   },
   {
     "name": "Fuerza brutal",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_brutalStrength"
+    "image": "/Imagenes/Perks/iconPerks_brutalStrength.png"
   },
   {
     "name": "Abrochaos el cinturón",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ash/iconPerks_buckleUp"
+    "image": "/Imagenes/Perks/iconPerks_buckleUp.png"
   },
   {
     "name": "Creado para durar",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yemen/iconPerks_builtToLast"
+    "image": "/Imagenes/Perks/iconPerks_builtToLast.png"
   },
   {
     "name": "Espíritu calmado",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_calmSpirit"
+    "image": "/Imagenes/Perks/iconPerks_calmSpirit.png"
   },
   {
     "name": "Camaradería",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_camaraderie"
+    "image": "/Imagenes/Perks/iconPerks_camaraderie.png"
   },
   {
     "name": "Intervención corrupta",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Mali/iconPerks_corruptIntervention"
+    "image": "/Imagenes/Perks/iconPerks_corruptIntervention.png"
   },
   {
     "name": "Coulrofobia",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Guam/iconPerks_coulrophobia"
+    "image": "/Imagenes/Perks/iconPerks_coulrophobia.png"
   },
   {
     "name": "Límites crueles",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_cruelConfinement"
+    "image": "/Imagenes/Perks/iconPerks_cruelConfinement.png"
   },
   {
     "name": "Baila conmigo",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kate/iconPerks_danceWithMe"
+    "image": "/Imagenes/Perks/iconPerks_danceWithMe.png"
   },
   {
     "name": "Sentido oscuro",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_darkSense"
+    "image": "/Imagenes/Perks/iconPerks_darkSense.png"
   },
   {
     "name": "Devoción oscura",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Mali/iconPerks_darkDevotion"
+    "image": "/Imagenes/Perks/iconPerks_darkDevotion.png"
   },
   {
     "name": "Fajador",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC5/iconPerks_DeadHard"
+    "image": "/Imagenes/Perks/iconPerks_DeadHard.png"
   },
   {
     "name": "El interruptor del hombre muerto",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ukraine/iconPerks_deadManSwitch"
+    "image": "/Imagenes/Perks/iconPerks_deadManSwitch.png"
   },
   {
     "name": "Sentencia de muerte",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wales/iconPerks_deathbound"
+    "image": "/Imagenes/Perks/iconPerks_deathbound.png"
   },
   {
     "name": "Golpe decisivo",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC2/iconPerks_decisiveStrike"
+    "image": "/Imagenes/Perks/iconPerks_decisiveStrike.png"
   },
   {
     "name": "Cazador de ciervos",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_deerstalker"
+    "image": "/Imagenes/Perks/iconPerks_deerstalker.png"
   },
   {
     "name": "Deja Vu",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_dejaVu"
+    "image": "/Imagenes/Perks/iconPerks_dejaVu.png"
   },
   {
     "name": "Liberación",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Haiti/iconPerks_deliverance"
+    "image": "/Imagenes/Perks/iconPerks_deliverance.png"
   },
   {
     "name": "Medidas desesperadas",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yemen/iconPerks_desperateMeasures"
+    "image": "/Imagenes/Perks/iconPerks_desperateMeasures.png"
   },
   {
     "name": "Corazonada de detective",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Finland/iconPerks_detectivesHunch"
+    "image": "/Imagenes/Perks/iconPerks_detectivesHunch.png"
   },
   {
     "name": "Discordancia",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kenya/iconPerks_discordance"
+    "image": "/Imagenes/Perks/iconPerks_discordance.png"
   },
   {
     "name": "Distorsión",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kenya/iconPerks_distortion"
+    "image": "/Imagenes/Perks/iconPerks_distortion.png"
   },
   {
     "name": "Desasosiego",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_distressing"
+    "image": "/Imagenes/Perks/iconPerks_distressing.png"
   },
   {
     "name": "Distracción",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Haiti/iconPerks_diversion"
+    "image": "/Imagenes/Perks/iconPerks_diversion.png"
   },
   {
     "name": "Dragon’s Grip",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yemen/iconPerks_dragonsGrip"
+    "image": "/Imagenes/Perks/iconPerks_dragonsGrip.png"
   },
   {
     "name": "Luz moribunda",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC2/iconPerks_dyingLight"
+    "image": "/Imagenes/Perks/iconPerks_dyingLight.png"
   },
   {
     "name": "Empatía",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_empathy"
+    "image": "/Imagenes/Perks/iconPerks_empathy.png"
   },
   {
     "name": "Implacable",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_enduring"
+    "image": "/Imagenes/Perks/iconPerks_enduring.png"
   },
   {
     "name": "Avivar",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/England/iconPerks_fireUp"
+    "image": "/Imagenes/Perks/iconPerks_fireUp.png"
   },
   {
     "name": "Fixated",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_fixated"
+    "image": "/Imagenes/Perks/iconPerks_fixated.png"
   },
   {
     "name": "Hasta Otra",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ash/iconPerks_flipFlop"
+    "image": "/Imagenes/Perks/iconPerks_flipFlop.png"
   },
   {
     "name": "Imposición de Penitencia",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wales/iconPerks_forcedPenance"
+    "image": "/Imagenes/Perks/iconPerks_forcedPenance.png"
   },
   {
     "name": "For the People",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ukraine/iconPerks_forThePeople"
+    "image": "/Imagenes/Perks/iconPerks_forThePeople.png"
   },
   {
     "name": "La caída de Franklin",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Cannibal/iconPerks_franklinsLoss"
+    "image": "/Imagenes/Perks/iconPerks_franklinsLoss.png"
   },
   {
     "name": "Persecución furtiva",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Oman/iconPerks_furtiveChase"
+    "image": "/Imagenes/Perks/iconPerks_furtiveChase.png"
   },
   {
     "name": "Mecánico",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ukraine/iconPerks_gearHead"
+    "image": "/Imagenes/Perks/iconPerks_gearHead.png"
   },
   {
     "name": "Sobrecarga",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC4/iconPerks_generatorOvercharge"
+    "image": "/Imagenes/Perks/iconPerks_generatorOvercharge.png"
   },
   {
     "name": "Truco del Verdugo",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Finland/iconPerks_hangmansTrick"
+    "image": "/Imagenes/Perks/iconPerks_hangmansTrick.png"
   },
   {
     "name": "De frente",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Mali/iconPerks_headOn"
+    "image": "/Imagenes/Perks/iconPerks_headOn.png"
   },
   {
     "name": "Maleficio: Devorador de esperanza",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_devourHope"
+    "image": "/Imagenes/Perks/iconPerks_devourHope.png"
   },
   {
     "name": "Hex: Haunted Ground",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Haiti/iconPerks_hauntedGround"
+    "image": "/Imagenes/Perks/iconPerks_hauntedGround.png"
   },
   {
     "name": "Maleficio: Canción de caza",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC5/iconPerks_HuntressLullaby"
+    "image": "/Imagenes/Perks/iconPerks_HuntressLullaby.png"
   },
   {
     "name": "Maleficio: Ruina",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_ruin"
+    "image": "/Imagenes/Perks/iconPerks_ruin.png"
   },
   {
     "name": "Maleficio: El Tercer Sello",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_theThirdSeal"
+    "image": "/Imagenes/Perks/iconPerks_theThirdSeal.png"
   },
   {
     "name": "Maleficio: La Emoción de la Caza",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_thrillOfTheHunt"
+    "image": "/Imagenes/Perks/iconPerks_thrillOfTheHunt.png"
   },
   {
     "name": "Hex: Blood Favor",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yemen/iconPerks_hexBloodFavor"
+    "image": "/Imagenes/Perks/iconPerks_hexBloodFavor.png"
   },
   {
     "name": "Hex: Retribution",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ukraine/iconPerks_hexRetribution"
+    "image": "/Imagenes/Perks/iconPerks_hexRetribution.png"
   },
   {
     "name": "Hex: Undying",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yemen/iconPerks_hexUndying"
+    "image": "/Imagenes/Perks/iconPerks_hexUndying.png"
   },
   {
     "name": "Esperanza",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_hope"
+    "image": "/Imagenes/Perks/iconPerks_hope.png"
   },
   {
     "name": "Soy Todo Oídos",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Oman/iconPerks_imAllEars"
+    "image": "/Imagenes/Perks/iconPerks_imAllEars.png"
   },
   {
     "name": "Terror Contagioso",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Mali/iconPerks_infectiousFright"
+    "image": "/Imagenes/Perks/iconPerks_infectiousFright.png"
   },
   {
     "name": "Inner Strength",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_innerStrength"
+    "image": "/Imagenes/Perks/iconPerks_innerStrength.png"
   },
   {
     "name": "Insidious",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_insidious"
+    "image": "/Imagenes/Perks/iconPerks_insidious.png"
   },
   {
     "name": "Noqueo",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Cannibal/iconPerks_knockOut"
+    "image": "/Imagenes/Perks/iconPerks_knockOut.png"
   },
   {
     "name": "Iron Grasp",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_ironGrasp"
+    "image": "/Imagenes/Perks/iconPerks_ironGrasp.png"
   },
   {
     "name": "Voluntad de Hierro",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_ironWill"
+    "image": "/Imagenes/Perks/iconPerks_ironWill.png"
   },
   {
     "name": "Doncella de Hierro",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kenya/iconPerks_ironMaiden"
+    "image": "/Imagenes/Perks/iconPerks_ironMaiden.png"
   },
   {
     "name": "Acaparadora",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Aurora/iconPerks_Hoarder"
+    "image": "/Imagenes/Perks/iconPerks_Hoarder.png"
   },
   {
     "name": "Opresión",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Aurora/iconPerks_Oppression"
+    "image": "/Imagenes/Perks/iconPerks_Oppression.png"
   },
   {
     "name": "Golpe de Gracia",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Aurora/iconPerks_coupDeGrace"
+    "image": "/Imagenes/Perks/iconPerks_coupDeGrace.png"
   },
   {
     "name": "Starstruck",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Comet/iconPerks_Starstruck"
+    "image": "/Imagenes/Perks/iconPerks_Starstruck.png"
   },
   {
     "name": "Hex: Crowd Control",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Comet/iconPerks_HexCrowdControl"
+    "image": "/Imagenes/Perks/iconPerks_HexCrowdControl.png"
   },
   {
     "name": "No Way Out",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Comet/iconPerks_NoWayOut"
+    "image": "/Imagenes/Perks/iconPerks_NoWayOut.png"
   },
   {
     "name": "Lethal Pursuer",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_lethalPursuer"
+    "image": "/Imagenes/Perks/iconPerks_lethalPursuer.png"
   },
   {
     "name": "Hysteria",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_hysteria"
+    "image": "/Imagenes/Perks/iconPerks_hysteria.png"
   },
   {
     "name": "Erupción",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_eruption"
+    "image": "/Imagenes/Perks/iconPerks_eruption.png"
   },
   {
     "name": "Deadlock",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gemini/iconPerks_Deadlock"
+    "image": "/Imagenes/Perks/iconPerks_Deadlock.png"
   },
   {
     "name": "Hex: Plaything",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gemini/iconPerks_HexPlaything"
+    "image": "/Imagenes/Perks/iconPerks_HexPlaything.png"
   },
   {
     "name": "Scourge Hook: Gift of Pain",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gemini/iconPerks_ScourgeHookGiftOfPain"
+    "image": "/Imagenes/Perks/iconPerks_ScourgeHookGiftOfPain.png"
   },
   {
     "name": "Grim Embrace",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ion/T_iconPerks_grimEmbrace"
+    "image": "/Imagenes/Perks/T_iconPerks_grimEmbrace.png"
   },
   {
     "name": "Scourge Hook: Pain Resonance",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ion/T_iconPerks_painResonance"
+    "image": "/Imagenes/Perks/T_iconPerks_painResonance.png"
   },
   {
     "name": "Hex: Pentimento",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ion/T_iconPerks_hexPentimento"
+    "image": "/Imagenes/Perks/T_iconPerks_hexPentimento.png"
   },
   {
     "name": "Scourge Hook: Floods of Rage",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kepler/iconPerks_floodOfRage"
+    "image": "/Imagenes/Perks/iconPerks_floodOfRage.png"
   },
   {
     "name": "Call of Brine",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kepler/iconPerks_callOfBrine"
+    "image": "/Imagenes/Perks/iconPerks_callOfBrine.png"
   },
   {
     "name": "Merciless Storm",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kepler/iconPerks_mercilessStorm"
+    "image": "/Imagenes/Perks/iconPerks_mercilessStorm.png"
   },
   {
     "name": "Dissolution",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_Dissolution"
+    "image": "/Imagenes/Perks/iconPerks_Dissolution.png"
   },
   {
     "name": "Darkness Revealed",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_DarknessRevelated"
+    "image": "/Imagenes/Perks/iconPerks_DarknessRevelated.png"
   },
   {
     "name": "Septic Touch",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_SepticTouch"
+    "image": "/Imagenes/Perks/iconPerks_SepticTouch.png"
   },
   {
     "name": "Superior Anatomy",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_SuperiorAnatomy"
+    "image": "/Imagenes/Perks/iconPerks_SuperiorAnatomy.png"
   },
   {
     "name": "Awakened Awareness",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_AwakenedAwarenesss"
+    "image": "/Imagenes/Perks/iconPerks_AwakenedAwarenesss.png"
   },
   {
     "name": "Terminus",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_Terminus"
+    "image": "/Imagenes/Perks/iconPerks_Terminus.png"
   },
   {
     "name": "Nowhere to Hide",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quantum/iconPerks_NowhereToHide"
+    "image": "/Imagenes/Perks/iconPerks_NowhereToHide.png"
   },
   {
     "name": "Hex: Face the Darkness",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quantum/iconPerks_HexFaceTheDarkness"
+    "image": "/Imagenes/Perks/iconPerks_HexFaceTheDarkness.png"
   },
   {
     "name": "Hubris",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quantum/iconPerks_Hubris"
+    "image": "/Imagenes/Perks/iconPerks_Hubris.png"
   },
   {
     "name": "Game Afoot",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_GameAfoot"
+    "image": "/Imagenes/Perks/iconPerks_GameAfoot.png"
   },
   {
     "name": "THWACK!",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_Thwack"
+    "image": "/Imagenes/Perks/iconPerks_Thwack.png"
   },
   {
     "name": "Leverage",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_Leverage"
+    "image": "/Imagenes/Perks/iconPerks_Leverage.png"
   },
   {
     "name": "Genetic Limits",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Umbra/IconPerks_GeneticLimits"
+    "image": "/Imagenes/Perks/IconPerks_GeneticLimits.png"
   },
   {
     "name": "Forced Hesitation",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Umbra/IconPerks_ForcedHesitation"
+    "image": "/Imagenes/Perks/IconPerks_ForcedHesitation.png"
   },
   {
     "name": "Machine Learning",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Umbra/IconPerks_SelfAware"
+    "image": "/Imagenes/Perks/IconPerks_SelfAware.png"
   },
   {
     "name": "Ultimate Weapon",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wormhole/iconPerks_UltimateWeapon"
+    "image": "/Imagenes/Perks/iconPerks_UltimateWeapon.png"
   },
   {
     "name": "Rapid Brutality",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wormhole/iconPerks_RapidBrutality"
+    "image": "/Imagenes/Perks/iconPerks_RapidBrutality.png"
   },
   {
     "name": "Alien Instinct",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wormhole/iconPerks_AlienInstinct"
+    "image": "/Imagenes/Perks/iconPerks_AlienInstinct.png"
   },
   {
     "name": "Hex: Two Can Play",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yerkes/iconPerks_twoCanPlay"
+    "image": "/Imagenes/Perks/iconPerks_twoCanPlay.png"
   },
   {
     "name": "Friends ‘Til the End",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yerkes/iconPerks_friendsTillTheEnd"
+    "image": "/Imagenes/Perks/iconPerks_friendsTillTheEnd.png"
   },
   {
     "name": "Batteries Included",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yerkes/iconPerks_batteriesIncluded"
+    "image": "/Imagenes/Perks/iconPerks_batteriesIncluded.png"
   },
   {
     "name": "Unbound",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Applepie/iconPerks_Unbound"
+    "image": "/Imagenes/Perks/iconPerks_Unbound.png"
   },
   {
     "name": "Unforeseen",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Applepie/iconPerks_Unforeseen"
+    "image": "/Imagenes/Perks/iconPerks_Unforeseen.png"
   },
   {
     "name": "Undone",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Applepie/iconPerks_Undone"
+    "image": "/Imagenes/Perks/iconPerks_Undone.png"
   },
   {
     "name": "Weave Attunement",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Churros/iconPerks_WeaveAttunement"
+    "image": "/Imagenes/Perks/iconPerks_WeaveAttunement.png"
   },
   {
     "name": "Languid Touch",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Churros/iconPerks_LanguidTouch"
+    "image": "/Imagenes/Perks/iconPerks_LanguidTouch.png"
   },
   {
     "name": "Dark Arrogance",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Churros/iconPerks_DarkArrogance"
+    "image": "/Imagenes/Perks/iconPerks_DarkArrogance.png"
   },
   {
     "name": "Hex: Wretched Fate",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclair/iconPerks_HexWretchedFate"
+    "image": "/Imagenes/Perks/iconPerks_HexWretchedFate.png"
   },
   {
     "name": "Human Greed",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclair/iconPerks_HumanGreed"
+    "image": "/Imagenes/Perks/iconPerks_HumanGreed.png"
   },
   {
     "name": "Dominance",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclair/iconPerks_Dominance"
+    "image": "/Imagenes/Perks/iconPerks_Dominance.png"
   },
   {
     "name": "All-Shaking Thunder",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gelato/T_UI_iconPerks_AllShakingThunder"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_AllShakingThunder.png"
   },
   {
     "name": "Scourge Hook: Jagged Compass",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gelato/T_UI_iconPerks_ScourgeHookJaggedCompass"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_ScourgeHookJaggedCompass.png"
   },
   {
     "name": "No Quarter",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gelato/T_UI_iconPerks_NoQuarter"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_NoQuarter.png"
   },
   {
     "name": "Hex: Nothing But Misery",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Icecream/T_UI_iconPerks_NothingButMisery"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_NothingButMisery.png"
   },
   {
     "name": "Forever Entwined",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Icecream/T_UI_iconPerks_ForeverEntwined"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_ForeverEntwined.png"
   },
   {
     "name": "None Are Free",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Icecream/T_UI_iconPerks_NoneAreFree"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_NoneAreFree.png"
   },
   {
     "name": "Help Wanted",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ketchup/T_UI_iconPerks_HelpWanted"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_HelpWanted.png"
   },
   {
     "name": "Phantom Fear",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ketchup/T_UI_iconPerks_PhantomFear"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_PhantomFear.png"
   },
   {
     "name": "Haywire",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ketchup/T_UI_iconPerks_Haywire"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_Haywire.png"
   },
   {
     "name": "Ravenous",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Maple/T_UI_iconPerks_Ravenous"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_Ravenous.png"
   },
   {
     "name": "Wandering Eye",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Maple/T_UI_iconPerks_WanderingEye"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_WanderingEye.png"
   },
   {
     "name": "Hex: Overture of Doom",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Maple/T_UI_iconPerks_HexOvertureOfDoom"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_HexOvertureOfDoom.png"
   },
   {
     "name": "Turn Back The Clock",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_TurnBackTheClock"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_TurnBackTheClock.png"
   },
   {
     "name": "Secret Project",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_SecretProject"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_SecretProject.png"
   },
   {
     "name": "Hex: Hive Mind",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_HexHiveMind"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_HexHiveMind.png"
   },
   {
     "name": "Hex: Scared to Death",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sushi/T_UI_iconsPerks_ScaredToDeath"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_ScaredToDeath.png"
   },
   {
     "name": "Silent Shadow",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sushi/T_UI_iconsPerks_SilentShadow"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_SilentShadow.png"
   },
   {
     "name": "Rampage",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sushi/T_UI_iconsPerks_Rampage"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_Rampage.png"
   },
   {
     "name": "Kindred",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_kindred"
+    "image": "/Imagenes/Perks/iconPerks_kindred.png"
   },
   {
     "name": "Líder",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_leader"
+    "image": "/Imagenes/Perks/iconPerks_leader.png"
   },
   {
     "name": "Rezagados",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/L4D/iconPerks_leftBehind"
+    "image": "/Imagenes/Perks/iconPerks_leftBehind.png"
   },
   {
     "name": "Hijo de la luz",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_lightborn"
+    "image": "/Imagenes/Perks/iconPerks_lightborn.png"
   },
   {
     "name": "Lightweight",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_lightweight"
+    "image": "/Imagenes/Perks/iconPerks_lightweight.png"
   },
   {
     "name": "Agilidad",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC4/iconPerks_lithe"
+    "image": "/Imagenes/Perks/iconPerks_lithe.png"
   },
   {
     "name": "Lucky Break",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sweden/iconPerks_luckyBreak"
+    "image": "/Imagenes/Perks/iconPerks_luckyBreak.png"
   },
   {
     "name": "Furia Ciega",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kenya/iconPerks_madGrit"
+    "image": "/Imagenes/Perks/iconPerks_madGrit.png"
   },
   {
     "name": "Make your Choice",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Finland/iconPerks_makeYourChoice"
+    "image": "/Imagenes/Perks/iconPerks_makeYourChoice.png"
   },
   {
     "name": "Quebrantamentes",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_mindBreaker"
+    "image": "/Imagenes/Perks/iconPerks_mindBreaker.png"
   },
   {
     "name": "Monitorización y Abuso",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC4/iconPerks_monitorAndAbuse"
+    "image": "/Imagenes/Perks/iconPerks_monitorAndAbuse.png"
   },
   {
     "name": "Scourge Hook: Monstrous Shrine",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_monstrousShrine"
+    "image": "/Imagenes/Perks/iconPerks_monstrousShrine.png"
   },
   {
     "name": "Némesis",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sweden/iconPerks_nemesis"
+    "image": "/Imagenes/Perks/iconPerks_nemesis.png"
   },
   {
     "name": "Hex: No One Escapes Death",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_noOneEscapesDeath"
+    "image": "/Imagenes/Perks/iconPerks_noOneEscapesDeath.png"
   },
   {
     "name": "Nadie se Queda Atrás",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_noOneLeftBehind"
+    "image": "/Imagenes/Perks/iconPerks_noOneLeftBehind.png"
   },
   {
     "name": "Me La Pela",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC5/iconPerks_NoMither"
+    "image": "/Imagenes/Perks/iconPerks_NoMither.png"
   },
   {
     "name": "Vocación de enfermera",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_aNursesCalling"
+    "image": "/Imagenes/Perks/iconPerks_aNursesCalling.png"
   },
   {
     "name": "Objeto de Obsesión",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC2/iconPerks_objectOfObsession"
+    "image": "/Imagenes/Perks/iconPerks_objectOfObsession.png"
   },
   {
     "name": "Off the Record",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ukraine/iconPerks_offTheRecord"
+    "image": "/Imagenes/Perks/iconPerks_offTheRecord.png"
   },
   {
     "name": "A Mano Descubierta",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_openHanded"
+    "image": "/Imagenes/Perks/iconPerks_openHanded.png"
   },
   {
     "name": "Presencia Abrumadora",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC4/iconPerks_overwhelmingPresence"
+    "image": "/Imagenes/Perks/iconPerks_overwhelmingPresence.png"
   },
   {
     "name": "Farmacia",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/England/iconPerks_pharmacy"
+    "image": "/Imagenes/Perks/iconPerks_pharmacy.png"
   },
   {
     "name": "Play With Your Food",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC2/iconPerks_playWithYourFood"
+    "image": "/Imagenes/Perks/iconPerks_playWithYourFood.png"
   },
   {
     "name": "Instinto de Saqueador",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_plunderersInstinct"
+    "image": "/Imagenes/Perks/iconPerks_plunderersInstinct.png"
   },
   {
     "name": "Serenidad",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Mali/iconPerks_poised"
+    "image": "/Imagenes/Perks/iconPerks_poised.png"
   },
   {
     "name": "Colorín Colorado",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Guam/iconPerks_popGoesTheWeasel"
+    "image": "/Imagenes/Perks/iconPerks_popGoesTheWeasel.png"
   },
   {
     "name": "Depredador",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_predator"
+    "image": "/Imagenes/Perks/iconPerks_predator.png"
   },
   {
     "name": "Premonition",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_premonition"
+    "image": "/Imagenes/Perks/iconPerks_premonition.png"
   },
   {
     "name": "Ponte a Prueba",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_proveThyself"
+    "image": "/Imagenes/Perks/iconPerks_proveThyself.png"
   },
   {
     "name": "Rápido y Silencioso",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_quickAndQuiet"
+    "image": "/Imagenes/Perks/iconPerks_quickAndQuiet.png"
   },
   {
     "name": "Rencor",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Haiti/iconPerks_hatred"
+    "image": "/Imagenes/Perks/iconPerks_hatred.png"
   },
   {
     "name": "Red Herring",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ukraine/iconPerks_redHerring"
+    "image": "/Imagenes/Perks/iconPerks_redHerring.png"
   },
   {
     "name": "Recuérdame",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/England/iconPerks_rememberMe"
+    "image": "/Imagenes/Perks/iconPerks_rememberMe.png"
   },
   {
     "name": "Repressed Alliance ",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wales/iconPerks_repressedAlliance"
+    "image": "/Imagenes/Perks/iconPerks_repressedAlliance.png"
   },
   {
     "name": "Resilience",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_resilience"
+    "image": "/Imagenes/Perks/iconPerks_resilience.png"
   },
   {
     "name": "Appraisal",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Aurora/iconPerks_appraisal"
+    "image": "/Imagenes/Perks/iconPerks_appraisal.png"
   },
   {
     "name": "Engaño",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Aurora/iconPerks_deception"
+    "image": "/Imagenes/Perks/iconPerks_deception.png"
   },
   {
     "name": "Power Struggle",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Aurora/iconPerks_powerStruggle"
+    "image": "/Imagenes/Perks/iconPerks_powerStruggle.png"
   },
   {
     "name": "Fast Track",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Comet/iconPerks_FastTrack"
+    "image": "/Imagenes/Perks/iconPerks_FastTrack.png"
   },
   {
     "name": "Smash Hit",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Comet/iconPerks_SmashHit"
+    "image": "/Imagenes/Perks/iconPerks_SmashHit.png"
   },
   {
     "name": "Self-Preservation",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Comet/iconPerks_Self-Preservation"
+    "image": "/Imagenes/Perks/iconPerks_Self-Preservation.png"
   },
   {
     "name": "Counterforce",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_Counterforce"
+    "image": "/Imagenes/Perks/iconPerks_Counterforce.png"
   },
   {
     "name": "Resurgence",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_Resurgence"
+    "image": "/Imagenes/Perks/iconPerks_Resurgence.png"
   },
   {
     "name": "Blast Mine",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_BlastMine"
+    "image": "/Imagenes/Perks/iconPerks_BlastMine.png"
   },
   {
     "name": "Bite the Bullet",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_BiteTheBullet"
+    "image": "/Imagenes/Perks/iconPerks_BiteTheBullet.png"
   },
   {
     "name": "Flashbang",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_Flashbang"
+    "image": "/Imagenes/Perks/iconPerks_Flashbang.png"
   },
   {
     "name": "Rookie Spirit",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclipse/iconPerks_RookieSpirit"
+    "image": "/Imagenes/Perks/iconPerks_RookieSpirit.png"
   },
   {
     "name": "Clairvoyance",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Hubble/iconPerks_Clairvoyance"
+    "image": "/Imagenes/Perks/iconPerks_Clairvoyance.png"
   },
   {
     "name": "Boon: Circle of Healing",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Hubble/iconPerks_BoonCircleOfHealing"
+    "image": "/Imagenes/Perks/iconPerks_BoonCircleOfHealing.png"
   },
   {
     "name": "Boon: Shadow Step",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Hubble/iconPerks_BoonShadowStep"
+    "image": "/Imagenes/Perks/iconPerks_BoonShadowStep.png"
   },
   {
     "name": "Overcome",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ion/T_iconPerks_Overcome"
+    "image": "/Imagenes/Perks/T_iconPerks_Overcome.png"
   },
   {
     "name": "Corrective Action",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ion/T_iconPerks_CorrectiveAction"
+    "image": "/Imagenes/Perks/T_iconPerks_CorrectiveAction.png"
   },
   {
     "name": "Boon: Exponential",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ion/T_iconPerks_BoonExponential"
+    "image": "/Imagenes/Perks/T_iconPerks_BoonExponential.png"
   },
   {
     "name": "Parental Guidance",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kepler/iconPerks_parentalGuidance"
+    "image": "/Imagenes/Perks/iconPerks_parentalGuidance.png"
   },
   {
     "name": "Empathic Connection",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kepler/iconPerks_empathicConnection"
+    "image": "/Imagenes/Perks/iconPerks_empathicConnection.png"
   },
   {
     "name": "Boon: Dark Theory",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kepler/iconPerks_darkTheory"
+    "image": "/Imagenes/Perks/iconPerks_darkTheory.png"
   },
   {
     "name": "Inner Focus",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_InnerFocus"
+    "image": "/Imagenes/Perks/iconPerks_InnerFocus.png"
   },
   {
     "name": "Residual Manifest",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_ResidualManifest"
+    "image": "/Imagenes/Perks/iconPerks_ResidualManifest.png"
   },
   {
     "name": "Overzealous",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Meteor/iconPerks_Overzealous"
+    "image": "/Imagenes/Perks/iconPerks_Overzealous.png"
   },
   {
     "name": "Wiretap",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_Wiretap"
+    "image": "/Imagenes/Perks/iconPerks_Wiretap.png"
   },
   {
     "name": "Reactive Healing",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_ReactiveHealing"
+    "image": "/Imagenes/Perks/iconPerks_ReactiveHealing.png"
   },
   {
     "name": "Low Profile",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_LowProfile"
+    "image": "/Imagenes/Perks/iconPerks_LowProfile.png"
   },
   {
     "name": "Better Than New",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_BetterThanNew"
+    "image": "/Imagenes/Perks/iconPerks_BetterThanNew.png"
   },
   {
     "name": "Reassurance",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_Reassurance"
+    "image": "/Imagenes/Perks/iconPerks_Reassurance.png"
   },
   {
     "name": "Hyperfocus",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Orion/iconPerks_Hyperfocus"
+    "image": "/Imagenes/Perks/iconPerks_Hyperfocus.png"
   },
   {
     "name": "Potential Energy",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quantum/iconPerks_PotentialEnergy"
+    "image": "/Imagenes/Perks/iconPerks_PotentialEnergy.png"
   },
   {
     "name": "Fogwise",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quantum/iconPerks_Fogwise"
+    "image": "/Imagenes/Perks/iconPerks_Fogwise.png"
   },
   {
     "name": "Quick Gambit",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quantum/iconPerks_VittoriosGambit"
+    "image": "/Imagenes/Perks/iconPerks_VittoriosGambit.png"
   },
   {
     "name": "Cut Loose",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_CutLoose"
+    "image": "/Imagenes/Perks/iconPerks_CutLoose.png"
   },
   {
     "name": "Friendly Competition",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_FriendlyCompetition"
+    "image": "/Imagenes/Perks/iconPerks_FriendlyCompetition.png"
   },
   {
     "name": "Teamwork: Power of Two",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_TeamworkPowerOfTwo"
+    "image": "/Imagenes/Perks/iconPerks_TeamworkPowerOfTwo.png"
   },
   {
     "name": "Background Player",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_BackgroundPlayer"
+    "image": "/Imagenes/Perks/iconPerks_BackgroundPlayer.png"
   },
   {
     "name": "Blood Rush",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_BloodRush"
+    "image": "/Imagenes/Perks/iconPerks_BloodRush.png"
   },
   {
     "name": "Teamwork: Collective Stealth",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Saturn/iconPerks_TeamworkCollectiveStealth"
+    "image": "/Imagenes/Perks/iconPerks_TeamworkCollectiveStealth.png"
   },
   {
     "name": "Troubleshooter",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Umbra/IconPerks_troubleshooter"
+    "image": "/Imagenes/Perks/IconPerks_troubleshooter.png"
   },
   {
     "name": "Made for This",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Umbra/IconPerks_madeForThis"
+    "image": "/Imagenes/Perks/IconPerks_madeForThis.png"
   },
   {
     "name": "Scavenger",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Umbra/IconPerks_scavenger"
+    "image": "/Imagenes/Perks/IconPerks_scavenger.png"
   },
   {
     "name": "Dramaturgy",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Venus/iconPerks_Dramaturgy"
+    "image": "/Imagenes/Perks/iconPerks_Dramaturgy.png"
   },
   {
     "name": "Scene Partner",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Venus/iconPerks_ScenePartner"
+    "image": "/Imagenes/Perks/iconPerks_ScenePartner.png"
   },
   {
     "name": "Plot Twist",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Venus/iconPerks_PlotTwist"
+    "image": "/Imagenes/Perks/iconPerks_PlotTwist.png"
   },
   {
     "name": "Lucky Star",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wormhole/iconPerks_LuckyStar"
+    "image": "/Imagenes/Perks/iconPerks_LuckyStar.png"
   },
   {
     "name": "Chemical Trap",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wormhole/iconPerks_ChemicalTrap"
+    "image": "/Imagenes/Perks/iconPerks_ChemicalTrap.png"
   },
   {
     "name": "Light-footed",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wormhole/iconPerks_LightFooted"
+    "image": "/Imagenes/Perks/iconPerks_LightFooted.png"
   },
   {
     "name": "Champion of Light",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Zodiac/iconsPerks_ChampionOfLight"
+    "image": "/Imagenes/Perks/iconsPerks_ChampionOfLight.png"
   },
   {
     "name": "Boon: Illumination",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Zodiac/iconsPerks_Illumination"
+    "image": "/Imagenes/Perks/iconsPerks_Illumination.png"
   },
   {
     "name": "Deadline",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Zodiac/iconsPerks_Deadline"
+    "image": "/Imagenes/Perks/iconsPerks_Deadline.png"
   },
   {
     "name": "Invocation: Weaving Spiders",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Applepie/iconsPerks_InvocationWeavingSpiders"
+    "image": "/Imagenes/Perks/iconsPerks_InvocationWeavingSpiders.png"
   },
   {
     "name": "Strength in Shadows",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Applepie/iconsPerks_StrengthInShadows"
+    "image": "/Imagenes/Perks/iconsPerks_StrengthInShadows.png"
   },
   {
     "name": "Wicked",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Applepie/iconsPerks_Wicked"
+    "image": "/Imagenes/Perks/iconsPerks_Wicked.png"
   },
   {
     "name": "Mirrored Illusion",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Churros/iconPerks_MirroredIllusion"
+    "image": "/Imagenes/Perks/iconPerks_MirroredIllusion.png"
   },
   {
     "name": "Bardic Inspiration",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Churros/iconPerks_BardicInspiration"
+    "image": "/Imagenes/Perks/iconPerks_BardicInspiration.png"
   },
   {
     "name": "Still Sight",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Churros/iconPerks_StillSight"
+    "image": "/Imagenes/Perks/iconPerks_StillSight.png"
   },
   {
     "name": "Finesse",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Donut/iconPerks_Finesse"
+    "image": "/Imagenes/Perks/iconPerks_Finesse.png"
   },
   {
     "name": "Hardened",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Donut/iconPerks_Hardened"
+    "image": "/Imagenes/Perks/iconPerks_Hardened.png"
   },
   {
     "name": "Specialist",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Donut/iconPerks_Specialist"
+    "image": "/Imagenes/Perks/iconPerks_Specialist.png"
   },
   {
     "name": "Eyes of Belmont",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclair/iconPerks_EyesOfBelmont"
+    "image": "/Imagenes/Perks/iconPerks_EyesOfBelmont.png"
   },
   {
     "name": "Exultation",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclair/iconPerks_Exultation"
+    "image": "/Imagenes/Perks/iconPerks_Exultation.png"
   },
   {
     "name": "Moment of Glory",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Eclair/iconPerks_MomentOfGlory"
+    "image": "/Imagenes/Perks/iconPerks_MomentOfGlory.png"
   },
   {
     "name": "Invocation: Treacherous Crows",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gelato/T_UI_iconsPerks_InvocationTreacherousCrows"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_InvocationTreacherousCrows.png"
   },
   {
     "name": "Clean Break",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gelato/T_UI_iconsPerks_CleanBreak"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_CleanBreak.png"
   },
   {
     "name": "Shoulder the Burden",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Gelato/T_UI_iconsPerks_ShoulderTheBurden"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_ShoulderTheBurden.png"
   },
   {
     "name": "Do No Harm",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Jerky/T_UI_iconsPerks_DoNoHarm"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_DoNoHarm.png"
   },
   {
     "name": "Duty of Care",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Jerky/T_UI_iconsPerks_DutyOfCare"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_DutyOfCare.png"
   },
   {
     "name": "Rapid Response",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Jerky/T_UI_iconsPerks_RapidResponse"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_RapidResponse.png"
   },
   {
     "name": "Apocalyptic Ingenuity",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Lasagna/T_UI_iconPerks_ApocalypticIngenuity"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_ApocalypticIngenuity.png"
   },
   {
     "name": "Come and Get Me!",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Lasagna/T_UI_iconPerks_ComeAndGetMe"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_ComeAndGetMe.png"
   },
   {
     "name": "Teamwork: Toughen Up",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Lasagna/T_UI_iconPerks_TeamworkThrowDown"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_TeamworkThrowDown.png"
   },
   {
     "name": "Conviction",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Lasagna/T_UI_iconPerks_Conviction"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_Conviction.png"
   },
   {
     "name": "Last Stand",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Lasagna/T_UI_iconPerks_LastStand"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_LastStand.png"
   },
   {
     "name": "Teamwork: Throw Down",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Lasagna/T_UI_iconPerks_TeamworkToughenUp"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_TeamworkToughenUp.png"
   },
   {
     "name": "Road Life",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Maple/T_UI_iconPerks_RoadLife"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_RoadLife.png"
   },
   {
     "name": "ONE-TWO-THREE-FOUR!",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Maple/T_UI_iconPerks_OneTwoThreeFour"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_OneTwoThreeFour.png"
   },
   {
     "name": "Ghost Notes",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Maple/T_UI_iconPerks_GhostNotes"
+    "image": "/Imagenes/Perks/T_UI_iconPerks_GhostNotes.png"
   },
   {
     "name": "Bada Bada Boom",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_BadaBadaBoom"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_BadaBadaBoom.png"
   },
   {
     "name": "Change of Plan",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_ChangeOfPlan"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_ChangeOfPlan.png"
   },
   {
     "name": "Teamwork: Full Circuit",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_TeamworkFullCircuit"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_TeamworkFullCircuit.png"
   },
   {
     "name": "Extrasensory Perception",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_ExtrasensoryPerception"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_ExtrasensoryPerception.png"
   },
   {
     "name": "We See You",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_WeSeeYou"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_WeSeeYou.png"
   },
   {
     "name": "Teamwork: Soft-Spoken",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Poutine/T_UI_iconsPerks_TeamworkSoftSpoken"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_TeamworkSoftSpoken.png"
   },
   {
     "name": "Flow State",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quiche/T_UI_iconsPerks_FlowState"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_FlowState.png"
   },
   {
     "name": "A Place For Us",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quiche/T_UI_iconsPerks_aPlaceForUs"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_aPlaceForUs.png"
   },
   {
     "name": "Five Moves Ahead",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Quiche/T_UI_iconsPerks_FiveMovesAhead"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_FiveMovesAhead.png"
   },
   {
     "name": "Wide Open Throttle",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sushi/T_UI_iconsPerks_WideOpenThrottle"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_WideOpenThrottle.png"
   },
   {
     "name": "Lend a Hand",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sushi/T_UI_iconsPerks_LendaHand"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_LendaHand.png"
   },
   {
     "name": "Cross-Examination",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sushi/T_UI_iconsPerks_CrossExamination"
+    "image": "/Imagenes/Perks/T_UI_iconsPerks_CrossExamination.png"
   },
   {
     "name": "Saboteador",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_saboteur"
+    "image": "/Imagenes/Perks/iconPerks_saboteur.png"
   },
   {
     "name": "Save the best for last",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC2/iconPerks_saveTheBestForLast"
+    "image": "/Imagenes/Perks/iconPerks_saveTheBestForLast.png"
   },
   {
     "name": "Second Wind",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_secondWind"
+    "image": "/Imagenes/Perks/iconPerks_secondWind.png"
   },
   {
     "name": "Autocuración",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_selfCare"
+    "image": "/Imagenes/Perks/iconPerks_selfCare.png"
   },
   {
     "name": "Inquebrantable",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/L4D/iconPerks_unbreakable"
+    "image": "/Imagenes/Perks/iconPerks_unbreakable.png"
   },
   {
     "name": "Hijo de las Sombras",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_shadowborn"
+    "image": "/Imagenes/Perks/iconPerks_shadowborn.png"
   },
   {
     "name": "Slippery Meat",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_slipperyMeat"
+    "image": "/Imagenes/Perks/iconPerks_slipperyMeat.png"
   },
   {
     "name": "Sloppy Butcher",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_sloppyButcher"
+    "image": "/Imagenes/Perks/iconPerks_sloppyButcher.png"
   },
   {
     "name": "Small Game",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_smallGame"
+    "image": "/Imagenes/Perks/iconPerks_smallGame.png"
   },
   {
     "name": "Solo Quedo Yo",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC2/iconPerks_soleSurvivor"
+    "image": "/Imagenes/Perks/iconPerks_soleSurvivor.png"
   },
   {
     "name": "Solidaridad",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Mali/iconPerks_solidarity"
+    "image": "/Imagenes/Perks/iconPerks_solidarity.png"
   },
   {
     "name": "Salvaguarda de Alma",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wales/iconPerks_soulGuard"
+    "image": "/Imagenes/Perks/iconPerks_soulGuard.png"
   },
   {
     "name": "Spies from the Shadows",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_spiesFromTheShadows"
+    "image": "/Imagenes/Perks/iconPerks_spiesFromTheShadows.png"
   },
   {
     "name": "Escalofríos",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_spineChill"
+    "image": "/Imagenes/Perks/iconPerks_spineChill.png"
   },
   {
     "name": "Furia Espiritual",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Haiti/iconPerks_spiritFury"
+    "image": "/Imagenes/Perks/iconPerks_spiritFury.png"
   },
   {
     "name": "Impulso de Carrera",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_sprintBurst"
+    "image": "/Imagenes/Perks/iconPerks_sprintBurst.png"
   },
   {
     "name": "Bajo Vigilancia",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Finland/iconPerks_stakeOut"
+    "image": "/Imagenes/Perks/iconPerks_stakeOut.png"
   },
   {
     "name": "Con Calle",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_streetwise"
+    "image": "/Imagenes/Perks/iconPerks_streetwise.png"
   },
   {
     "name": "Aliento",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_stridor"
+    "image": "/Imagenes/Perks/iconPerks_stridor.png"
   },
   {
     "name": "Surge",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Qatar/iconPerks_surge"
+    "image": "/Imagenes/Perks/iconPerks_surge.png"
   },
   {
     "name": "Supervisión",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Finland/iconPerks_surveillance"
+    "image": "/Imagenes/Perks/iconPerks_surveillance.png"
   },
   {
     "name": "Pericia Técnica",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC4/iconPerks_technician"
+    "image": "/Imagenes/Perks/iconPerks_technician.png"
   },
   {
     "name": "Tenacidad",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Finland/iconPerks_tenacity"
+    "image": "/Imagenes/Perks/iconPerks_tenacity.png"
   },
   {
     "name": "Ordenamiento territorial",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC5/iconPerks_TerritorialImperative"
+    "image": "/Imagenes/Perks/iconPerks_TerritorialImperative.png"
   },
   {
     "name": "Tanatofobia",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_thatanophobia"
+    "image": "/Imagenes/Perks/iconPerks_thatanophobia.png"
   },
   {
     "name": "El Temple del Hombre",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Ash/iconPerks_mettleOfMan"
+    "image": "/Imagenes/Perks/iconPerks_mettleOfMan.png"
   },
   {
     "name": "Esto No Puede Estar Pasando",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_thisIsNotHappening"
+    "image": "/Imagenes/Perks/iconPerks_thisIsNotHappening.png"
   },
   {
     "name": "Temblores Trepidantes",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Oman/iconPerks_thrillingTremors"
+    "image": "/Imagenes/Perks/iconPerks_thrillingTremors.png"
   },
   {
     "name": "Manitas",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_tinkerer"
+    "image": "/Imagenes/Perks/iconPerks_tinkerer.png"
   },
   {
     "name": "Rastro de Tormento",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Wales/iconPerks_trailOfTorment"
+    "image": "/Imagenes/Perks/iconPerks_trailOfTorment.png"
   },
   {
     "name": "Presencia Perturbadora",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_unnervingPresence"
+    "image": "/Imagenes/Perks/iconPerks_unnervingPresence.png"
   },
   {
     "name": "Unrelenting",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_unrelenting"
+    "image": "/Imagenes/Perks/iconPerks_unrelenting.png"
   },
   {
     "name": "Subir las Apuestas",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC3/iconPerks_upTheAnte"
+    "image": "/Imagenes/Perks/iconPerks_upTheAnte.png"
   },
   {
     "name": "Evasión Urbana",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_urbanEvasion"
+    "image": "/Imagenes/Perks/iconPerks_urbanEvasion.png"
   },
   {
     "name": "Vigilia",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/England/iconPerks_vigil"
+    "image": "/Imagenes/Perks/iconPerks_vigil.png"
   },
   {
     "name": "Visión de Futuro",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Yemen/iconPerks_visionary"
+    "image": "/Imagenes/Perks/iconPerks_visionary.png"
   },
   {
     "name": "¡Despierta!",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/England/iconPerks_wakeUp"
+    "image": "/Imagenes/Perks/iconPerks_wakeUp.png"
   },
   {
     "name": "We'll make it",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_wellMakeIt"
+    "image": "/Imagenes/Perks/iconPerks_wellMakeIt.png"
   },
   {
     "name": "Vamos a Vivir para Siempre",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/DLC5/iconPerks_WereGonnaLiveForever"
+    "image": "/Imagenes/Perks/iconPerks_WereGonnaLiveForever.png"
   },
   {
     "name": "Whispers",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/iconPerks_whispers"
+    "image": "/Imagenes/Perks/iconPerks_whispers.png"
   },
   {
     "name": "Oportunidades",
     "role": "survivor",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Kate/iconPerks_windowsOfOpportunity"
+    "image": "/Imagenes/Perks/iconPerks_windowsOfOpportunity.png"
   },
   {
     "name": "Tácticas de Zanshin",
     "role": "killer",
-    "image": "/Game/UI/UMGAssets/Icons/Perks/Sweden/iconPerks_zanshinTactics"
+    "image": "/Imagenes/Perks/iconPerks_zanshinTactics.png"
   }
 ];
