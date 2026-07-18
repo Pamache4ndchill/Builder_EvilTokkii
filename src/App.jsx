@@ -10,6 +10,7 @@ import { MUSIC_HITS_QUESTIONS } from './data/MusicHitsQuestions';
 import { FLAG_QUESTIONS } from './data/FlagQuestions';
 import { SCRAMBLE_WORDS } from './data/ScrambleWords';
 import { DBD_PERKS } from './data/DbdPerks';
+import { DISNEY_QUESTIONS } from './data/DisneyQuestions';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
@@ -548,7 +549,8 @@ function App() {
     flags: [],
     games: [],
     scramble: [],
-    music: []
+    music: [],
+    disney: []
   });
   const [loadingMinigames, setLoadingMinigames] = useState(false);
   const [minigameSearch, setMinigameSearch] = useState('');
@@ -583,7 +585,8 @@ function App() {
           options: [],
           answerIndex: 0
         })),
-        music: [...MUSIC_HITS_QUESTIONS]
+        music: [...MUSIC_HITS_QUESTIONS],
+        disney: [...DISNEY_QUESTIONS]
       };
 
       if (data && data.length > 0) {
@@ -664,7 +667,8 @@ function App() {
           options: [],
           answerIndex: 0
         })) :
-        [...MUSIC_HITS_QUESTIONS];
+        gameType === 'music' ? [...MUSIC_HITS_QUESTIONS] :
+        [...DISNEY_QUESTIONS];
       
       setMinigamesData(prev => ({
         ...prev,
@@ -2221,21 +2225,46 @@ function App() {
               Editar Item #{editingMinigameItem.index + 1} ({activeMinigameTab.toUpperCase()})
             </h2>
             
-            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games') && (
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label">Texto de la Pregunta</label>
-                <textarea 
-                  className="form-control" 
-                  rows={2}
-                  value={editingMinigameItem.data.text}
-                  onChange={(e) => {
-                    const copy = { ...editingMinigameItem };
-                    copy.data.text = e.target.value;
-                    setEditingMinigameItem(copy);
-                  }}
-                  style={{ resize: 'vertical' }}
-                />
-              </div>
+            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney') && (
+              <>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Texto de la Pregunta</label>
+                  <textarea 
+                    className="form-control" 
+                    rows={2}
+                    value={editingMinigameItem.data.text}
+                    onChange={(e) => {
+                      const copy = { ...editingMinigameItem };
+                      copy.data.text = e.target.value;
+                      setEditingMinigameItem(copy);
+                    }}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+                {activeMinigameTab === 'disney' && (
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label className="form-label">URL de la Imagen</label>
+                    <input 
+                      type="text" 
+                      className="form-control"
+                      value={editingMinigameItem.data.image}
+                      onChange={(e) => {
+                        const copy = { ...editingMinigameItem };
+                        copy.data.image = e.target.value;
+                        setEditingMinigameItem(copy);
+                      }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
+                      <img 
+                        src={editingMinigameItem.data.image} 
+                        alt="Preview" 
+                        style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
+                        onError={(e) => { e.target.src = '/Imagenes/default_character.png'; }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {activeMinigameTab === 'dbd' && (
@@ -3932,7 +3961,8 @@ function App() {
                     { id: 'games', label: '🎮 Trivia Juegos' },
                     { id: 'flags', label: '🏳️ Banderas' },
                     { id: 'scramble', label: '🔤 Scramble' },
-                    { id: 'music', label: '🎵 Música' }
+                    { id: 'music', label: '🎵 Música' },
+                    { id: 'disney', label: '🏰 Disney' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -4148,10 +4178,21 @@ function App() {
                               )}
                             </div>
 
-                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games') && (
+                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney') && (
                               <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', lineHeight: '1.4', color: 'var(--text-main)' }}>
                                 {item.text}
                               </h4>
+                            )}
+
+                            {activeMinigameTab === 'disney' && (
+                              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                                <img 
+                                  src={item.image} 
+                                  alt="Personaje" 
+                                  style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
+                                  onError={(e) => { e.target.src = '/Imagenes/default_character.png'; }}
+                                />
+                              </div>
                             )}
 
                             {activeMinigameTab === 'dbd' && (
