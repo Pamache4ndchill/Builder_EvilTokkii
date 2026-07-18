@@ -599,7 +599,7 @@ function App() {
         overwatch: [...OVERWATCH_QUESTIONS],
         dbd: DBD_PERKS.filter(perk => {
           const parts = perk.image.split('/');
-          const imgName = parts[parts.length - 1];
+          const imgName = parts[parts.length - 1].replace('.png', '');
           return DOWNLOADED_PERKS.has(imgName);
         }),
         flags: [...FLAG_QUESTIONS],
@@ -621,7 +621,7 @@ function App() {
             if (row.game_type === 'dbd') {
               loadedData.dbd = row.data.filter(perk => {
                 const parts = perk.image.split('/');
-                const imgName = parts[parts.length - 1];
+                const imgName = parts[parts.length - 1].replace('.png', '');
                 return DOWNLOADED_PERKS.has(imgName);
               });
             } else {
@@ -681,7 +681,7 @@ function App() {
         gameType === 'overwatch' ? [...OVERWATCH_QUESTIONS] :
         gameType === 'dbd' ? DBD_PERKS.filter(perk => {
           const parts = perk.image.split('/');
-          const imgName = parts[parts.length - 1];
+          const imgName = parts[parts.length - 1].replace('.png', '');
           return DOWNLOADED_PERKS.has(imgName);
         }) :
         gameType === 'flags' ? [...FLAG_QUESTIONS] :
