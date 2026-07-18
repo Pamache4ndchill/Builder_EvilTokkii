@@ -503,6 +503,7 @@ function App() {
   const [loadingReports, setLoadingReports] = useState(false);
   const [reportFilter, setReportFilter] = useState('todos');
   const [reportSearch, setReportSearch] = useState('');
+  const [expandedReports, setExpandedReports] = useState({});
   
   // Song Request States
   const [songRequests, setSongRequests] = useState([]);
@@ -3365,110 +3366,125 @@ function App() {
                 {userReports
                   .filter(r => reportFilter === 'todos' || r.report_type === reportFilter)
                   .filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase()))
-                  .map((report) => (
-                    <div 
-                      key={report.id} 
-                      className="card animate-slide-down" 
-                      style={{ 
-                        padding: '20px', 
-                        borderLeft: `5px solid ${
-                          report.report_type === 'bug' ? '#EF4444' : 
-                          report.report_type === 'sugerencia' ? '#10B981' : 
-                          '#F59E0B'
-                        }`,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                          <span style={{
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold',
-                            textTransform: 'uppercase',
-                            background: report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                            color: report.report_type === 'bug' ? '#EF4444' : report.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
-                            border: `1px solid ${report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
-                          }}>
-                            {report.report_type === 'bug' ? '🐛 Bug' : report.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
-                          </span>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            ID Usuario: <code style={{ color: 'var(--text-main)', background: 'rgba(255,255,255,0.05)', padding: '2px 4px', borderRadius: '4px' }} title={report.user_id}>{report.user_id.substring(0, 8)}...</code>
-                          </span>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            {new Date(report.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <button
-                          className="btn-delete-news"
-                          onClick={() => handleDeleteReport(report.id)}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid rgba(239, 68, 68, 0.2)',
-                            color: '#EF4444',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                          title="Eliminar Reporte"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      
-                      <div style={{ 
-                        fontSize: '0.95rem', 
-                        color: 'var(--text-main)', 
-                        background: 'rgba(15, 23, 42, 0.3)', 
-                        padding: '12px 16px', 
-                        borderRadius: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.03)',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: '1.5'
-                      }}>
-                        {report.description}
-                      </div>
-                      
-                      {report.images && Array.isArray(report.images) && report.images.length > 0 && (
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
-                          {report.images.map((imgUrl, index) => (
-                            <a 
-                              key={index} 
-                              href={imgUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              style={{ 
-                                display: 'block', 
-                                border: '1px solid rgba(255, 255, 255, 0.1)', 
-                                borderRadius: '6px', 
-                                overflow: 'hidden',
-                                transition: 'transform 0.2s',
+                  .map((report) => {
+                    const isExpanded = !!expandedReports[report.id];
+                    return (
+                      <div 
+                        key={report.id} 
+                        className="card animate-slide-down" 
+                        style={{ 
+                          padding: '16px 20px', 
+                          borderLeft: `5px solid ${
+                            report.report_type === 'bug' ? '#EF4444' : 
+                            report.report_type === 'sugerencia' ? '#10B981' : 
+                            '#F59E0B'
+                          }`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: isExpanded ? '12px' : '0px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                        onClick={() => setExpandedReports(prev => ({ ...prev, [report.id]: !prev[report.id] }))}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase',
+                              background: report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                              color: report.report_type === 'bug' ? '#EF4444' : report.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
+                              border: `1px solid ${report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                            }}>
+                              {report.report_type === 'bug' ? '🐛 Bug' : report.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
+                            </span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                              {report.username ? `@${report.username}` : (report.user_id ? `Usuario: ${report.user_id.substring(0, 8)}...` : 'Usuario Anónimo')}
+                            </span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              • {new Date(report.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-delete-news"
+                              onClick={() => handleDeleteReport(report.id)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                color: '#EF4444',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
                               }}
-                              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                              title="Eliminar Reporte"
                             >
-                              <img 
-                                src={imgUrl} 
-                                alt={`Reporte Adjunto ${index + 1}`} 
-                                style={{ 
-                                  maxHeight: '150px', 
-                                  maxWidth: '250px', 
-                                  objectFit: 'cover', 
-                                  display: 'block' 
-                                }} 
-                              />
-                            </a>
-                          ))}
+                              <Trash2 size={16} />
+                            </button>
+                            <div style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandedReports(prev => ({ ...prev, [report.id]: !prev[report.id] }))}>
+                              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        
+                        {isExpanded && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ 
+                              fontSize: '0.95rem', 
+                              color: 'var(--text-main)', 
+                              background: 'rgba(15, 23, 42, 0.3)', 
+                              padding: '12px 16px', 
+                              borderRadius: '8px',
+                              border: '1px solid rgba(255, 255, 255, 0.03)',
+                              whiteSpace: 'pre-wrap',
+                              lineHeight: '1.5'
+                            }}>
+                              {report.description}
+                            </div>
+                            
+                            {report.images && Array.isArray(report.images) && report.images.length > 0 && (
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                {report.images.map((imgUrl, index) => (
+                                  <a 
+                                    key={index} 
+                                    href={imgUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    style={{ 
+                                      display: 'block', 
+                                      border: '1px solid rgba(255, 255, 255, 0.1)', 
+                                      borderRadius: '6px', 
+                                      overflow: 'hidden',
+                                      transition: 'transform 0.2s',
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                  >
+                                    <img 
+                                      src={imgUrl} 
+                                      alt={`Reporte Adjunto ${index + 1}`} 
+                                      style={{ 
+                                        maxHeight: '150px', 
+                                        maxWidth: '250px', 
+                                        objectFit: 'cover', 
+                                        display: 'block' 
+                                      }} 
+                                    />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
 
                 {userReports.filter(r => reportFilter === 'todos' || r.report_type === reportFilter).filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase())).length === 0 && (
                   <div className="card text-center" style={{ padding: '30px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
