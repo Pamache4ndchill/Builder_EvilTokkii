@@ -2235,6 +2235,14 @@ function App() {
 
             {activeMinigameTab === 'dbd' && (
               <>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                  <img 
+                    src={getDbdPerkImageUrl(editingMinigameItem.data.image)} 
+                    alt={editingMinigameItem.data.name} 
+                    style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}
+                    onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
+                  />
+                </div>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label className="form-label">Nombre del Perk</label>
                   <input 
@@ -4048,7 +4056,7 @@ function App() {
                                   <img 
                                     src={getDbdPerkImageUrl(item.image)} 
                                     alt={item.name} 
-                                    style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+                                    style={{ width: '64px', height: '64px', objectFit: 'contain' }}
                                     onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
                                   />
                                 </div>
