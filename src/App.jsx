@@ -564,7 +564,11 @@ function App() {
       
       const loadedData = {
         overwatch: [...OVERWATCH_QUESTIONS],
-        dbd: [...DBD_PERKS],
+        dbd: DBD_PERKS.filter(perk => {
+          const parts = perk.image.split('/');
+          const imgName = parts[parts.length - 1];
+          return DOWNLOADED_PERKS.has(imgName);
+        }),
         flags: [...FLAG_QUESTIONS],
         games: [...GAMES_QUESTIONS],
         scramble: SCRAMBLE_WORDS.map(w => ({
@@ -580,7 +584,15 @@ function App() {
       if (data && data.length > 0) {
         data.forEach(row => {
           if (loadedData[row.game_type]) {
-            loadedData[row.game_type] = row.data;
+            if (row.game_type === 'dbd') {
+              loadedData.dbd = row.data.filter(perk => {
+                const parts = perk.image.split('/');
+                const imgName = parts[parts.length - 1];
+                return DOWNLOADED_PERKS.has(imgName);
+              });
+            } else {
+              loadedData[row.game_type] = row.data;
+            }
           }
         });
       }
@@ -633,7 +645,11 @@ function App() {
       
       const defaultData = 
         gameType === 'overwatch' ? [...OVERWATCH_QUESTIONS] :
-        gameType === 'dbd' ? [...DBD_PERKS] :
+        gameType === 'dbd' ? DBD_PERKS.filter(perk => {
+          const parts = perk.image.split('/');
+          const imgName = parts[parts.length - 1];
+          return DOWNLOADED_PERKS.has(imgName);
+        }) :
         gameType === 'flags' ? [...FLAG_QUESTIONS] :
         gameType === 'games' ? [...GAMES_QUESTIONS] :
         gameType === 'scramble' ? SCRAMBLE_WORDS.map(w => ({
