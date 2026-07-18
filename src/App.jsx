@@ -11,6 +11,7 @@ import { FLAG_QUESTIONS } from './data/FlagQuestions';
 import { SCRAMBLE_WORDS } from './data/ScrambleWords';
 import { DBD_PERKS } from './data/DbdPerks';
 import { DISNEY_QUESTIONS } from './data/DisneyQuestions';
+import { COVERS_QUESTIONS } from './data/CoversQuestions';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
@@ -523,7 +524,9 @@ function App() {
         case 'reports':
           return !!sessionPermissions.access_reports;
         case 'minigames':
-          return !!sessionPermissions.access_minigames;
+          return !!(sessionPermissions.access_minigames || sessionPermissions.access_covers);
+        case 'covers':
+          return !!sessionPermissions.access_covers;
         case 'admin':
           return !!(
             sessionPermissions.access_participations ||
@@ -533,7 +536,8 @@ function App() {
             sessionPermissions.access_song_request ||
             sessionPermissions.access_commands ||
             sessionPermissions.access_reports ||
-            sessionPermissions.access_minigames
+            sessionPermissions.access_minigames ||
+            sessionPermissions.access_covers
           );
         default:
           return false;
@@ -579,7 +583,8 @@ function App() {
     games: [],
     scramble: [],
     music: [],
-    disney: []
+    disney: [],
+    covers: []
   });
   const [loadingMinigames, setLoadingMinigames] = useState(false);
   const [minigameSearch, setMinigameSearch] = useState('');
@@ -615,7 +620,8 @@ function App() {
           answerIndex: 0
         })),
         music: [...MUSIC_HITS_QUESTIONS],
-        disney: [...DISNEY_QUESTIONS]
+        disney: [...DISNEY_QUESTIONS],
+        covers: [...COVERS_QUESTIONS]
       };
 
       if (data && data.length > 0) {
@@ -704,7 +710,8 @@ function App() {
           answerIndex: 0
         })) :
         gameType === 'music' ? [...MUSIC_HITS_QUESTIONS] :
-        [...DISNEY_QUESTIONS];
+        gameType === 'disney' ? [...DISNEY_QUESTIONS] :
+        [...COVERS_QUESTIONS];
       
       setMinigamesData(prev => ({
         ...prev,
@@ -1597,7 +1604,8 @@ function App() {
               access_song_request: false,
               access_commands: false,
               access_reports: false,
-              access_minigames: false
+              access_minigames: false,
+              access_covers: false
             }
           ]);
           
@@ -2262,7 +2270,7 @@ function App() {
               Editar Item #{editingMinigameItem.index + 1} ({activeMinigameTab.toUpperCase()})
             </h2>
             
-            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney') && (
+            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
               <>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label className="form-label">Texto de la Pregunta</label>
@@ -2278,7 +2286,7 @@ function App() {
                     style={{ resize: 'vertical' }}
                   />
                 </div>
-                {activeMinigameTab === 'disney' && (
+                {(activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label className="form-label">URL de la Imagen</label>
                     <input 
@@ -2296,7 +2304,7 @@ function App() {
                         src={editingMinigameItem.data.image} 
                         alt="Preview" 
                         style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
-                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_character.png'; }}
+                        onError={(e) => { e.target.onerror = null; e.target.src = activeMinigameTab === 'disney' ? 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_character.png' : 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png'; }}
                       />
                     </div>
                   </div>
@@ -3999,7 +4007,8 @@ function App() {
                     { id: 'flags', label: '🏳️ Banderas' },
                     { id: 'scramble', label: '🔤 Scramble' },
                     { id: 'music', label: '🎵 Música' },
-                    { id: 'disney', label: '🏰 Disney' }
+                    { id: 'disney', label: '🏰 Disney' },
+                    { id: 'covers', label: '🎮 Carátulas' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -4235,19 +4244,19 @@ function App() {
                               )}
                             </div>
 
-                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney') && (
+                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
                               <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', lineHeight: '1.4', color: 'var(--text-main)' }}>
                                 {item.text}
                               </h4>
                             )}
 
-                            {activeMinigameTab === 'disney' && (
+                            {(activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
                               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
                                 <img 
                                   src={item.image} 
-                                  alt="Personaje" 
+                                  alt="Imagen" 
                                   style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
-                                  onError={(e) => { e.target.src = '/Imagenes/default_character.png'; }}
+                                  onError={(e) => { e.target.onerror = null; e.target.src = activeMinigameTab === 'disney' ? 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_character.png' : 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png'; }}
                                 />
                               </div>
                             )}
