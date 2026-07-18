@@ -29,12 +29,8 @@ function getDbdPerkImageUrl(apiPath) {
   if (!apiPath) return '';
   const parts = apiPath.split('/');
   const rawBaseName = parts[parts.length - 1]; // e.g. iconPerks_Terminus
-  
-  if (DOWNLOADED_PERKS.has(rawBaseName)) {
-    return `/Imagenes/Perks/${rawBaseName}.png`;
-  }
-
   let baseName = rawBaseName;
+
   if (baseName.startsWith('iconPerks_')) {
     const perkPart = baseName.substring(10); // e.g. Terminus
     const formattedPerkPart = perkPart.charAt(0).toLowerCase() + perkPart.slice(1); // e.g. terminus
