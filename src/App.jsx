@@ -4028,6 +4028,71 @@ function App() {
                       const absoluteIdx = startIdx + localIdx;
                       const originalIdx = items.indexOf(item);
                       
+                      if (activeMinigameTab === 'dbd') {
+                        return (
+                          <div 
+                            key={originalIdx !== -1 ? originalIdx : absoluteIdx} 
+                            className="card animate-slide-down" 
+                            style={{ 
+                              padding: '12px 16px', 
+                              display: 'flex', 
+                              gap: '15px',
+                              alignItems: 'center',
+                              borderLeft: '4px solid var(--primary)', 
+                              margin: 0,
+                              position: 'relative',
+                              minHeight: '100px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                              <img 
+                                src={getDbdPerkImageUrl(item.image)} 
+                                alt={item.name} 
+                                style={{ width: '64px', height: '64px', objectFit: 'contain' }}
+                                onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
+                              />
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold', marginTop: '4px' }}>
+                                #{originalIdx + 1}
+                              </span>
+                            </div>
+
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', paddingBottom: '20px' }}>
+                              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1.2' }}>
+                                {item.name}
+                              </h4>
+                              <span style={{
+                                fontSize: '0.7rem',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                width: 'fit-content',
+                                background: item.role === 'killer' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                color: item.role === 'killer' ? '#EF4444' : '#10B981',
+                                textTransform: 'uppercase'
+                              }}>
+                                {item.role === 'killer' ? 'Asesino' : 'Superviviente'}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="btn-add"
+                              style={{ 
+                                width: 'auto', 
+                                padding: '4px 12px', 
+                                fontSize: '0.8rem',
+                                position: 'absolute',
+                                right: '16px',
+                                bottom: '12px'
+                              }}
+                              onClick={() => setEditingMinigameItem({ index: originalIdx, data: JSON.parse(JSON.stringify(item)) })}
+                            >
+                              Editar
+                            </button>
+                          </div>
+                        );
+                      }
+                      
                       return (
                         <div 
                           key={originalIdx !== -1 ? originalIdx : absoluteIdx} 
