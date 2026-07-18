@@ -52,6 +52,32 @@ function getDbdPerkImageUrl(apiPath) {
   return `https://static.wikia.nocookie.net/deadbydaylight_gamepedia_en/images/${f}/${s}/${baseName}`;
 }
 
+function handlePerkImageError(e, apiPath) {
+  e.target.onerror = null; // Prevent loop
+  if (!apiPath) {
+    e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png';
+    return;
+  }
+  try {
+    const parts = apiPath.split('/');
+    const rawBaseName = parts[parts.length - 1];
+    let baseName = rawBaseName;
+    if (baseName.startsWith('iconPerks_')) {
+      const perkPart = baseName.substring(10);
+      const formattedPerkPart = perkPart.charAt(0).toLowerCase() + perkPart.slice(1);
+      baseName = 'IconPerks_' + formattedPerkPart + '.png';
+    } else {
+      baseName = baseName.charAt(0).toUpperCase() + baseName.slice(1) + '.png';
+    }
+    const hash = md5(baseName);
+    const f = hash.charAt(0);
+    const s = hash.substring(0, 2);
+    e.target.src = `https://static.wikia.nocookie.net/deadbydaylight_gamepedia_en/images/${f}/${s}/${baseName}`;
+  } catch (err) {
+    e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png';
+  }
+}
+
 const RichTextEditor = ({ value, onChange }) => {
   const contentEditableRef = useRef(null);
   const [activeFormats, setActiveFormats] = useState({
@@ -2259,7 +2285,7 @@ function App() {
                         src={editingMinigameItem.data.image} 
                         alt="Preview" 
                         style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
-                        onError={(e) => { e.target.src = '/Imagenes/default_character.png'; }}
+                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_character.png'; }}
                       />
                     </div>
                   </div>
@@ -2274,7 +2300,7 @@ function App() {
                     src={getDbdPerkImageUrl(editingMinigameItem.data.image)} 
                     alt={editingMinigameItem.data.name} 
                     style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}
-                    onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
+                    onError={(e) => handlePerkImageError(e, editingMinigameItem.data.image)}
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
@@ -4084,7 +4110,7 @@ function App() {
                                 src={getDbdPerkImageUrl(item.image)} 
                                 alt={item.name} 
                                 style={{ width: '64px', height: '64px', objectFit: 'contain' }}
-                                onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
+                                onError={(e) => handlePerkImageError(e, item.image)}
                               />
                               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold', marginTop: '4px' }}>
                                 #{originalIdx + 1}
@@ -4157,7 +4183,7 @@ function App() {
                                     src={getDbdPerkImageUrl(item.image)} 
                                     alt={item.name} 
                                     style={{ width: '64px', height: '64px', objectFit: 'contain' }}
-                                    onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
+                                    onError={(e) => handlePerkImageError(e, item.image)}
                                   />
                                 </div>
                               )}
