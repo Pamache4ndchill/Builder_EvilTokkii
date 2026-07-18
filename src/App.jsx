@@ -1,6 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+
+import md5 from 'blueimp-md5';
+import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
+import { OVERWATCH_QUESTIONS } from './data/OverwatchQuestions';
+import { GAMES_QUESTIONS } from './data/GamesQuestions';
+import { MUSIC_HITS_QUESTIONS } from './data/MusicHitsQuestions';
+import { FLAG_QUESTIONS } from './data/FlagQuestions';
+import { SCRAMBLE_WORDS } from './data/ScrambleWords';
+import { DBD_PERKS } from './data/DbdPerks';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
@@ -15,6 +24,31 @@ const getDisplayUrl = (url) => {
   if (!url) return '';
   return window.__R2_MOCK_CACHE__[url] || url;
 };
+
+function getDbdPerkImageUrl(apiPath) {
+  if (!apiPath) return '';
+  const parts = apiPath.split('/');
+  const rawBaseName = parts[parts.length - 1]; // e.g. iconPerks_Terminus
+  
+  if (DOWNLOADED_PERKS.has(rawBaseName)) {
+    return `/Imagenes/Perks/${rawBaseName}.png`;
+  }
+
+  let baseName = rawBaseName;
+  if (baseName.startsWith('iconPerks_')) {
+    const perkPart = baseName.substring(10); // e.g. Terminus
+    const formattedPerkPart = perkPart.charAt(0).toLowerCase() + perkPart.slice(1); // e.g. terminus
+    baseName = 'IconPerks_' + formattedPerkPart + '.png'; // e.g. IconPerks_terminus.png
+  } else {
+    baseName = baseName.charAt(0).toUpperCase() + baseName.slice(1) + '.png';
+  }
+  
+  const hash = md5(baseName);
+  const f = hash.charAt(0);
+  const s = hash.substring(0, 2);
+  
+  return `https://static.wikia.nocookie.net/deadbydaylight_gamepedia_en/images/${f}/${s}/${baseName}`;
+}
 
 const RichTextEditor = ({ value, onChange }) => {
   const contentEditableRef = useRef(null);
@@ -505,6 +539,130 @@ function App() {
   const [reportSearch, setReportSearch] = useState('');
   const [expandedReports, setExpandedReports] = useState({});
   
+  // Minigames Editor States
+  const [activeMinigameTab, setActiveMinigameTab] = useState('overwatch');
+  const [minigamesData, setMinigamesData] = useState({
+    overwatch: [],
+    dbd: [],
+    flags: [],
+    games: [],
+    scramble: [],
+    music: []
+  });
+  const [loadingMinigames, setLoadingMinigames] = useState(false);
+  const [minigameSearch, setMinigameSearch] = useState('');
+  const [minigamePage, setMinigamePage] = useState(1);
+  const [editingMinigameItem, setEditingMinigameItem] = useState(null);
+  const [isSavingMinigame, setIsSavingMinigame] = useState(false);
+
+  const fetchMinigamesFromSupabase = async () => {
+    setLoadingMinigames(true);
+    try {
+      const { data, error } = await supabase
+        .from('minigames_content')
+        .select('*');
+      
+      if (error) {
+        console.warn("Table minigames_content might not exist yet or permission denied. Using seeds.", error.message);
+      }
+      
+      const loadedData = {
+        overwatch: [...OVERWATCH_QUESTIONS],
+        dbd: [...DBD_PERKS],
+        flags: [...FLAG_QUESTIONS],
+        games: [...GAMES_QUESTIONS],
+        scramble: SCRAMBLE_WORDS.map(w => ({
+          id: w.id,
+          scrambleWord: w.word,
+          scrambleHint: w.hint,
+          options: [],
+          answerIndex: 0
+        })),
+        music: [...MUSIC_HITS_QUESTIONS]
+      };
+
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          if (loadedData[row.game_type]) {
+            loadedData[row.game_type] = row.data;
+          }
+        });
+      }
+      
+      setMinigamesData(loadedData);
+    } catch (err) {
+      console.error("Error loading minigames:", err);
+    } finally {
+      setLoadingMinigames(false);
+    }
+  };
+
+  const saveMinigameToSupabase = async (gameType, updatedData) => {
+    setIsSavingMinigame(true);
+    try {
+      const { error } = await supabase
+        .from('minigames_content')
+        .upsert({
+          game_type: gameType,
+          data: updatedData,
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+      
+      setMinigamesData(prev => ({
+        ...prev,
+        [gameType]: updatedData
+      }));
+      triggerToast("✅ ¡Cambios guardados en Supabase!");
+      setEditingMinigameItem(null);
+    } catch (err) {
+      console.error("Error saving minigame:", err);
+      alert("Error al guardar en Supabase. Asegúrate de haber creado la tabla minigames_content: " + err.message);
+    } finally {
+      setIsSavingMinigame(false);
+    }
+  };
+
+  const resetMinigameToDefault = async (gameType) => {
+    if (!window.confirm(`¿Estás seguro de que deseas restaurar los valores por defecto de este minijuego? Se perderán las ediciones manuales.`)) return;
+    setIsSavingMinigame(true);
+    try {
+      const { error } = await supabase
+        .from('minigames_content')
+        .delete()
+        .eq('game_type', gameType);
+      
+      if (error) throw error;
+      
+      const defaultData = 
+        gameType === 'overwatch' ? [...OVERWATCH_QUESTIONS] :
+        gameType === 'dbd' ? [...DBD_PERKS] :
+        gameType === 'flags' ? [...FLAG_QUESTIONS] :
+        gameType === 'games' ? [...GAMES_QUESTIONS] :
+        gameType === 'scramble' ? SCRAMBLE_WORDS.map(w => ({
+          id: w.id,
+          scrambleWord: w.word,
+          scrambleHint: w.hint,
+          options: [],
+          answerIndex: 0
+        })) :
+        [...MUSIC_HITS_QUESTIONS];
+      
+      setMinigamesData(prev => ({
+        ...prev,
+        [gameType]: defaultData
+      }));
+      
+      triggerToast("🔄 Restaurado a valores por defecto.");
+    } catch (err) {
+      console.error("Error resetting minigame:", err);
+      alert("Error al restaurar: " + err.message);
+    } finally {
+      setIsSavingMinigame(false);
+    }
+  };
+  
   // Song Request States
   const [songRequests, setSongRequests] = useState([]);
   const [currentSong, setCurrentSong] = useState(null);
@@ -634,6 +792,7 @@ function App() {
   useEffect(() => {
     fetchSongs();
     fetchChatCommands();
+    fetchMinigamesFromSupabase();
 
     // Subscribe to realtime database changes
     const channel = supabase
@@ -1537,6 +1696,8 @@ function App() {
       fetchParticipationsAndEvents();
     } else if (view === 'view_reports') {
       fetchUserReports();
+    } else if (view === 'view_minijuegos') {
+      fetchMinigamesFromSupabase();
     }
   }, [view]);
 
@@ -2011,6 +2172,226 @@ function App() {
         </div>
       )}
 
+      {editingMinigameItem && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(2, 6, 23, 0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000
+          }}
+        >
+          <div 
+            className="login-card animate-modal-in" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '600px', 
+              padding: '2.5rem', 
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+              margin: '0 20px',
+              textAlign: 'left',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Gamepad2 size={24} color="var(--primary)" />
+              Editar Item #{editingMinigameItem.index + 1} ({activeMinigameTab.toUpperCase()})
+            </h2>
+            
+            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games') && (
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Texto de la Pregunta</label>
+                <textarea 
+                  className="form-control" 
+                  rows={2}
+                  value={editingMinigameItem.data.text}
+                  onChange={(e) => {
+                    const copy = { ...editingMinigameItem };
+                    copy.data.text = e.target.value;
+                    setEditingMinigameItem(copy);
+                  }}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+            )}
+
+            {activeMinigameTab === 'dbd' && (
+              <>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Nombre del Perk</label>
+                  <input 
+                    type="text" 
+                    className="form-control"
+                    value={editingMinigameItem.data.name}
+                    onChange={(e) => {
+                      const copy = { ...editingMinigameItem };
+                      copy.data.name = e.target.value;
+                      setEditingMinigameItem(copy);
+                    }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Ruta de Imagen API</label>
+                  <input 
+                    type="text" 
+                    className="form-control"
+                    value={editingMinigameItem.data.image}
+                    onChange={(e) => {
+                      const copy = { ...editingMinigameItem };
+                      copy.data.image = e.target.value;
+                      setEditingMinigameItem(copy);
+                    }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Rol</label>
+                  <select 
+                    className="form-control"
+                    value={editingMinigameItem.data.role}
+                    onChange={(e) => {
+                      const copy = { ...editingMinigameItem };
+                      copy.data.role = e.target.value;
+                      setEditingMinigameItem(copy);
+                    }}
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '10px' }}
+                  >
+                    <option value="survivor">Survivor</option>
+                    <option value="killer">Killer</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {activeMinigameTab === 'flags' && (
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Código de Bandera (Minúsculas, ej: es, ar, mx)</label>
+                <input 
+                  type="text" 
+                  className="form-control"
+                  value={editingMinigameItem.data.flagCode}
+                  onChange={(e) => {
+                    const copy = { ...editingMinigameItem };
+                    copy.data.flagCode = e.target.value;
+                    setEditingMinigameItem(copy);
+                  }}
+                />
+              </div>
+            )}
+
+            {activeMinigameTab === 'scramble' && (
+              <>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Palabra Correcta (Mayúsculas)</label>
+                  <input 
+                    type="text" 
+                    className="form-control"
+                    value={editingMinigameItem.data.scrambleWord}
+                    onChange={(e) => {
+                      const copy = { ...editingMinigameItem };
+                      copy.data.scrambleWord = e.target.value.toUpperCase();
+                      setEditingMinigameItem(copy);
+                    }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label">Pista</label>
+                  <input 
+                    type="text" 
+                    className="form-control"
+                    value={editingMinigameItem.data.scrambleHint}
+                    onChange={(e) => {
+                      const copy = { ...editingMinigameItem };
+                      copy.data.scrambleHint = e.target.value;
+                      setEditingMinigameItem(copy);
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {activeMinigameTab === 'music' && (
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">ID de Video de YouTube (11 caracteres)</label>
+                <input 
+                  type="text" 
+                  className="form-control"
+                  value={editingMinigameItem.data.youtubeId}
+                  onChange={(e) => {
+                    const copy = { ...editingMinigameItem };
+                    copy.data.youtubeId = e.target.value;
+                    setEditingMinigameItem(copy);
+                  }}
+                />
+              </div>
+            )}
+
+            {editingMinigameItem.data.options && editingMinigameItem.data.options.length > 0 && (
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Opciones de Respuesta</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                  {editingMinigameItem.data.options.map((opt, oIdx) => (
+                    <div key={oIdx} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <input 
+                        type="radio" 
+                        name="minigame-correct-answer"
+                        checked={editingMinigameItem.data.answerIndex === oIdx}
+                        onChange={() => {
+                          const copy = { ...editingMinigameItem };
+                          copy.data.answerIndex = oIdx;
+                          setEditingMinigameItem(copy);
+                        }}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#4ADE80' }}
+                        title="Marcar como respuesta correcta"
+                      />
+                      <input 
+                        type="text" 
+                        className="form-control"
+                        value={opt}
+                        onChange={(e) => {
+                          const copy = { ...editingMinigameItem };
+                          copy.data.options[oIdx] = e.target.value;
+                          setEditingMinigameItem(copy);
+                        }}
+                        style={{ flex: 1, padding: '8px' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '2rem' }}>
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', flex: 1 }}
+                onClick={() => setEditingMinigameItem(null)}
+                disabled={isSavingMinigame}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn-submit" 
+                style={{ background: 'var(--primary)', color: 'white', flex: 1 }}
+                onClick={() => {
+                  const items = [...minigamesData[activeMinigameTab]];
+                  items[editingMinigameItem.index] = editingMinigameItem.data;
+                  saveMinigameToSupabase(activeMinigameTab, items);
+                }}
+                disabled={isSavingMinigame}
+              >
+                {isSavingMinigame ? 'Guardando...' : 'Guardar en Supabase'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmModal.show && (
         <div 
           style={{
@@ -2258,7 +2639,7 @@ function App() {
       )}
 
       {/* SIDEBAR ZONE */}
-      {view !== 'home' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && (() => {
+      {view !== 'home' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
@@ -2520,6 +2901,18 @@ function App() {
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
                 <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
+              </div>
+
+              <div 
+                className="dashboard-card" 
+                onClick={() => setView('view_minijuegos')}
+                style={{ border: '1px solid rgba(168, 85, 247, 0.4)' }}
+              >
+                <div className="icon-bg" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7' }}>
+                  <Gamepad2 size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Minijuegos</h3>
+                <p>Visualiza y edita manualmente el banco de preguntas, perks y palabras de todas las dinámicas.</p>
               </div>
             </div>
 
@@ -3493,6 +3886,293 @@ function App() {
                 )}
               </div>
             )}
+          </div>
+        ) : view === 'view_minijuegos' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => { setView('home'); setMinigameSearch(''); setMinigamePage(1); setEditingMinigameItem(null); }}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Gestor de Minijuegos
+              </h1>
+            </div>
+
+            <div className="card animate-slide-down" style={{ padding: '20px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'overwatch', label: '🛡️ Overwatch' },
+                    { id: 'dbd', label: '💀 DBD Perks' },
+                    { id: 'games', label: '🎮 Trivia Juegos' },
+                    { id: 'flags', label: '🏳️ Banderas' },
+                    { id: 'scramble', label: '🔤 Scramble' },
+                    { id: 'music', label: '🎵 Música' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveMinigameTab(tab.id);
+                        setMinigameSearch('');
+                        setMinigamePage(1);
+                        setEditingMinigameItem(null);
+                      }}
+                      className={`btn-add ${activeMinigameTab === tab.id ? 'active' : ''}`}
+                      style={{
+                        padding: '8px 16px',
+                        background: activeMinigameTab === tab.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
+                        border: activeMinigameTab === tab.id ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: 'var(--text-main)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        fontWeight: 'bold',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Buscar por texto..."
+                    value={minigameSearch}
+                    onChange={(e) => {
+                      setMinigameSearch(e.target.value);
+                      setMinigamePage(1);
+                    }}
+                    style={{ width: '250px', margin: 0, padding: '6px 12px', fontSize: '0.9rem' }}
+                  />
+                  <button
+                    onClick={() => resetMinigameToDefault(activeMinigameTab)}
+                    className="btn-submit"
+                    style={{ width: 'auto', padding: '6px 16px', margin: 0, background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}
+                    disabled={loadingMinigames || isSavingMinigame}
+                  >
+                    Restaurar Defectos
+                  </button>
+                  <button
+                    onClick={fetchMinigamesFromSupabase}
+                    className="btn-submit"
+                    style={{ width: 'auto', padding: '6px 16px', margin: 0 }}
+                    disabled={loadingMinigames || isSavingMinigame}
+                  >
+                    {loadingMinigames ? 'Cargando...' : 'Actualizar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {loadingMinigames ? (
+              <div className="card text-center" style={{ padding: '40px' }}>
+                <p style={{ color: 'var(--text-muted)' }}>Cargando datos del minijuego desde Supabase...</p>
+              </div>
+            ) : (() => {
+              const items = minigamesData[activeMinigameTab] || [];
+              
+              const filtered = items.filter((item) => {
+                if (!minigameSearch) return true;
+                const searchLower = minigameSearch.toLowerCase();
+                if (activeMinigameTab === 'overwatch' || activeMinigameTab === 'games') {
+                  return (item.text || '').toLowerCase().includes(searchLower) ||
+                         (item.options || []).some(opt => opt.toLowerCase().includes(searchLower));
+                } else if (activeMinigameTab === 'dbd') {
+                  return (item.name || '').toLowerCase().includes(searchLower) ||
+                         (item.role || '').toLowerCase().includes(searchLower);
+                } else if (activeMinigameTab === 'flags') {
+                  return (item.options || []).some(opt => opt.toLowerCase().includes(searchLower)) ||
+                         (item.flagCode || '').toLowerCase().includes(searchLower);
+                } else if (activeMinigameTab === 'scramble') {
+                  return (item.scrambleWord || '').toLowerCase().includes(searchLower) ||
+                         (item.scrambleHint || '').toLowerCase().includes(searchLower);
+                } else if (activeMinigameTab === 'music') {
+                  return (item.options || []).some(opt => opt.toLowerCase().includes(searchLower)) ||
+                         (item.youtubeId || '').toLowerCase().includes(searchLower);
+                }
+                return true;
+              });
+
+              const itemsPerPage = 15;
+              const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+              const startIdx = (minigamePage - 1) * itemsPerPage;
+              const paginated = filtered.slice(startIdx, startIdx + itemsPerPage);
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+                    {paginated.map((item, localIdx) => {
+                      const absoluteIdx = startIdx + localIdx;
+                      const originalIdx = items.indexOf(item);
+                      
+                      return (
+                        <div 
+                          key={originalIdx !== -1 ? originalIdx : absoluteIdx} 
+                          className="card animate-slide-down" 
+                          style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderLeft: '4px solid var(--primary)', margin: 0 }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                #{originalIdx + 1}
+                              </span>
+                              
+                              {activeMinigameTab === 'dbd' && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{
+                                    fontSize: '0.7rem',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontWeight: 'bold',
+                                    background: item.role === 'killer' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                    color: item.role === 'killer' ? '#EF4444' : '#10B981',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    {item.role === 'killer' ? 'Asesino' : 'Superviviente'}
+                                  </span>
+                                  <img 
+                                    src={getDbdPerkImageUrl(item.image)} 
+                                    alt={item.name} 
+                                    style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+                                    onError={(e) => { e.target.src = '/Imagenes/default_perk.png'; }}
+                                  />
+                                </div>
+                              )}
+                              
+                              {activeMinigameTab === 'flags' && (
+                                <img 
+                                  src={`https://flagcdn.com/h80/${item.flagCode}.png`} 
+                                  alt={item.flagCode}
+                                  style={{ height: '24px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}
+                                  onError={(e) => { e.target.style.display = 'none'; }}
+                                />
+                              )}
+
+                              {activeMinigameTab === 'music' && (
+                                <span style={{ fontSize: '0.75rem', color: '#38BDF8', fontFamily: 'monospace' }}>
+                                  YT: {item.youtubeId}
+                                </span>
+                              )}
+                            </div>
+
+                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games') && (
+                              <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', lineHeight: '1.4', color: 'var(--text-main)' }}>
+                                {item.text}
+                              </h4>
+                            )}
+
+                            {activeMinigameTab === 'dbd' && (
+                              <h4 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                                {item.name}
+                              </h4>
+                            )}
+
+                            {activeMinigameTab === 'flags' && (
+                              <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'var(--text-muted)' }}>
+                                Adivina el país para la bandera: <strong style={{ color: 'var(--text-main)', textTransform: 'uppercase' }}>{item.flagCode}</strong>
+                              </h4>
+                            )}
+
+                            {activeMinigameTab === 'scramble' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', letterSpacing: '2px', color: 'var(--primary)' }}>
+                                  {item.scrambleWord}
+                                </div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                  💡 Pista: {item.scrambleHint}
+                                </div>
+                              </div>
+                            )}
+
+                            {activeMinigameTab === 'music' && (
+                              <div style={{ marginBottom: '12px' }}>
+                                <div style={{ 
+                                  height: '80px', 
+                                  background: '#000', 
+                                  borderRadius: '6px', 
+                                  overflow: 'hidden', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  marginBottom: '8px'
+                                }}>
+                                  <img 
+                                    src={`https://img.youtube.com/vi/${item.youtubeId}/mqdefault.jpg`} 
+                                    alt="thumbnail" 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} 
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {item.options && item.options.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '15px' }}>
+                                {item.options.map((opt, oIdx) => {
+                                  const isCorrect = oIdx === item.answerIndex;
+                                  return (
+                                    <div 
+                                      key={oIdx} 
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.85rem',
+                                        background: isCorrect ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                                        border: isCorrect ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+                                        color: isCorrect ? '#4ADE80' : 'var(--text-muted)'
+                                      }}
+                                    >
+                                      {isCorrect ? '✅ ' : '• '} {opt}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px' }}>
+                            <button
+                              type="button"
+                              className="btn-add"
+                              style={{ width: 'auto', padding: '6px 16px', fontSize: '0.85rem' }}
+                              onClick={() => setEditingMinigameItem({ index: originalIdx, data: JSON.parse(JSON.stringify(item)) })}
+                            >
+                              Editar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '20px', marginBottom: '40px' }}>
+                      <button
+                        className="btn-add"
+                        style={{ width: 'auto', padding: '6px 12px' }}
+                        disabled={minigamePage === 1}
+                        onClick={() => setMinigamePage(p => p - 1)}
+                      >
+                        Anterior
+                      </button>
+                      <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                        Página <strong>{minigamePage}</strong> de {totalPages}
+                      </span>
+                      <button
+                        className="btn-add"
+                        style={{ width: 'auto', padding: '6px 12px' }}
+                        disabled={minigamePage === totalPages}
+                        onClick={() => setMinigamePage(p => p + 1)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : view === 'view_song_request' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
