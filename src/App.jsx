@@ -522,6 +522,8 @@ function App() {
           return !!sessionPermissions.access_commands;
         case 'reports':
           return !!sessionPermissions.access_reports;
+        case 'minigames':
+          return !!sessionPermissions.access_minigames;
         case 'admin':
           return !!(
             sessionPermissions.access_participations ||
@@ -530,7 +532,8 @@ function App() {
             sessionPermissions.access_scheduled_messages ||
             sessionPermissions.access_song_request ||
             sessionPermissions.access_commands ||
-            sessionPermissions.access_reports
+            sessionPermissions.access_reports ||
+            sessionPermissions.access_minigames
           );
         default:
           return false;
@@ -1593,7 +1596,8 @@ function App() {
               access_scheduled_messages: false,
               access_song_request: false,
               access_commands: false,
-              access_reports: false
+              access_reports: false,
+              access_minigames: false
             }
           ]);
           
@@ -2991,11 +2995,11 @@ function App() {
               </div>
 
               <div 
-                className="dashboard-card" 
-                onClick={() => setView('view_minijuegos')}
-                style={{ border: '1px solid rgba(168, 85, 247, 0.4)' }}
+                className={`dashboard-card ${!hasAccess('minigames') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_minijuegos', 'minigames')}
+                style={{ border: hasAccess('minigames') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }}
               >
-                <div className="icon-bg" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7' }}>
+                <div className="icon-bg" style={{ background: hasAccess('minigames') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#A855F7' }}>
                   <Gamepad2 size={36} />
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Minijuegos</h3>

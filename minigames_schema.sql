@@ -13,3 +13,9 @@ ALTER TABLE public.minigames_content ENABLE ROW LEVEL SECURITY;
 -- Políticas de RLS para permitir acceso público total (lectura y escritura)
 DROP POLICY IF EXISTS "Public Manage Minigames Content" ON public.minigames_content;
 CREATE POLICY "Public Manage Minigames Content" ON public.minigames_content FOR ALL USING (true) WITH CHECK (true);
+
+-- =========================================================================
+-- IMPORTANTE: Ejecuta también esto en tu SQL Editor para habilitar la columna
+-- de permisos de minijuegos para los usuarios en la tabla de whitelist.
+-- =========================================================================
+ALTER TABLE public.whitelist ADD COLUMN IF NOT EXISTS access_minigames BOOLEAN DEFAULT FALSE;
