@@ -666,6 +666,13 @@ function App() {
     }
   };
 
+  const deleteMinigameItem = (index) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este elemento?")) return;
+    const items = [...minigamesData[activeMinigameTab]];
+    items.splice(index, 1);
+    saveMinigameToSupabase(activeMinigameTab, items);
+  };
+
   const resetMinigameToDefault = async (gameType) => {
     if (!window.confirm(`¿Estás seguro de que deseas restaurar los valores por defecto de este minijuego? Se perderán las ediciones manuales.`)) return;
     setIsSavingMinigame(true);
@@ -4135,21 +4142,41 @@ function App() {
                               </span>
                             </div>
 
-                            <button
-                              type="button"
-                              className="btn-add"
-                              style={{ 
-                                width: 'auto', 
-                                padding: '4px 12px', 
-                                fontSize: '0.8rem',
-                                position: 'absolute',
-                                right: '16px',
-                                bottom: '12px'
-                              }}
-                              onClick={() => setEditingMinigameItem({ index: originalIdx, data: JSON.parse(JSON.stringify(item)) })}
-                            >
-                              Editar
-                            </button>
+                            <div style={{ 
+                              position: 'absolute',
+                              right: '16px',
+                              bottom: '12px',
+                              display: 'flex',
+                              gap: '8px'
+                            }}>
+                              <button
+                                type="button"
+                                className="btn-add"
+                                style={{ 
+                                  width: 'auto', 
+                                  padding: '4px 12px', 
+                                  fontSize: '0.8rem',
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  color: '#EF4444',
+                                  border: '1px solid rgba(239, 68, 68, 0.2)'
+                                }}
+                                onClick={() => deleteMinigameItem(originalIdx)}
+                              >
+                                Eliminar
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-add"
+                                style={{ 
+                                  width: 'auto', 
+                                  padding: '4px 12px', 
+                                  fontSize: '0.8rem'
+                                }}
+                                onClick={() => setEditingMinigameItem({ index: originalIdx, data: JSON.parse(JSON.stringify(item)) })}
+                              >
+                                Editar
+                              </button>
+                            </div>
                           </div>
                         );
                       }
@@ -4289,7 +4316,22 @@ function App() {
                             )}
                           </div>
 
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="btn-add"
+                              style={{ 
+                                width: 'auto', 
+                                padding: '6px 16px', 
+                                fontSize: '0.85rem',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                color: '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.2)'
+                              }}
+                              onClick={() => deleteMinigameItem(originalIdx)}
+                            >
+                              Eliminar
+                            </button>
                             <button
                               type="button"
                               className="btn-add"
