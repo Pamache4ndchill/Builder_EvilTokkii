@@ -524,11 +524,7 @@ function App() {
         case 'reports':
           return !!sessionPermissions.access_reports;
         case 'minigames':
-          return !!(sessionPermissions.access_minigames || sessionPermissions.access_covers || sessionPermissions.access_music);
-        case 'covers':
-          return !!sessionPermissions.access_covers;
-        case 'music':
-          return !!sessionPermissions.access_music;
+          return !!sessionPermissions.access_minigames;
         case 'admin':
           return !!(
             sessionPermissions.access_participations ||
@@ -538,9 +534,7 @@ function App() {
             sessionPermissions.access_song_request ||
             sessionPermissions.access_commands ||
             sessionPermissions.access_reports ||
-            sessionPermissions.access_minigames ||
-            sessionPermissions.access_covers ||
-            sessionPermissions.access_music
+            sessionPermissions.access_minigames
           );
         default:
           return false;
@@ -1607,9 +1601,7 @@ function App() {
               access_song_request: false,
               access_commands: false,
               access_reports: false,
-              access_minigames: false,
-              access_covers: false,
-              access_music: false
+              access_minigames: false
             }
           ]);
           
@@ -4005,15 +3997,15 @@ function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {[
-                    { id: 'overwatch', label: '🛡️ Overwatch', perm: 'minigames' },
-                    { id: 'dbd', label: '💀 DBD Perks', perm: 'minigames' },
-                    { id: 'games', label: '🎮 Trivia Juegos', perm: 'minigames' },
-                    { id: 'flags', label: '🏳️ Banderas', perm: 'minigames' },
-                    { id: 'scramble', label: '🔤 Scramble', perm: 'minigames' },
-                    { id: 'music', label: '🎵 Música', perm: 'music' },
-                    { id: 'disney', label: '🏰 Disney', perm: 'minigames' },
-                    { id: 'covers', label: '🎮 Carátulas', perm: 'covers' }
-                  ].filter(tab => hasAccess(tab.perm)).map(tab => (
+                    { id: 'overwatch', label: '🛡️ Overwatch' },
+                    { id: 'dbd', label: '💀 DBD Perks' },
+                    { id: 'games', label: '🎮 Trivia Juegos' },
+                    { id: 'flags', label: '🏳️ Banderas' },
+                    { id: 'scramble', label: '🔤 Scramble' },
+                    { id: 'music', label: '🎵 Música' },
+                    { id: 'disney', label: '🏰 Disney' },
+                    { id: 'covers', label: '🎮 Carátulas' }
+                  ].map(tab => (
                     <button
                       key={tab.id}
                       type="button"
