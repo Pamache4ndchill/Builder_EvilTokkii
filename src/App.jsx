@@ -4375,22 +4375,34 @@ function App() {
 
                             {activeMinigameTab === 'music' && (
                               <div style={{ marginBottom: '12px' }}>
-                                <div style={{ 
-                                  height: '80px', 
-                                  background: '#000', 
-                                  borderRadius: '6px', 
-                                  overflow: 'hidden', 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center',
-                                  marginBottom: '8px'
-                                }}>
-                                  <img 
-                                    src={`https://img.youtube.com/vi/${item.youtubeId}/mqdefault.jpg`} 
-                                    alt="thumbnail" 
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} 
+                                {item.audioUrl ? (
+                                  <audio 
+                                    controls 
+                                    src={item.audioUrl} 
+                                    style={{ width: '100%', height: '40px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', padding: '2px' }}
                                   />
-                                </div>
+                                ) : item.youtubeId ? (
+                                  <div style={{ 
+                                    height: '80px', 
+                                    background: '#000', 
+                                    borderRadius: '6px', 
+                                    overflow: 'hidden', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    marginBottom: '8px'
+                                  }}>
+                                    <img 
+                                      src={`https://img.youtube.com/vi/${item.youtubeId}/mqdefault.jpg`} 
+                                      alt="thumbnail" 
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} 
+                                    />
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                    Sin vista previa de audio
+                                  </span>
+                                )}
                               </div>
                             )}
 
