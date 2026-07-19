@@ -4190,6 +4190,91 @@ function App() {
                         );
                       }
                       
+                      if (activeMinigameTab === 'covers') {
+                        return (
+                          <div 
+                            key={originalIdx !== -1 ? originalIdx : absoluteIdx} 
+                            className="card animate-slide-down" 
+                            style={{ 
+                              padding: '0', 
+                              display: 'flex', 
+                              flexDirection: 'row', 
+                              borderLeft: '4px solid var(--primary)', 
+                              margin: 0,
+                              overflow: 'hidden',
+                              background: 'rgba(255,255,255,0.01)',
+                              minHeight: '220px'
+                            }}
+                          >
+                            {/* Imagen de carátula a la izquierda */}
+                            <div style={{ width: '150px', flexShrink: 0, background: '#000', position: 'relative' }}>
+                              <img 
+                                src={item.image} 
+                                alt="Carátula" 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => { e.target.onerror = null; e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png'; }}
+                              />
+                            </div>
+
+                            {/* Contenido a la derecha */}
+                            <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                    #{originalIdx + 1}
+                                  </span>
+                                </div>
+                                <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', lineHeight: '1.4', color: 'var(--text-main)' }}>
+                                  {item.text}
+                                </h4>
+
+                                {item.options && item.options.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
+                                    {item.options.map((opt, oIdx) => {
+                                      const isCorrect = oIdx === item.answerIndex;
+                                      return (
+                                        <div 
+                                          key={oIdx} 
+                                          style={{
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.8rem',
+                                            background: isCorrect ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                                            border: isCorrect ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+                                            color: isCorrect ? '#4ADE80' : 'var(--text-muted)'
+                                          }}
+                                        >
+                                          {isCorrect ? '✅ ' : '• '} {opt}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+                                <button
+                                  type="button"
+                                  className="btn-delete"
+                                  style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem' }}
+                                  onClick={() => handleDeleteMinigameItem(originalIdx)}
+                                >
+                                  Eliminar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-add"
+                                  style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem' }}
+                                  onClick={() => setEditingMinigameItem({ index: originalIdx, data: JSON.parse(JSON.stringify(item)) })}
+                                >
+                                  Editar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
                       return (
                         <div 
                           key={originalIdx !== -1 ? originalIdx : absoluteIdx} 
