@@ -4223,6 +4223,14 @@ function App() {
                                   />
                                 </div>
                               )}
+                              {activeMinigameTab === 'covers' && (
+                                <img 
+                                  src={item.image} 
+                                  alt="Carátula" 
+                                  style={{ width: '64px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}
+                                  onError={(e) => { e.target.onerror = null; e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png'; }}
+                                />
+                              )}
                               
                               {activeMinigameTab === 'flags' && (
                                 <img 
@@ -4246,13 +4254,13 @@ function App() {
                               </h4>
                             )}
 
-                            {(activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
+                            {activeMinigameTab === 'disney' && (
                               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
                                 <img 
                                   src={item.image} 
                                   alt="Imagen" 
                                   style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
-                                  onError={(e) => { e.target.onerror = null; e.target.src = activeMinigameTab === 'disney' ? 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_character.png' : 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_perk.png'; }}
+                                  onError={(e) => { e.target.onerror = null; e.target.src = 'https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public/Imagenes/default_character.png'; }}
                                 />
                               </div>
                             )}
