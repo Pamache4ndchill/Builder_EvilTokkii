@@ -15,7 +15,9 @@ DROP POLICY IF EXISTS "Public Manage Minigames Content" ON public.minigames_cont
 CREATE POLICY "Public Manage Minigames Content" ON public.minigames_content FOR ALL USING (true) WITH CHECK (true);
 
 -- =========================================================================
--- IMPORTANTE: Ejecuta también esto en tu SQL Editor para habilitar la columna
--- de permisos de minijuegos para los usuarios en la tabla de whitelist.
+-- IMPORTANTE: Ejecuta también esto en tu SQL Editor para habilitar las columnas
+-- de permisos para usuarios en la tabla de whitelist.
 -- =========================================================================
 ALTER TABLE public.whitelist ADD COLUMN IF NOT EXISTS access_minigames BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.whitelist ADD COLUMN IF NOT EXISTS access_covers BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.whitelist ADD COLUMN IF NOT EXISTS access_music BOOLEAN DEFAULT FALSE;
