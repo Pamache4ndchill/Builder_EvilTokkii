@@ -948,12 +948,12 @@ function App() {
         
       if (error) throw error;
       
-      enviarMensajeTwitch(`@${requester} ¡Canción añadida a la cola! 🎵 "${song.title}"`);
+      enviarMensajeTwitch(`@${requester} ¡Canción añadida a la cola! 🎵 "${song.title}"`, true);
       // Update local state instantly
       fetchSongs();
     } catch (err) {
       addBotLog(`Error al procesar Song Request: ${err.message}`);
-      enviarMensajeTwitch(`@${requester} ⚠️ Error: ${err.message}`);
+      enviarMensajeTwitch(`@${requester} ⚠️ Error: ${err.message}`, true);
     }
   };
 
@@ -968,9 +968,9 @@ function App() {
         .maybeSingle();
         
       if (data) {
-        enviarMensajeTwitch(`🎵 Reproduciendo ahora: "${data.title}" (pedida por @${data.requested_by})`);
+        enviarMensajeTwitch(`🎵 Reproduciendo ahora: "${data.title}" (pedida por @${data.requested_by})`, true);
       } else {
-        enviarMensajeTwitch(`🎵 No hay ninguna canción reproduciéndose en este momento.`);
+        enviarMensajeTwitch(`🎵 No hay ninguna canción reproduciéndose en este momento.`, true);
       }
     } catch (err) {
       console.error(err);
@@ -1022,10 +1022,46 @@ function App() {
         .eq('id', currentSong.id);
         
       addBotLog(`Canción omitida: "${currentSong.title}"`);
-      enviarMensajeTwitch(`⏭️ Canción omitida: "${currentSong.title}"`);
+      enviarMensajeTwitch(`⏭️ Canción omitida: "${currentSong.title}"`, true);
       playNextSong();
     } catch (err) {
       console.error("Error skipping song:", err);
+    }
+  };
+
+  const handleMoveSong = async (songId, direction) => {
+    const pending = allSongs.filter(s => s.status === 'pending');
+    const idx = pending.findIndex(s => s.id === songId);
+    if (idx === -1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= pending.length) return;
+
+    const current = pending[idx];
+    const target = pending[targetIdx];
+
+    try {
+      const tempTime = current.created_at;
+      
+      const { error: err1 } = await supabase
+        .from('song_requests')
+        .update({ created_at: target.created_at })
+        .eq('id', current.id);
+
+      if (err1) throw err1;
+
+      const { error: err2 } = await supabase
+        .from('song_requests')
+        .update({ created_at: tempTime })
+        .eq('id', target.id);
+
+      if (err2) throw err2;
+
+      fetchSongs();
+      triggerToast("↕️ Cola de reproducción reordenada");
+    } catch (err) {
+      console.error("Error reordering song:", err);
+      triggerToast("❌ Error al mover la canción");
     }
   };
 
@@ -1423,13 +1459,15 @@ function App() {
     addBotLog("Bot desconectado manualmente.");
   };
 
-  const enviarMensajeTwitch = (texto) => {
+  const enviarMensajeTwitch = (texto, silent = false) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${texto}`);
       addBotLog(`Mensaje enviado: ${texto}`);
     } else {
       addBotLog("Error: El WebSocket no está abierto. Conéctate primero.");
-      triggerToast("⚠️ Conéctate a Twitch primero.");
+      if (!silent) {
+        triggerToast("⚠️ Conéctate a Twitch primero.");
+      }
     }
   };
 
@@ -4790,6 +4828,40 @@ function App() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                        {song.status === 'pending' && (
+                          <div style={{ display: 'flex', gap: '2px', marginRight: '4px' }}>
+                            <button
+                              onClick={() => handleMoveSong(song.id, 'up')}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--highlight)',
+                                cursor: 'pointer',
+                                padding: '2px',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                              title="Subir en la cola"
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleMoveSong(song.id, 'down')}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--highlight)',
+                                cursor: 'pointer',
+                                padding: '2px',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                              title="Bajar en la cola"
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                          </div>
+                        )}
                         {!isPlaying && (
                           <button 
                             onClick={() => handlePlaySpecificSong(song)}
