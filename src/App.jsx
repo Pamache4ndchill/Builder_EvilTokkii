@@ -4650,7 +4650,7 @@ function App() {
                     Para reproducir el audio en directo y mostrar el widget animado:
                   </p>
                   <ol style={{ color: 'var(--text-muted)', fontSize: '0.8rem', paddingLeft: '18px', margin: '0 0 10px 0', lineHeight: '1.4' }}>
-                    <li style={{ marginBottom: '4px' }}>Copia la URL: <code style={{ color: '#E9D5FF', background: 'rgba(168, 85, 247, 0.1)', padding: '2px 4px', borderRadius: '4px', display: 'inline-block', fontSize: '0.7rem', wordBreak: 'break-all', marginTop: '1px' }}>{`${window.location.origin}/?overlay=true`}</code></li>
+                    <li style={{ marginBottom: '4px' }}>Copia la URL: <code style={{ color: '#E9D5FF', background: 'rgba(168, 85, 247, 0.1)', padding: '2px 4px', borderRadius: '4px', display: 'inline-block', fontSize: '0.7rem', wordBreak: 'break-all', marginTop: '1px' }}>{`${window.location.origin}${window.location.pathname}${window.location.pathname.endsWith('/') ? '' : '/'}?overlay=true`}</code></li>
                     <li style={{ marginBottom: '4px' }}>En OBS, añade una fuente de <strong>Navegador</strong>.</li>
                     <li>Activa <strong>"Controlar audio mediante OBS"</strong>.</li>
                   </ol>
@@ -4669,7 +4669,7 @@ function App() {
                 <button 
                   className="btn-add"
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/?overlay=true`);
+                    navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}${window.location.pathname.endsWith('/') ? '' : '/'}?overlay=true`);
                     triggerToast("📋 Enlace copiado al portapapeles");
                   }}
                   style={{ width: '100%', height: 'auto', padding: '8px', fontSize: '0.8rem', marginTop: '10px' }}
