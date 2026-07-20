@@ -4993,6 +4993,7 @@ const YoutubePlayer = ({ videoId, onEnded, volume = 50, isPlaying = true }) => {
     let player;
     const initPlayer = () => {
       player = new window.YT.Player(containerId.current, {
+        host: 'https://www.youtube-nocookie.com',
         height: '100%',
         width: '100%',
         videoId: videoId,
