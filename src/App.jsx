@@ -12,6 +12,7 @@ import { SCRAMBLE_WORDS } from './data/ScrambleWords';
 import { DBD_PERKS } from './data/DbdPerks';
 import { DISNEY_QUESTIONS } from './data/DisneyQuestions';
 import { COVERS_QUESTIONS } from './data/CoversQuestions';
+import { POKEMON_QUESTIONS } from './data/PokemonQuestions';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
@@ -581,7 +582,8 @@ function App() {
     scramble: [],
     music: [],
     disney: [],
-    covers: []
+    covers: [],
+    pokemon: []
   });
   const [loadingMinigames, setLoadingMinigames] = useState(false);
   const [minigameSearch, setMinigameSearch] = useState('');
@@ -618,7 +620,8 @@ function App() {
         })),
         music: [...MUSIC_HITS_QUESTIONS],
         disney: [...DISNEY_QUESTIONS],
-        covers: [...COVERS_QUESTIONS]
+        covers: [...COVERS_QUESTIONS],
+        pokemon: [...POKEMON_QUESTIONS]
       };
 
       if (data && data.length > 0) {
@@ -708,6 +711,7 @@ function App() {
         })) :
         gameType === 'music' ? [...MUSIC_HITS_QUESTIONS] :
         gameType === 'disney' ? [...DISNEY_QUESTIONS] :
+        gameType === 'pokemon' ? [...POKEMON_QUESTIONS] :
         [...COVERS_QUESTIONS];
       
       setMinigamesData(prev => ({
@@ -2320,7 +2324,31 @@ function App() {
                     style={{ resize: 'vertical' }}
                   />
                 </div>
-                {(activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
+                {activeMinigameTab === 'pokemon' && (
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">URL de la Imagen (Artwork del Pokémon)</label>
+                <input 
+                  type="text" 
+                  className="form-control"
+                  value={editingMinigameItem.data.pokemonImage}
+                  onChange={(e) => {
+                    const copy = { ...editingMinigameItem };
+                    copy.data.pokemonImage = e.target.value;
+                    setEditingMinigameItem(copy);
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
+                  <img 
+                    src={editingMinigameItem.data.pokemonImage} 
+                    alt="Preview Pokémon" 
+                    style={{ height: '80px', objectFit: 'contain', background: 'rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}
+                    onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=No+Image'; }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {(activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label className="form-label">URL de la Imagen</label>
                     <input 
@@ -4042,7 +4070,8 @@ function App() {
                     { id: 'scramble', label: '🔤 Scramble' },
                     { id: 'music', label: '🎵 Música' },
                     { id: 'disney', label: '🏰 Disney' },
-                    { id: 'covers', label: '🎮 Carátulas' }
+                    { id: 'covers', label: '🎮 Carátulas' },
+                    { id: 'pokemon', label: '😺 Pokémon' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -4223,6 +4252,91 @@ function App() {
                               >
                                 Editar
                               </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      if (activeMinigameTab === 'covers' || activeMinigameTab === 'pokemon') {
+                        return (
+                          <div 
+                            key={originalIdx !== -1 ? originalIdx : absoluteIdx} 
+                            className="card animate-slide-down" 
+                            style={{ 
+                              padding: '0', 
+                              display: 'flex', 
+                              flexDirection: 'row', 
+                              borderLeft: '4px solid var(--primary)', 
+                              margin: 0,
+                              overflow: 'hidden',
+                              background: 'rgba(255,255,255,0.01)',
+                              minHeight: '220px'
+                            }}
+                          >
+                            {/* Imagen de carátula o Pokémon a la izquierda */}
+                            <div style={{ width: '150px', flexShrink: 0, background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' }}>
+                              <img 
+                                src={activeMinigameTab === 'pokemon' ? item.pokemonImage : item.image} 
+                                alt={activeMinigameTab === 'pokemon' ? 'Pokémon' : 'Carátula'} 
+                                style={{ width: '100%', height: '100%', objectFit: activeMinigameTab === 'pokemon' ? 'contain' : 'cover' }}
+                                onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/150?text=No+Image'; }}
+                              />
+                            </div>
+
+                            {/* Contenido a la derecha */}
+                            <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                    #{originalIdx + 1}
+                                  </span>
+                                </div>
+                                <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', lineHeight: '1.4', color: 'var(--text-main)' }}>
+                                  {activeMinigameTab === 'pokemon' ? '¿Quién es este Pokémon?' : item.text}
+                                </h4>
+
+                                {item.options && item.options.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
+                                    {item.options.map((opt, oIdx) => {
+                                      const isCorrect = oIdx === item.answerIndex;
+                                      return (
+                                        <div 
+                                          key={oIdx} 
+                                          style={{
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.8rem',
+                                            background: isCorrect ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                                            border: isCorrect ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+                                            color: isCorrect ? '#4ADE80' : 'var(--text-muted)'
+                                          }}
+                                        >
+                                          {isCorrect ? '✅ ' : '• '} {opt}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+                                <button
+                                  type="button"
+                                  className="btn-delete"
+                                  style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem' }}
+                                  onClick={() => handleDeleteMinigameItem(originalIdx)}
+                                >
+                                  Eliminar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-add"
+                                  style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem' }}
+                                  onClick={() => setEditingMinigameItem({ index: originalIdx, data: JSON.parse(JSON.stringify(item)) })}
+                                >
+                                  Editar
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
