@@ -5024,7 +5024,21 @@ const YoutubePlayer = ({ videoId, onEnded, volume = 50, isPlaying = true }) => {
     if (window.YT && window.YT.Player) {
       initPlayer();
     } else {
+      if (!document.getElementById('youtube-iframe-api-script')) {
+        const tag = document.createElement('script');
+        tag.id = 'youtube-iframe-api-script';
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        if (firstScriptTag) {
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        } else {
+          document.head.appendChild(tag);
+        }
+      }
+      
+      const previousCallback = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
+        if (previousCallback) previousCallback();
         initPlayer();
       };
     }
