@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS public.whitelist (
     access_song_request BOOLEAN NOT NULL DEFAULT false,
     access_commands BOOLEAN NOT NULL DEFAULT false,
     access_reports BOOLEAN NOT NULL DEFAULT false,
+    access_ruleta BOOLEAN NOT NULL DEFAULT false,
+    access_twitch_giveaway BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

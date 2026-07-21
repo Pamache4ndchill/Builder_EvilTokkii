@@ -516,6 +516,10 @@ function App() {
           return !!sessionPermissions.access_participations;
         case 'twitch':
           return !!sessionPermissions.access_twitch;
+        case 'ruleta':
+          return !!sessionPermissions.access_ruleta;
+        case 'twitch_giveaway':
+          return !!sessionPermissions.access_twitch_giveaway;
         case 'most_streamed':
           return !!sessionPermissions.access_most_streamed;
         case 'scheduled_messages':
@@ -1744,7 +1748,9 @@ function App() {
               access_song_request: false,
               access_commands: false,
               access_reports: false,
-              access_minigames: false
+              access_minigames: false,
+              access_ruleta: false,
+              access_twitch_giveaway: false
             }
           ]);
           
@@ -3227,26 +3233,26 @@ function App() {
             </h2>
             <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
               <div 
-                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_ruleta', 'twitch')}
+                className={`dashboard-card ${!hasAccess('ruleta') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('ruleta') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_ruleta', 'ruleta')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#A855F7' }}>
+                <div className="icon-bg" style={{ background: hasAccess('ruleta') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('ruleta') ? '#A855F7' : 'var(--primary)' }}>
                   <Disc size={36} />
                 </div>
-                <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Ruleta de Sorteos</h3>
+                <h3 style={{ color: hasAccess('ruleta') ? '#A855F7' : 'var(--text-main)' }}>Ruleta de Sorteos</h3>
                 <p>Girador de ruleta animada personalizable para realizar sorteos en directo.</p>
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('twitch') ? '1px solid rgba(145, 70, 255, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_twitch_giveaway', 'twitch')}
+                className={`dashboard-card ${!hasAccess('twitch_giveaway') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('twitch_giveaway') ? '1px solid rgba(145, 70, 255, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_twitch_giveaway', 'twitch_giveaway')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(145, 70, 255, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#9146FF' }}>
+                <div className="icon-bg" style={{ background: hasAccess('twitch_giveaway') ? 'rgba(145, 70, 255, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--primary)' }}>
                   <Gift size={36} />
                 </div>
-                <h3 style={{ color: hasAccess('twitch') ? '#9146FF' : 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
+                <h3 style={{ color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
                 <p>Escucha el chat de Twitch en tiempo real por palabras clave para sortear ganadores.</p>
               </div>
 
