@@ -15,6 +15,7 @@ import { DBD_PERKS } from './data/DbdPerks';
 import { DISNEY_QUESTIONS } from './data/DisneyQuestions';
 import { COVERS_QUESTIONS } from './data/CoversQuestions';
 import { POKEMON_QUESTIONS } from './data/PokemonQuestions';
+import { BRAND_QUESTIONS } from './data/BrandQuestions';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
@@ -589,7 +590,8 @@ function App() {
     music: [],
     disney: [],
     covers: [],
-    pokemon: []
+    pokemon: [],
+    brands: []
   });
   const [loadingMinigames, setLoadingMinigames] = useState(false);
   const [minigameSearch, setMinigameSearch] = useState('');
@@ -627,7 +629,8 @@ function App() {
         music: [...MUSIC_HITS_QUESTIONS],
         disney: [...DISNEY_QUESTIONS],
         covers: [...COVERS_QUESTIONS],
-        pokemon: [...POKEMON_QUESTIONS]
+        pokemon: [...POKEMON_QUESTIONS],
+        brands: [...BRAND_QUESTIONS]
       };
 
       if (data && data.length > 0) {
@@ -4291,7 +4294,7 @@ function App() {
             )}
           </div>
         ) : view === 'view_minijuegos' ? (
-          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
+          <div className="builder-view" style={{ maxWidth: '1600px', width: '98%' }}>
             <div className="builder-header animate-slide-down">
               <button className="btn-back" onClick={() => { setView('home'); setMinigameSearch(''); setMinigamePage(1); setEditingMinigameItem(null); }}>
                 <ChevronLeft size={18} /> Volver
@@ -4301,9 +4304,15 @@ function App() {
               </h1>
             </div>
 
-            <div className="card animate-slide-down" style={{ padding: '20px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Layout en 2 Columnas: Barra Lateral Izquierda (Menú + Filtros) y Contenido Principal Derecha */}
+            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '20px', alignItems: 'start' }}>
+              {/* Barra Lateral Izquierda */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', position: 'sticky', top: '20px' }}>
+                {/* Selector de Minijuegos en lista vertical */}
+                <div className="card animate-slide-down" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
+                    Seleccionar Minijuego
+                  </span>
                   {[
                     { id: 'overwatch', label: '🛡️ Overwatch' },
                     { id: 'dbd', label: '💀 DBD Perks' },
@@ -4313,7 +4322,8 @@ function App() {
                     { id: 'music', label: '🎵 Música' },
                     { id: 'disney', label: '🏰 Disney' },
                     { id: 'covers', label: '🎮 Carátulas' },
-                    { id: 'pokemon', label: '😺 Pokémon' }
+                    { id: 'pokemon', label: '😺 Pokémon' },
+                    { id: 'brands', label: '🏷️ Marcas' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -4326,22 +4336,35 @@ function App() {
                       }}
                       className={`btn-add ${activeMinigameTab === tab.id ? 'active' : ''}`}
                       style={{
-                        padding: '8px 16px',
-                        background: activeMinigameTab === tab.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                        border: activeMinigameTab === tab.id ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.1)',
+                        padding: '10px 14px',
+                        background: activeMinigameTab === tab.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.03)',
+                        border: activeMinigameTab === tab.id ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.08)',
                         color: 'var(--text-main)',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         cursor: 'pointer',
                         fontSize: '0.9rem',
                         fontWeight: 'bold',
-                        transition: 'all 0.2s'
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'all 0.2s ease',
+                        boxShadow: activeMinigameTab === tab.id ? '0 4px 12px rgba(255, 0, 110, 0.25)' : 'none'
                       }}
                     >
-                      {tab.label}
+                      <span>{tab.label}</span>
+                      <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                        ({(minigamesData[tab.id] || []).length})
+                      </span>
                     </button>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+
+                {/* Buscador y Botones de Acción */}
+                <div className="card animate-slide-down" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Acciones y Búsqueda
+                  </span>
                   <input
                     type="text"
                     className="form-control"
@@ -4351,33 +4374,34 @@ function App() {
                       setMinigameSearch(e.target.value);
                       setMinigamePage(1);
                     }}
-                    style={{ width: '250px', margin: 0, padding: '6px 12px', fontSize: '0.9rem' }}
+                    style={{ width: '100%', margin: 0, padding: '8px 12px', fontSize: '0.9rem' }}
                   />
-                  <button
-                    onClick={() => resetMinigameToDefault(activeMinigameTab)}
-                    className="btn-submit"
-                    style={{ width: 'auto', padding: '6px 16px', margin: 0, background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}
-                    disabled={loadingMinigames || isSavingMinigame}
-                  >
-                    Restaurar Defectos
-                  </button>
                   <button
                     onClick={fetchMinigamesFromSupabase}
                     className="btn-submit"
-                    style={{ width: 'auto', padding: '6px 16px', margin: 0 }}
+                    style={{ width: '100%', padding: '8px 16px', margin: 0 }}
                     disabled={loadingMinigames || isSavingMinigame}
                   >
-                    {loadingMinigames ? 'Cargando...' : 'Actualizar'}
+                    {loadingMinigames ? 'Cargando...' : '🔄 Actualizar Lista'}
+                  </button>
+                  <button
+                    onClick={() => resetMinigameToDefault(activeMinigameTab)}
+                    className="btn-submit"
+                    style={{ width: '100%', padding: '8px 16px', margin: 0, background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}
+                    disabled={loadingMinigames || isSavingMinigame}
+                  >
+                    ⚠️ Restaurar Defectos
                   </button>
                 </div>
               </div>
-            </div>
 
-            {loadingMinigames ? (
-              <div className="card text-center" style={{ padding: '40px' }}>
-                <p style={{ color: 'var(--text-muted)' }}>Cargando datos del minijuego desde Supabase...</p>
-              </div>
-            ) : (() => {
+              {/* Panel Principal Derecha (Contenido de cada Minijuego) */}
+              <div>
+                {loadingMinigames ? (
+                  <div className="card text-center" style={{ padding: '40px' }}>
+                    <p style={{ color: 'var(--text-muted)' }}>Cargando datos del minijuego desde Supabase...</p>
+                  </div>
+                ) : (() => {
               const items = minigamesData[activeMinigameTab] || [];
               
               const filtered = items.filter((item) => {
@@ -4398,6 +4422,9 @@ function App() {
                 } else if (activeMinigameTab === 'music') {
                   return (item.options || []).some(opt => opt.toLowerCase().includes(searchLower)) ||
                          (item.youtubeId || '').toLowerCase().includes(searchLower);
+                } else if (activeMinigameTab === 'brands') {
+                  return (item.brandName || '').toLowerCase().includes(searchLower) ||
+                         (item.logoUrl || '').toLowerCase().includes(searchLower);
                 }
                 return true;
               });
@@ -4767,6 +4794,22 @@ function App() {
                               </div>
                             )}
 
+                            {activeMinigameTab === 'brands' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                <div style={{ padding: '8px', background: '#fff', borderRadius: '8px', display: 'inline-flex' }}>
+                                  <img 
+                                    src={item.logoUrl} 
+                                    alt={item.brandName} 
+                                    style={{ height: '50px', maxWidth: '140px', objectFit: 'contain' }}
+                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                  />
+                                </div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--primary)', marginTop: '4px' }}>
+                                  {item.brandName}
+                                </div>
+                              </div>
+                            )}
+
                             {activeMinigameTab === 'music' && (
                               <div style={{ marginBottom: '12px' }}>
                                 {item.audioUrl ? (
@@ -4880,6 +4923,8 @@ function App() {
                 </div>
               );
             })()}
+              </div>
+            </div>
           </div>
         ) : view === 'view_song_request' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
