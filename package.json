@@ -13,8 +13,10 @@
     "@supabase/supabase-js": "^2.103.2",
     "blueimp-md5": "^2.19.0",
     "lucide-react": "^1.8.0",
+    "motion": "^12.42.2",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "tmi.js": "^1.8.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

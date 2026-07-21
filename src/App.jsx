@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
+import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -1579,6 +1581,105 @@ function App() {
   const [mostStreamed, setMostStreamed] = useState([]);
   const [isLoadingMostStreamed, setIsLoadingMostStreamed] = useState(false);
 
+  // Ruleta States
+  const [ruletaParticipants, setRuletaParticipants] = useState([]);
+  const [ruletaInputValue, setRuletaInputValue] = useState('');
+  const [ruletaIsMuted, setRuletaIsMuted] = useState(false);
+  const [ruletaHideNames, setRuletaHideNames] = useState(false);
+  const [ruletaEditingIndex, setRuletaEditingIndex] = useState(null);
+  const [ruletaShowToast, setRuletaShowToast] = useState(false);
+
+  const handleAddRuletaParticipant = () => {
+    if (ruletaInputValue.trim()) {
+      const names = ruletaInputValue
+        .split(/\r\n|\r|\n/)
+        .map(name => name.trim())
+        .filter(name => name.length > 0);
+      if (names.length > 0) {
+        setRuletaParticipants(prev => [...prev, ...names]);
+        setRuletaInputValue('');
+      }
+    }
+  };
+
+  const handleRemoveRuletaParticipant = (index) => {
+    if (ruletaParticipants.length <= 2) {
+      alert("Se necesitan al menos 2 participantes.");
+      return;
+    }
+    setRuletaParticipants(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearRuletaParticipants = () => {
+    setRuletaParticipants([]);
+    setRuletaShowToast(true);
+    setTimeout(() => setRuletaShowToast(false), 3000);
+  };
+
+  // Twitch Giveaway States & Handlers
+  const [twitchGiveawayParticipants, setTwitchGiveawayParticipants] = useState([]);
+  const [twitchGiveawayKeyword, setTwitchGiveawayKeyword] = useState('!web');
+  const [twitchGiveawayIsStarted, setTwitchGiveawayIsStarted] = useState(false);
+  const [twitchGiveawayWinner, setTwitchGiveawayWinner] = useState(null);
+
+  const twitchGiveawayClientRef = useRef(null);
+  const twitchGiveawayParticipantsRef = useRef([]);
+
+  useEffect(() => {
+    twitchGiveawayParticipantsRef.current = twitchGiveawayParticipants;
+  }, [twitchGiveawayParticipants]);
+
+  const connectTwitchGiveaway = useCallback(() => {
+    if (twitchGiveawayClientRef.current) return;
+    try {
+      const client = new tmi.Client({ channels: ['eviltokkii'] });
+      client.connect().then(() => console.log('Sorteo conectó a Twitch')).catch(e => console.error(e));
+      client.on('message', (_ch, tags, msg, self) => {
+        if (self || !twitchGiveawayIsStarted) return;
+        const text = msg.trim();
+        const user = tags['display-name'] || tags.username;
+        if (text === twitchGiveawayKeyword.trim() && user) {
+          if (!twitchGiveawayParticipantsRef.current.includes(user)) {
+            setTwitchGiveawayParticipants(prev => prev.includes(user) ? prev : [user, ...prev]);
+          }
+        }
+      });
+      twitchGiveawayClientRef.current = client;
+    } catch (err) {
+      console.error(err);
+    }
+  }, [twitchGiveawayIsStarted, twitchGiveawayKeyword]);
+
+  useEffect(() => {
+    if (twitchGiveawayIsStarted) {
+      connectTwitchGiveaway();
+    }
+  }, [twitchGiveawayIsStarted, connectTwitchGiveaway]);
+
+  const handleStartTwitchGiveaway = () => {
+    setTwitchGiveawayIsStarted(true);
+    setTwitchGiveawayWinner(null);
+  };
+
+  const handleStopTwitchGiveaway = () => {
+    setTwitchGiveawayIsStarted(false);
+  };
+
+  const handleDrawTwitchGiveaway = () => {
+    if (twitchGiveawayParticipants.length === 0) {
+      alert("No hay participantes todavía.");
+      return;
+    }
+    setTwitchGiveawayIsStarted(false);
+    const randomIndex = Math.floor(Math.random() * twitchGiveawayParticipants.length);
+    setTwitchGiveawayWinner(twitchGiveawayParticipants[randomIndex]);
+  };
+
+  const handleClearTwitchGiveaway = () => {
+    setTwitchGiveawayParticipants([]);
+    setTwitchGiveawayWinner(null);
+  };
+
   // Validar sesión y username al cargar
   useEffect(() => {
     const validateSession = async () => {
@@ -2800,7 +2901,51 @@ function App() {
       )}
 
       {/* SIDEBAR ZONE */}
-      {view !== 'home' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
+      {view === 'view_ruleta' ? (
+        <aside className="sidebar animate-slide-down">
+          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Disc size={24} color="var(--primary)" />
+              <h2 style={{ whiteSpace: 'nowrap', fontSize: '1.1rem', margin: 0 }}>Ruleta de Sorteos</h2>
+            </div>
+          </div>
+          <div className="sidebar-content" style={{ padding: 0 }}>
+            <RuletaSidebar
+              participants={ruletaParticipants}
+              setParticipants={setRuletaParticipants}
+              inputValue={ruletaInputValue}
+              setInputValue={setRuletaInputValue}
+              addParticipant={handleAddRuletaParticipant}
+              removeParticipant={handleRemoveRuletaParticipant}
+              clearParticipants={handleClearRuletaParticipants}
+              editingIndex={ruletaEditingIndex}
+              setEditingIndex={setRuletaEditingIndex}
+            />
+          </div>
+        </aside>
+      ) : view === 'view_twitch_giveaway' ? (
+        <aside className="sidebar animate-slide-down">
+          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Gift size={24} color="var(--primary)" />
+              <h2 style={{ whiteSpace: 'nowrap', fontSize: '1.1rem', margin: 0 }}>Sorteo en Vivo</h2>
+            </div>
+          </div>
+          <div className="sidebar-content" style={{ padding: 0 }}>
+            <TwitchGiveawaySidebar
+              keyword={twitchGiveawayKeyword}
+              setKeyword={setTwitchGiveawayKeyword}
+              isStarted={twitchGiveawayIsStarted}
+              handleStart={handleStartTwitchGiveaway}
+              handleStop={handleStopTwitchGiveaway}
+              handleClear={handleClearTwitchGiveaway}
+              handleDraw={handleDrawTwitchGiveaway}
+              participants={twitchGiveawayParticipants}
+              winner={twitchGiveawayWinner}
+            />
+          </div>
+        </aside>
+      ) : view !== 'home' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
@@ -3084,6 +3229,30 @@ function App() {
               <div 
                 className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
                 style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_ruleta', 'twitch')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#A855F7' }}>
+                  <Disc size={36} />
+                </div>
+                <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Ruleta de Sorteos</h3>
+                <p>Girador de ruleta animada personalizable para realizar sorteos en directo.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('twitch') ? '1px solid rgba(145, 70, 255, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_twitch_giveaway', 'twitch')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(145, 70, 255, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#9146FF' }}>
+                  <Gift size={36} />
+                </div>
+                <h3 style={{ color: hasAccess('twitch') ? '#9146FF' : 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
+                <p>Escucha el chat de Twitch en tiempo real por palabras clave para sortear ganadores.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
                 onClick={() => restrictedNavigate('view_twitch', 'twitch')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch') ? '#A855F7' : 'var(--primary)' }}>
@@ -3314,6 +3483,73 @@ function App() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        ) : view === 'view_ruleta' ? (
+          <div className="builder-view" style={{ maxWidth: '100%', margin: 0, padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 'calc(100vh - 40px)' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ 
+                fontSize: '2.2rem', 
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                background: 'linear-gradient(135deg, #a855f7, #ec4899)', 
+                WebkitBackgroundClip: 'text', 
+                WebkitTextFillColor: 'transparent',
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                margin: 0,
+                whiteSpace: 'nowrap'
+              }}>
+                Ruleta de Sorteos EvilTokkii
+              </h1>
+            </div>
+
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+              <RuletaWheel
+                participants={ruletaParticipants}
+                isMuted={ruletaIsMuted}
+                setIsMuted={setRuletaIsMuted}
+                hideNames={ruletaHideNames}
+                setHideNames={setRuletaHideNames}
+                showToast={ruletaShowToast}
+              />
+            </div>
+          </div>
+        ) : view === 'view_twitch_giveaway' ? (
+          <div className="builder-view" style={{ maxWidth: '100%', margin: 0, padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 'calc(100vh - 40px)' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+              <h1 className="header-title" style={{ 
+                fontSize: '2.2rem', 
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                background: 'linear-gradient(135deg, #9146FF, #00d4ff)', 
+                WebkitBackgroundClip: 'text', 
+                WebkitTextFillColor: 'transparent',
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                margin: 0,
+                whiteSpace: 'nowrap'
+              }}>
+                Sorteo en Vivo (Twitch)
+              </h1>
+            </div>
+
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+              <TwitchGiveawayMain
+                keyword={twitchGiveawayKeyword}
+                isStarted={twitchGiveawayIsStarted}
+                winner={twitchGiveawayWinner}
+                setWinner={setTwitchGiveawayWinner}
+                participants={twitchGiveawayParticipants}
+              />
             </div>
           </div>
         ) : view === 'view_twitch' ? (
