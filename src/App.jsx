@@ -577,7 +577,9 @@ function App() {
   const [loadingReports, setLoadingReports] = useState(false);
   const [reportFilter, setReportFilter] = useState('todos');
   const [reportSearch, setReportSearch] = useState('');
-  const [expandedReports, setExpandedReports] = useState({});
+  const [selectedReportId, setSelectedReportId] = useState(null);
+  const [replyingText, setReplyingText] = useState('');
+  const [sendingResponse, setSendingResponse] = useState(false);
   
   // Minigames Editor States
   const [activeMinigameTab, setActiveMinigameTab] = useState('overwatch');
@@ -789,9 +791,34 @@ function App() {
       } else {
         triggerToast("✅ Reporte eliminado.");
         setUserReports(prev => prev.filter(r => r.id !== id));
+        if (selectedReportId === id) setSelectedReportId(null);
       }
     } catch (err) {
       console.error("Error deleting report:", err);
+    }
+  };
+
+  const handleSaveReportResponse = async (reportId) => {
+    if (!replyingText.trim()) {
+      triggerToast("⚠️ Por favor escribe una respuesta.");
+      return;
+    }
+    setSendingResponse(true);
+    try {
+      const { error } = await supabase
+        .from('user_reports')
+        .update({ admin_response: replyingText.trim() })
+        .eq('id', reportId);
+
+      if (error) throw error;
+
+      triggerToast("💌 Respuesta enviada con éxito al usuario.");
+      setUserReports(prev => prev.map(r => r.id === reportId ? { ...r, admin_response: replyingText.trim() } : r));
+    } catch (err) {
+      console.error("Error sending report response:", err);
+      triggerToast("⚠️ Error al guardar respuesta: " + err.message);
+    } finally {
+      setSendingResponse(false);
     }
   };
 
@@ -4102,19 +4129,20 @@ function App() {
             </div>
           </div>
         ) : view === 'view_reports' ? (
-          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
+          <div className="builder-view" style={{ maxWidth: '1500px', width: '98%' }}>
             <div className="builder-header animate-slide-down">
-              <button className="btn-back" onClick={() => setView('home')}>
+              <button className="btn-back" onClick={() => { setView('home'); setSelectedReportId(null); setReplyingText(''); }}>
                 <ChevronLeft size={18} /> Volver
               </button>
               <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                Bandeja de Reportes Web
+                Bandeja de Reportes y Ayuda
               </h1>
             </div>
 
-            <div className="card animate-slide-down" style={{ padding: '20px', marginBottom: '20px' }}>
+            {/* Sub-header con Filtros y Buscador */}
+            <div className="card animate-slide-down" style={{ padding: '16px 20px', marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   {['todos', 'bug', 'sugerencia', 'cambio'].map(type => (
                     <button
                       key={type}
@@ -4128,7 +4156,8 @@ function App() {
                         color: 'var(--text-main)',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        textTransform: 'capitalize'
+                        fontSize: '0.85rem',
+                        fontWeight: 'bold'
                       }}
                     >
                       {type === 'todos' ? 'Todos' : type === 'bug' ? '🐛 Bugs' : type === 'sugerencia' ? '💡 Sugerencias' : '🔄 Cambios'}
@@ -4139,10 +4168,10 @@ function App() {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Buscar en descripción..."
+                    placeholder="Buscar por usuario o texto..."
                     value={reportSearch}
                     onChange={(e) => setReportSearch(e.target.value)}
-                    style={{ width: '250px', margin: 0, padding: '6px 12px', fontSize: '0.9rem' }}
+                    style={{ width: '260px', margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}
                   />
                   <button
                     onClick={fetchUserReports}
@@ -4160,138 +4189,264 @@ function App() {
               <div className="card text-center" style={{ padding: '40px' }}>
                 <p style={{ color: 'var(--text-muted)' }}>Cargando reportes desde la base de datos...</p>
               </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
-                {userReports
-                  .filter(r => reportFilter === 'todos' || r.report_type === reportFilter)
-                  .filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase()))
-                  .map((report) => {
-                    const isExpanded = !!expandedReports[report.id];
-                    return (
-                      <div 
-                        key={report.id} 
-                        className="card animate-slide-down" 
-                        style={{ 
-                          padding: '16px 20px', 
-                          borderLeft: `5px solid ${
-                            report.report_type === 'bug' ? '#EF4444' : 
-                            report.report_type === 'sugerencia' ? '#10B981' : 
-                            '#F59E0B'
-                          }`,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: isExpanded ? '12px' : '0px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease-in-out'
-                        }}
-                        onClick={() => setExpandedReports(prev => ({ ...prev, [report.id]: !prev[report.id] }))}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            ) : (() => {
+              const filteredReports = userReports
+                .filter(r => reportFilter === 'todos' || r.report_type === reportFilter)
+                .filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase()) || (r.username && r.username.toLowerCase().includes(reportSearch.toLowerCase())));
+
+              const activeReport = filteredReports.find(r => r.id === selectedReportId) || filteredReports[0] || null;
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '20px', alignItems: 'start' }}>
+                  {/* BARRA LATERAL IZQUIERDA: Lista de Reportes */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', paddingRight: '4px' }}>
+                    {filteredReports.length === 0 ? (
+                      <div className="card text-center" style={{ padding: '30px 15px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                        No hay reportes que coincidan con la búsqueda.
+                      </div>
+                    ) : (
+                      filteredReports.map((report) => {
+                        const isSelected = activeReport && activeReport.id === report.id;
+                        const isAnswered = !!report.admin_response;
+
+                        return (
+                          <div
+                            key={report.id}
+                            className="card animate-slide-down"
+                            onClick={() => {
+                              setSelectedReportId(report.id);
+                              setReplyingText(report.admin_response || '');
+                            }}
+                            style={{
+                              padding: '14px 16px',
+                              margin: 0,
+                              cursor: 'pointer',
+                              borderRadius: '12px',
+                              background: isSelected 
+                                ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)' 
+                                : 'var(--bg-card)',
+                              border: isSelected 
+                                ? '1px solid var(--primary)' 
+                                : '1px solid rgba(255, 255, 255, 0.05)',
+                              borderLeft: `5px solid ${
+                                report.report_type === 'bug' ? '#EF4444' : 
+                                report.report_type === 'sugerencia' ? '#10B981' : 
+                                '#F59E0B'
+                              }`,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '8px',
+                              transition: 'all 0.2s ease',
+                              boxShadow: isSelected ? '0 4px 14px rgba(236, 72, 153, 0.2)' : 'none'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.65rem',
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase',
+                                background: report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                color: report.report_type === 'bug' ? '#EF4444' : report.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
+                                border: `1px solid ${report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                              }}>
+                                {report.report_type === 'bug' ? '🐛 Bug' : report.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
+                              </span>
+
+                              <span style={{
+                                fontSize: '0.65rem',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                background: isAnswered ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                color: isAnswered ? '#10B981' : '#F59E0B'
+                              }}>
+                                {isAnswered ? 'Respondido' : 'Pendiente'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                {report.username ? `@${report.username}` : `Usuario #${report.user_id.substring(0,6)}`}
+                              </strong>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                {new Date(report.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+
+                            <p style={{
+                              margin: 0,
+                              fontSize: '0.8rem',
+                              color: 'var(--text-muted)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {report.description}
+                            </p>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* PANEL PRINCIPAL DERECHO: Detalle del Reporte y Casilla para Responder */}
+                  {activeReport ? (
+                    <div className="card animate-slide-down" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', margin: 0 }}>
+                      {/* Cabecera del Reporte Seleccionado */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                             <span style={{
-                              padding: '4px 8px',
-                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
                               fontSize: '0.75rem',
                               fontWeight: 'bold',
                               textTransform: 'uppercase',
-                              background: report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                              color: report.report_type === 'bug' ? '#EF4444' : report.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
-                              border: `1px solid ${report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                              background: activeReport.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : activeReport.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                              color: activeReport.report_type === 'bug' ? '#EF4444' : activeReport.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
+                              border: `1px solid ${activeReport.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : activeReport.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
                             }}>
-                              {report.report_type === 'bug' ? '🐛 Bug' : report.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
+                              {activeReport.report_type === 'bug' ? '🐛 Bug' : activeReport.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
                             </span>
-                            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                              {report.username ? `@${report.username}` : (report.user_id ? `Usuario: ${report.user_id.substring(0, 8)}...` : 'Usuario Anónimo')}
-                            </span>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              • {new Date(report.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                            <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)' }}>
+                              {activeReport.username ? `@${activeReport.username}` : `Usuario: ${activeReport.user_id}`}
+                            </h2>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className="btn-delete-news"
-                              onClick={() => handleDeleteReport(report.id)}
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                border: '1px solid rgba(239, 68, 68, 0.2)',
-                                color: '#EF4444',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              title="Eliminar Reporte"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                            <div style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandedReports(prev => ({ ...prev, [report.id]: !prev[report.id] }))}>
-                              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                            </div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            Enviado el {new Date(activeReport.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn-delete-news"
+                          onClick={() => handleDeleteReport(activeReport.id)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#EF4444',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            padding: '8px 14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          <Trash2 size={16} /> Eliminar Reporte
+                        </button>
+                      </div>
+
+                      {/* Contenido Completo de la Descripción */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                          Mensaje / Descripción del Usuario
+                        </label>
+                        <div style={{
+                          fontSize: '0.95rem',
+                          color: 'var(--text-main)',
+                          background: 'rgba(15, 23, 42, 0.4)',
+                          padding: '16px',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: '1.6'
+                        }}>
+                          {activeReport.description}
+                        </div>
+                      </div>
+
+                      {/* Galería de Imágenes Adjuntas */}
+                      {activeReport.images && Array.isArray(activeReport.images) && activeReport.images.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                            Imágenes Adjuntas ({activeReport.images.length})
+                          </label>
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            {activeReport.images.map((imgUrl, index) => (
+                              <a
+                                key={index}
+                                href={imgUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'block',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
+                                  transition: 'transform 0.2s',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.03)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                              >
+                                <img
+                                  src={imgUrl}
+                                  alt={`Captura ${index + 1}`}
+                                  style={{
+                                    height: '140px',
+                                    maxWidth: '220px',
+                                    objectFit: 'cover',
+                                    display: 'block'
+                                  }}
+                                />
+                              </a>
+                            ))}
                           </div>
                         </div>
-                        
-                        {isExpanded && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' }} onClick={(e) => e.stopPropagation()}>
-                            <div style={{ 
-                              fontSize: '0.95rem', 
-                              color: 'var(--text-main)', 
-                              background: 'rgba(15, 23, 42, 0.3)', 
-                              padding: '12px 16px', 
-                              borderRadius: '8px',
-                              border: '1px solid rgba(255, 255, 255, 0.03)',
-                              whiteSpace: 'pre-wrap',
-                              lineHeight: '1.5'
-                            }}>
-                              {report.description}
-                            </div>
-                            
-                            {report.images && Array.isArray(report.images) && report.images.length > 0 && (
-                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                {report.images.map((imgUrl, index) => (
-                                  <a 
-                                    key={index} 
-                                    href={imgUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    style={{ 
-                                      display: 'block', 
-                                      border: '1px solid rgba(255, 255, 255, 0.1)', 
-                                      borderRadius: '6px', 
-                                      overflow: 'hidden',
-                                      transition: 'transform 0.2s',
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                  >
-                                    <img 
-                                      src={imgUrl} 
-                                      alt={`Reporte Adjunto ${index + 1}`} 
-                                      style={{ 
-                                        maxHeight: '150px', 
-                                        maxWidth: '250px', 
-                                        objectFit: 'cover', 
-                                        display: 'block' 
-                                      }} 
-                                    />
-                                  </a>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      )}
 
-                {userReports.filter(r => reportFilter === 'todos' || r.report_type === reportFilter).filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase())).length === 0 && (
-                  <div className="card text-center" style={{ padding: '30px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    No se encontraron reportes que coincidan con la búsqueda o filtro.
-                  </div>
-                )}
-              </div>
-            )}
+                      {/* Casilla para Responder al Usuario */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          💌 Responder al Usuario (Aparecerá en su buzón personal):
+                        </label>
+                        <textarea
+                          rows={4}
+                          className="form-control"
+                          placeholder="Escribe tu respuesta oficial de soporte aquí..."
+                          value={replyingText}
+                          onChange={(e) => setReplyingText(e.target.value)}
+                          style={{
+                            width: '100%',
+                            margin: 0,
+                            padding: '12px 14px',
+                            fontSize: '0.9rem',
+                            lineHeight: 1.5,
+                            background: 'rgba(0,0,0,0.25)'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn-submit"
+                          onClick={() => handleSaveReportResponse(activeReport.id)}
+                          disabled={sendingResponse}
+                          style={{
+                            width: 'fit-content',
+                            padding: '10px 24px',
+                            margin: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            alignSelf: 'flex-end',
+                            fontSize: '0.9rem'
+                          }}
+                        >
+                          {sendingResponse ? 'Guardando...' : activeReport.admin_response ? '🔄 Actualizar Respuesta' : '✉️ Enviar Respuesta'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="card text-center" style={{ padding: '50px 20px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Selecciona un reporte de la izquierda para ver los detalles.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : view === 'view_minijuegos' ? (
           <div className="builder-view" style={{ maxWidth: '1600px', width: '98%' }}>
