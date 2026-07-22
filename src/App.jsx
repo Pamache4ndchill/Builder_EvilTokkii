@@ -16,6 +16,7 @@ import { DISNEY_QUESTIONS } from './data/DisneyQuestions';
 import { COVERS_QUESTIONS } from './data/CoversQuestions';
 import { POKEMON_QUESTIONS } from './data/PokemonQuestions';
 import { BRAND_QUESTIONS } from './data/BrandQuestions';
+import { HISTORY_QUESTIONS } from './data/HistoryQuestions';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
@@ -633,7 +634,8 @@ function App() {
         disney: [...DISNEY_QUESTIONS],
         covers: [...COVERS_QUESTIONS],
         pokemon: [...POKEMON_QUESTIONS],
-        brands: [...BRAND_QUESTIONS]
+        brands: [...BRAND_QUESTIONS],
+        history: [...HISTORY_QUESTIONS]
       };
 
       if (data && data.length > 0) {
