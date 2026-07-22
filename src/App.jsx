@@ -593,7 +593,8 @@ function App() {
     disney: [],
     covers: [],
     pokemon: [],
-    brands: []
+    brands: [],
+    history: []
   });
   const [loadingMinigames, setLoadingMinigames] = useState(false);
   const [minigameSearch, setMinigameSearch] = useState('');
@@ -4478,7 +4479,8 @@ function App() {
                     { id: 'disney', label: '🏰 Disney' },
                     { id: 'covers', label: '🎮 Carátulas' },
                     { id: 'pokemon', label: '😺 Pokémon' },
-                    { id: 'brands', label: '🏷️ Marcas' }
+                    { id: 'brands', label: '🏷️ Marcas' },
+                    { id: 'history', label: '🌍 Eventos Mundiales' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -4562,7 +4564,7 @@ function App() {
               const filtered = items.filter((item) => {
                 if (!minigameSearch) return true;
                 const searchLower = minigameSearch.toLowerCase();
-                if (activeMinigameTab === 'overwatch' || activeMinigameTab === 'games') {
+                if (activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'history') {
                   return (item.text || '').toLowerCase().includes(searchLower) ||
                          (item.options || []).some(opt => opt.toLowerCase().includes(searchLower));
                 } else if (activeMinigameTab === 'dbd') {
@@ -4909,7 +4911,7 @@ function App() {
                               )}
                             </div>
 
-                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney' || activeMinigameTab === 'covers') && (
+                            {(activeMinigameTab === 'overwatch' || activeMinigameTab === 'games' || activeMinigameTab === 'disney' || activeMinigameTab === 'covers' || activeMinigameTab === 'history') && (
                               <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', lineHeight: '1.4', color: 'var(--text-main)' }}>
                                 {item.text}
                               </h4>
