@@ -46,6 +46,16 @@ const GAME_OPTIONS = {
   }
 };
 
+export function getCharacterImageUrl(imgUrl) {
+  if (!imgUrl) return '';
+  if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://') || imgUrl.startsWith('data:') || imgUrl.startsWith('blob:')) {
+    return imgUrl;
+  }
+  const cleanPath = imgUrl.startsWith('/') ? imgUrl : `/${imgUrl}`;
+  // Primary: Production website domain, fallback to raw github
+  return `https://tokkii.online${cleanPath}`;
+}
+
 export default function TierlistsManager({ supabase, triggerToast }) {
   const [activeTab, setActiveTab] = useState('genshin');
   const [tierlistsData, setTierlistsData] = useState(DEFAULT_TIERLISTS);
@@ -460,12 +470,14 @@ export default function TierlistsManager({ supabase, triggerToast }) {
                       boxShadow: '0 4px 10px rgba(0,0,0,0.4)'
                     }}>
                       <img
-                        src={char.imgUrl}
+                        src={getCharacterImageUrl(char.imgUrl)}
                         alt={char.name}
+                        loading="lazy"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = 'https://via.placeholder.com/84x84.png?text=' + encodeURIComponent(char.name);
+                          const cleanPath = char.imgUrl.startsWith('/') ? char.imgUrl : `/${char.imgUrl}`;
+                          e.target.src = `https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public${cleanPath}`;
                         }}
                       />
                     </div>
@@ -645,10 +657,14 @@ export default function TierlistsManager({ supabase, triggerToast }) {
                 {charForm.imgUrl && (
                   <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '10px' }}>
                     <img
-                      src={charForm.imgUrl}
+                      src={getCharacterImageUrl(charForm.imgUrl)}
                       alt="Preview"
                       style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--primary)' }}
-                      onError={(e) => { e.target.style.display = 'none'; }}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        const cleanPath = charForm.imgUrl.startsWith('/') ? charForm.imgUrl : `/${charForm.imgUrl}`;
+                        e.target.src = `https://raw.githubusercontent.com/WebTokkii/tokkii-web/main/public${cleanPath}`;
+                      }}
                     />
                     <div>
                       <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)', display: 'block' }}>Vista Previa de Imagen</strong>
