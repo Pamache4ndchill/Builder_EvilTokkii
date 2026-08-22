@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
+import TierlistsManager from './components/TierlistsManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -534,6 +535,8 @@ function App() {
           return !!sessionPermissions.access_reports;
         case 'minigames':
           return !!sessionPermissions.access_minigames;
+        case 'tierlists':
+          return sessionPermissions.access_tierlists !== undefined ? !!sessionPermissions.access_tierlists : true;
         case 'admin':
           return !!(
             sessionPermissions.access_participations ||
@@ -543,7 +546,8 @@ function App() {
             sessionPermissions.access_song_request ||
             sessionPermissions.access_commands ||
             sessionPermissions.access_reports ||
-            sessionPermissions.access_minigames
+            sessionPermissions.access_minigames ||
+            sessionPermissions.access_tierlists
           );
         default:
           return false;
@@ -2984,7 +2988,7 @@ function App() {
             />
           </div>
         </aside>
-      ) : view !== 'home' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
+      ) : view !== 'home' && view !== 'view_tierlists' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
@@ -3258,6 +3262,18 @@ function App() {
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Minijuegos</h3>
                 <p>Visualiza y edita manualmente el banco de preguntas, perks y palabras de todas las dinámicas.</p>
+              </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('tierlists') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_tierlists', 'tierlists')}
+                style={{ border: hasAccess('tierlists') ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('tierlists') ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
+                  <Layers size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Contenido Tierlists</h3>
+                <p>Gestiona, añade y actualiza personajes e imágenes en las 4 Tierlists oficiales de la web.</p>
               </div>
             </div>
 
@@ -5466,6 +5482,15 @@ function App() {
                 )}
               </div>
             </div>
+          </div>
+        ) : view === 'view_tierlists' ? (
+          <div className="builder-view" style={{ maxWidth: '100%', margin: 0, padding: '1.5rem 2rem' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+            </div>
+            <TierlistsManager supabase={supabase} triggerToast={triggerToast} />
           </div>
         ) : (
           <div className="builder-view">
