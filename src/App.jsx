@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
 import TierlistsManager from './components/TierlistsManager';
+import SyncNewsManager from './components/SyncNewsManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -3275,6 +3276,18 @@ function App() {
                 <h3 style={{ color: 'var(--text-main)' }}>Contenido Tierlists</h3>
                 <p>Gestiona, añade y actualiza personajes e imágenes en las 4 Tierlists oficiales de la web.</p>
               </div>
+
+              <div 
+                className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_sync_news', 'news_only')}
+                style={{ border: hasAccess('news_only') ? '1px solid rgba(56, 189, 248, 0.4)' : '1px dashed var(--border-color)' }}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(56, 189, 248, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
+                  <Newspaper size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Sincronizar Noticias</h3>
+                <p>Ejecuta la sincronización automática de 3 noticias de videojuegos y 3 de anime desde los feeds oficiales.</p>
+              </div>
             </div>
 
             <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: '#A855F7', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(168, 85, 247, 0.1)', paddingBottom: '8px' }}>
@@ -5491,6 +5504,15 @@ function App() {
               </button>
             </div>
             <TierlistsManager supabase={supabase} triggerToast={triggerToast} />
+          </div>
+        ) : view === 'view_sync_news' ? (
+          <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+            </div>
+            <SyncNewsManager supabase={supabase} triggerToast={triggerToast} />
           </div>
         ) : (
           <div className="builder-view">
