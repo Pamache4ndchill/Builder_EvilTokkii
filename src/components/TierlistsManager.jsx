@@ -293,17 +293,6 @@ export default function TierlistsManager({ supabase, triggerToast }) {
             Administra, añade y actualiza los personajes e imágenes de las 4 Tierlists oficiales.
           </p>
         </div>
-
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            type="button"
-            className="btn-submit"
-            style={{ width: 'auto', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--primary)', color: '#fff' }}
-            onClick={handleOpenAddModal}
-          >
-            <Plus size={18} /> + Añadir Personaje
-          </button>
-        </div>
       </div>
 
       {/* Main Two-Column Layout */}
