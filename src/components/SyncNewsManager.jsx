@@ -55,7 +55,7 @@ function generateSlug(title) {
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/\s+/g, '-')
         .replace(/[^\w\-]+/g, '')
-        .replace(/\-\-+/g, '-')
+        .replace(/\-\-/g, '-')
         .replace(/^-+/, '')
         .replace(/-+$/, '');
 }
@@ -108,28 +108,13 @@ function extractTagValue(xml, tagName) {
     return regularMatch?.[1] || '';
 }
 
-const ANIME_KEYWORDS = [
-    'anime', 'manga', 'otaku', 'crunchyroll', 'animacion', 'animación',
-    'temporada', 'doblaje', 'doblaje latino', 'pelicula', 'película',
-    'demon slayer', 'kimetsu', 'jujutsu', 'dragon ball', 'naruto', 'one piece',
-    'chainsaw man', 'bleach', 'toei', 'mappa', 'ufotable', 'aniplex', 'boku no hero',
-    'my hero academia', 'spy x family', 'solo leveling', 'frieren', 'mononoke',
-    'dan da dan', 'dandadan', 'blue lock', 'kaiju', 'isekai', 'shingeki',
-    'attack on titan', 'gundam', 'evangelion', 'romance', 'manhwa', 'webtoon'
-];
-
-function isStrictCategory(category, title, description, sourceCategory) {
+function isStrictCategory(category, title, description) {
     const text = `${title} ${description}`.toLowerCase();
     
     if (category === 'ANIME') {
         const isPureGaming = (text.includes('gta 6') || text.includes('gta vi') || text.includes('playstation 5') || text.includes('xbox series') || text.includes('tarjeta gráfica') || text.includes('rtx 40') || text.includes('gameplay trailer') || text.includes('nintendo switch 2')) && !text.includes('anime') && !text.includes('manga');
         if (isPureGaming) return false;
-
-        if (sourceCategory === 'ANIME') {
-            const hasAnimeMatch = ANIME_KEYWORDS.some(k => text.includes(k));
-            return hasAnimeMatch || !isPureGaming;
-        }
-        return ANIME_KEYWORDS.some(k => text.includes(k));
+        return true;
     }
 
     if (category === 'VIDEOJUEGOS') {
@@ -162,7 +147,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
             if (error) throw error;
             
-            // Orden descendente estricto: desde la más actual a la más vieja
             const sorted = (data || []).sort((a, b) => {
                 const timeA = new Date(a.published_at || a.created_at || 0).getTime();
                 const timeB = new Date(b.published_at || b.created_at || 0).getTime();
@@ -171,7 +155,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
             setArticles(sorted);
 
-            // Count today articles
             const todayVg = sorted.filter(a => {
                 const isVg = a.category === 'VIDEOJUEGOS' || (a.content_blocks && JSON.stringify(a.content_blocks).includes('VIDEOJUEGOS'));
                 const isToday = (a.published_at || a.created_at || '').startsWith(todayDateStr);
@@ -197,28 +180,119 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         fetchRecentArticles();
     }, []);
 
-    const fetchFeedContent = async (feedUrl) => {
+    // Helper unificado que intenta rss2json primero, luego API directa o proxies
+    const fetchNormalizedItems = async (source) => {
+        if (source.type === 'mmobomb') {
+            try {
+                const res = await fetch('https://www.mmobomb.com/api1/latestnews');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        return data.map(item => ({
+                            title: item.title,
+                            link: item.article_url,
+                            description: item.short_description || item.article_content,
+                            image: item.main_image || item.thumbnail,
+                            date: new Date().toISOString(),
+                            sourceName: source.name
+                        }));
+                    }
+                }
+            } catch (e) {
+                console.warn("MMOBomb API failed, skipping:", e);
+            }
+            return [];
+        }
+
+        // 1. Intentar con rss2json (CORS friendly para navegadores)
+        try {
+            const r2jUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}`;
+            const res = await fetch(r2jUrl);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
+                    return json.items.map(item => {
+                        let img = item.thumbnail || item.enclosure?.link || '';
+                        if (!img && item.description) {
+                            const match = item.description.match(/<img[^>]*src=["']([^"']*)["']/i);
+                            if (match) img = match[1];
+                        }
+                        return {
+                            title: item.title,
+                            link: item.link,
+                            description: item.description || item.content,
+                            image: img,
+                            date: item.pubDate || new Date().toISOString(),
+                            sourceName: source.name
+                        };
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn(`rss2json failed for ${source.name}, trying proxy raw...`, e);
+        }
+
+        // 2. Fallback con Proxies XML
         const proxies = [
-            (url) => url, // Direct
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
+            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            (url) => url
         ];
 
         for (const proxy of proxies) {
             try {
-                const target = proxy(feedUrl);
+                const target = proxy(source.url);
                 const res = await fetch(target, { cache: 'no-store' });
                 if (res.ok) {
-                    const text = await res.text();
-                    if (text && (text.includes('<item>') || text.includes('<entry>'))) {
-                        return text;
+                    const xml = await res.text();
+                    if (xml && (xml.includes('<item>') || xml.includes('<entry>'))) {
+                        const itemBlocks = xml.includes('<item>') ? xml.split('<item>') : xml.split('<entry>');
+                        itemBlocks.shift();
+                        const parsed = [];
+                        for (const itemXml of itemBlocks) {
+                            const rawTitle = extractTagValue(itemXml, 'title');
+                            const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
+                            let rawLink = extractTagValue(itemXml, 'link').trim();
+                            if (!rawLink || rawLink.startsWith('<')) {
+                                rawLink = itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '';
+                            }
+                            const guid = extractTagValue(itemXml, 'guid').trim() || extractTagValue(itemXml, 'id').trim();
+                            const link = ensureAbsoluteUrl(rawLink || (guid.startsWith('http') ? guid : ''), source.url);
+                            
+                            if (!rawTitleClean || !link || !link.startsWith('http')) continue;
+
+                            const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
+                            
+                            let header_image = '';
+                            const encMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
+                            const medMatch = itemXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || itemXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
+                            if (encMatch) header_image = encMatch[1];
+                            else if (medMatch) header_image = medMatch[1];
+                            else {
+                                const imgMatch = itemXml.match(/<img[^>]*src=["']([^"']*)["']/i);
+                                if (imgMatch) header_image = ensureAbsoluteUrl(imgMatch[1], link);
+                            }
+
+                            const pubDateStr = extractTagValue(itemXml, 'pubDate') || extractTagValue(itemXml, 'dc:date') || extractTagValue(itemXml, 'updated');
+
+                            parsed.push({
+                                title: rawTitleClean,
+                                link,
+                                description: contentEncoded,
+                                image: header_image,
+                                date: pubDateStr || new Date().toISOString(),
+                                sourceName: source.name
+                            });
+                        }
+                        if (parsed.length > 0) return parsed;
                     }
                 }
-            } catch (err) {
-                // Try next proxy
+            } catch (e) {
+                // Try next
             }
         }
-        throw new Error(`No se pudo leer el feed: ${feedUrl}`);
+
+        return [];
     };
 
     const handleRunSync = async () => {
@@ -226,16 +300,16 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         setIsSyncing(true);
         setSyncProgress('Iniciando sincronización estricta (3 Videojuegos + 3 Anime)...');
 
-        // Feeds ordenados por prioridad y categoría estricta
-        const vgFeeds = [
-            { url: 'https://www.3djuegos.com/universo/rss/rss.php', name: '3DJuegos', category: 'VIDEOJUEGOS', lang: 'es' },
-            { url: 'https://es.ign.com/feed.xml', name: 'IGN España', category: 'VIDEOJUEGOS', lang: 'es' }
+        const vgSources = [
+            { name: '3DJuegos', type: 'rss', url: 'https://www.3djuegos.com/universo/rss/rss.php' },
+            { name: 'MMOBomb', type: 'mmobomb' },
+            { name: 'IGN', type: 'rss', url: 'https://feeds.feedburner.com/ign/news' }
         ];
 
-        const animeFeeds = [
-            { url: 'https://ramenparados.com/feed/', name: 'Ramen Para Dos', category: 'ANIME', lang: 'es' },
-            { url: 'https://areajugones.sport.es/anime/feed/', name: 'Areajugones', category: 'ANIME', lang: 'es' },
-            { url: 'https://www.crunchyroll.com/news/rss?lang=esES', name: 'Crunchyroll', category: 'ANIME', lang: 'es' }
+        const animeSources = [
+            { name: 'Ramen Para Dos', type: 'rss', url: 'https://ramenparados.com/feed/' },
+            { name: 'Areajugones', type: 'rss', url: 'https://areajugones.sport.es/anime/feed/' },
+            { name: 'Crunchyroll', type: 'rss', url: 'https://www.crunchyroll.com/news/rss?lang=esES' }
         ];
 
         let countVideojuegos = 0;
@@ -244,45 +318,23 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
         try {
             // 1. Sincronizar exactamente 3 noticias de VIDEOJUEGOS
-            for (const feed of vgFeeds) {
+            for (const src of vgSources) {
                 if (countVideojuegos >= targetLimit) break;
-                setSyncProgress(`Consultando noticias de Videojuegos en ${feed.name}...`);
+                setSyncProgress(`Consultando videojuegos en ${src.name}...`);
 
-                let xml = '';
-                try {
-                    xml = await fetchFeedContent(feed.url);
-                } catch (e) {
-                    console.warn(`Feed ${feed.name} falló:`, e);
-                    continue;
-                }
-
-                const itemBlocks = xml.includes('<item>') ? xml.split('<item>') : xml.split('<entry>');
-                itemBlocks.shift();
-
-                for (const itemXml of itemBlocks) {
+                const items = await fetchNormalizedItems(src);
+                for (const item of items) {
                     if (countVideojuegos >= targetLimit) break;
 
-                    const rawTitle = extractTagValue(itemXml, 'title');
-                    const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
-                    let rawLink = extractTagValue(itemXml, 'link').trim();
-                    if (!rawLink || rawLink.startsWith('<')) {
-                        rawLink = itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '';
-                    }
-                    const guid = extractTagValue(itemXml, 'guid').trim() || extractTagValue(itemXml, 'id').trim();
-                    const link = ensureAbsoluteUrl(rawLink || (guid.startsWith('http') ? guid : ''), feed.url);
+                    const titleClean = decodeHtmlEntities(item.title || '').trim();
+                    const link = (item.link || '').trim();
+                    if (!titleClean || !link || !link.startsWith('http')) continue;
 
-                    if (!rawTitleClean || !link || !link.startsWith('http')) continue;
+                    let fullDesc = cleanDescription(item.description || '');
+                    if (!isStrictCategory('VIDEOJUEGOS', titleClean, fullDesc)) continue;
 
-                    const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
-                    let fullDesc = cleanDescription(contentEncoded);
-
-                    // Validar categoría estricta de videojuegos
-                    if (!isStrictCategory('VIDEOJUEGOS', rawTitleClean, fullDesc, 'VIDEOJUEGOS')) {
-                        continue;
-                    }
-
-                    const hash = getHash(link || `${feed.name}-${rawTitleClean}`);
-                    const baseSlug = generateSlug(rawTitleClean || `${feed.name}-${hash}`);
+                    const hash = getHash(link || `${src.name}-${titleClean}`);
+                    const baseSlug = generateSlug(titleClean || `${src.name}-${hash}`);
                     const slug = `${baseSlug}-${hash}`;
 
                     const { data: existing } = await supabase
@@ -293,51 +345,36 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     if (existing) continue;
 
-                    setSyncProgress(`[Videojuegos ${countVideojuegos + 1}/3] Guardando: "${rawTitleClean.substring(0, 30)}..."`);
+                    setSyncProgress(`[Videojuegos ${countVideojuegos + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
 
                     if (!fullDesc || fullDesc.length < 50) {
                         fullDesc = '¡Mantente al día con las últimas novedades del mundo de los videojuegos! Hay grandes noticias sucediendo en este momento en la industria.\n\nHaz clic en el botón de abajo para leer el artículo completo con todos los detalles directamente en la fuente oficial.';
                     }
 
                     const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : fullDesc;
-
-                    // Extract image
-                    let header_image = '';
-                    const encMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
-                    const medMatch = itemXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || itemXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
-                    if (encMatch) header_image = encMatch[1];
-                    else if (medMatch) header_image = medMatch[1];
-                    else {
-                        const imgMatch = itemXml.match(/<img[^>]*src=["']([^"']*)["']/i);
-                        if (imgMatch) header_image = ensureAbsoluteUrl(imgMatch[1], link);
-                    }
-
-                    if (!header_image) {
-                        header_image = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
-                    }
+                    let header_image = item.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
 
                     const paragraphsHtml = formatParagraphs(fullDesc);
                     const articleHtml = `
                         ${paragraphsHtml}
                         <p style="margin-top: 2rem; text-align: center;">
                             <a href="${link}" target="_blank" rel="noopener noreferrer" class="games-join-btn" style="display: inline-flex; text-decoration: none; padding: 1rem 2.5rem; background: var(--primary); color: white; border-radius: 30px; font-weight: bold; box-shadow: 0 5px 15px rgba(157, 78, 221, 0.4);">
-                                LEER ARTÍCULO COMPLETO EN ${feed.name.toUpperCase()}
+                                LEER ARTÍCULO COMPLETO EN ${src.name.toUpperCase()}
                             </a>
                         </p>
                     `;
 
                     const author = pickAuthor(link);
-                    const pubDateStr = extractTagValue(itemXml, 'pubDate') || extractTagValue(itemXml, 'dc:date') || extractTagValue(itemXml, 'updated');
-                    const parsedDate = pubDateStr ? new Date(pubDateStr) : new Date();
+                    const parsedDate = item.date ? new Date(item.date) : new Date();
                     const published_at = Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
 
                     const payload = {
-                        title: rawTitleClean,
+                        title: titleClean,
                         subtitle,
                         slug,
                         header_image,
                         content_blocks: [
-                            { type: 'metadata', category: 'VIDEOJUEGOS', source: feed.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
+                            { type: 'metadata', category: 'VIDEOJUEGOS', source: src.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
                             { type: 'text', content: articleHtml }
                         ],
                         author,
@@ -356,45 +393,23 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             }
 
             // 2. Sincronizar exactamente 3 noticias de ANIME
-            for (const feed of animeFeeds) {
+            for (const src of animeSources) {
                 if (countAnime >= targetLimit) break;
-                setSyncProgress(`Consultando noticias de Anime en ${feed.name}...`);
+                setSyncProgress(`Consultando anime en ${src.name}...`);
 
-                let xml = '';
-                try {
-                    xml = await fetchFeedContent(feed.url);
-                } catch (e) {
-                    console.warn(`Feed ${feed.name} falló:`, e);
-                    continue;
-                }
-
-                const itemBlocks = xml.includes('<item>') ? xml.split('<item>') : xml.split('<entry>');
-                itemBlocks.shift();
-
-                for (const itemXml of itemBlocks) {
+                const items = await fetchNormalizedItems(src);
+                for (const item of items) {
                     if (countAnime >= targetLimit) break;
 
-                    const rawTitle = extractTagValue(itemXml, 'title');
-                    const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
-                    let rawLink = extractTagValue(itemXml, 'link').trim();
-                    if (!rawLink || rawLink.startsWith('<')) {
-                        rawLink = itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '';
-                    }
-                    const guid = extractTagValue(itemXml, 'guid').trim() || extractTagValue(itemXml, 'id').trim();
-                    const link = ensureAbsoluteUrl(rawLink || (guid.startsWith('http') ? guid : ''), feed.url);
+                    const titleClean = decodeHtmlEntities(item.title || '').trim();
+                    const link = (item.link || '').trim();
+                    if (!titleClean || !link || !link.startsWith('http')) continue;
 
-                    if (!rawTitleClean || !link || !link.startsWith('http')) continue;
+                    let fullDesc = cleanDescription(item.description || '');
+                    if (!isStrictCategory('ANIME', titleClean, fullDesc)) continue;
 
-                    const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
-                    let fullDesc = cleanDescription(contentEncoded);
-
-                    // Validar categoría estricta de anime (descartar notas de GTA, consolas o ajenas)
-                    if (!isStrictCategory('ANIME', rawTitleClean, fullDesc, feed.category)) {
-                        continue;
-                    }
-
-                    const hash = getHash(link || `${feed.name}-${rawTitleClean}`);
-                    const baseSlug = generateSlug(rawTitleClean || `${feed.name}-${hash}`);
+                    const hash = getHash(link || `${src.name}-${titleClean}`);
+                    const baseSlug = generateSlug(titleClean || `${src.name}-${hash}`);
                     const slug = `${baseSlug}-${hash}`;
 
                     const { data: existing } = await supabase
@@ -405,55 +420,36 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     if (existing) continue;
 
-                    setSyncProgress(`[Anime ${countAnime + 1}/3] Guardando: "${rawTitleClean.substring(0, 30)}..."`);
+                    setSyncProgress(`[Anime ${countAnime + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
 
                     if (!fullDesc || fullDesc.length < 50) {
-                        fullDesc = '¡Grandes novedades para los fans del anime! Mantente al día con todos los anuncios, trailers y fechas clave de esta producción.\n\nPuedes consultar todos los pormenores accediendo directamente a la fuente original de la noticia.';
+                        fullDesc = '¡Grandes novedades para los fans del anime y el manga! Mantente al día con todos los anuncios, trailers y fechas clave de esta producción.\n\nPuedes consultar todos los pormenores accediendo directamente a la fuente original de la noticia.';
                     }
 
                     const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : fullDesc;
-
-                    // Extract image
-                    let header_image = '';
-                    const encMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
-                    const medMatch = itemXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || itemXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
-                    if (encMatch) header_image = encMatch[1];
-                    else if (medMatch) header_image = medMatch[1];
-                    else {
-                        const imgMatch = itemXml.match(/<img[^>]*src=["']([^"']*)["']/i);
-                        if (imgMatch) header_image = ensureAbsoluteUrl(imgMatch[1], link);
-                    }
-
-                    if (header_image && (header_image.includes('blogger.googleusercontent.com') || header_image.includes('bp.blogspot.com'))) {
-                        header_image = header_image.replace(/\/s[0-9]+(-c)?\//i, '/s1600/').replace(/\/w[0-9]+-h[0-9]+[^/]*\//i, '/s1600/');
-                    }
-
-                    if (!header_image) {
-                        header_image = 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80';
-                    }
+                    let header_image = item.image || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80';
 
                     const paragraphsHtml = formatParagraphs(fullDesc);
                     const articleHtml = `
                         ${paragraphsHtml}
                         <p style="margin-top: 2rem; text-align: center;">
                             <a href="${link}" target="_blank" rel="noopener noreferrer" class="games-join-btn" style="display: inline-flex; text-decoration: none; padding: 1rem 2.5rem; background: var(--primary); color: white; border-radius: 30px; font-weight: bold; box-shadow: 0 5px 15px rgba(157, 78, 221, 0.4);">
-                                LEER ARTÍCULO COMPLETO EN ${feed.name.toUpperCase()}
+                                LEER ARTÍCULO COMPLETO EN ${src.name.toUpperCase()}
                             </a>
                         </p>
                     `;
 
                     const author = pickAuthor(link);
-                    const pubDateStr = extractTagValue(itemXml, 'pubDate') || extractTagValue(itemXml, 'dc:date') || extractTagValue(itemXml, 'updated');
-                    const parsedDate = pubDateStr ? new Date(pubDateStr) : new Date();
+                    const parsedDate = item.date ? new Date(item.date) : new Date();
                     const published_at = Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
 
                     const payload = {
-                        title: rawTitleClean,
+                        title: titleClean,
                         subtitle,
                         slug,
                         header_image,
                         content_blocks: [
-                            { type: 'metadata', category: 'ANIME', source: feed.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
+                            { type: 'metadata', category: 'ANIME', source: src.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
                             { type: 'text', content: articleHtml }
                         ],
                         author,
@@ -498,14 +494,13 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
             
-            {/* Header Card */}
             <div className="card animate-slide-down" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '1.6rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <Newspaper size={28} color="#38bdf8" /> Sincronizador Automático de Noticias
                     </h2>
                     <p style={{ margin: '6px 0 0 0', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                        Obtén 3 noticias diarias de Videojuegos y 3 de Anime directamente de las fuentes oficiales (3DJuegos, IGN, Crunchyroll, ANMTV).
+                        Obtén 3 noticias diarias de Videojuegos y 3 de Anime directamente de las APIs y fuentes oficiales (3DJuegos, RamenParaDos, Areajugones, MMOBomb).
                     </p>
                 </div>
 
@@ -527,11 +522,10 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     disabled={isSyncing}
                 >
                     <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-                    {isSyncing ? 'Sincronizando...' : '?? Sincronizar Noticias Ahora'}
+                    {isSyncing ? 'Sincronizando...' : '🔄 Sincronizar Noticias Ahora'}
                 </button>
             </div>
 
-            {/* Status & Progress Bar */}
             {syncProgress && (
                 <div className="card animate-slide-down" style={{ padding: '14px 20px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <Sparkles size={20} color="#38bdf8" />
@@ -539,7 +533,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                 </div>
             )}
 
-            {/* Daily Counter Badges */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
                 <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
                     <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(236, 72, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
@@ -548,7 +541,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     <div>
                         <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Noticias Videojuegos Hoy</span>
                         <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)' }}>
-                            {todayStats.videojuegos} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.videojuegos >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.videojuegos >= 3 ? '? Completo' : '?? Pendiente'}</span>
+                            {todayStats.videojuegos} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.videojuegos >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.videojuegos >= 3 ? '✅ Completo' : '⚠️ Pendiente'}</span>
                         </div>
                     </div>
                 </div>
@@ -560,13 +553,12 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     <div>
                         <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Noticias Anime Hoy</span>
                         <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)' }}>
-                            {todayStats.anime} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.anime >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.anime >= 3 ? '? Completo' : '?? Pendiente'}</span>
+                            {todayStats.anime} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.anime >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.anime >= 3 ? '✅ Completo' : '⚠️ Pendiente'}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* List of Recent Articles in Supabase */}
             <div className="card animate-slide-down" style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
                     <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>
