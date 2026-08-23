@@ -233,8 +233,9 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         ];
 
         const animeFeeds = [
-            { url: 'https://www.crunchyroll.com/news/rss?lang=esES', name: 'Crunchyroll', category: 'ANIME', lang: 'es' },
-            { url: 'https://www.anmtvla.com/feeds/posts/default?alt=rss', name: 'ANMTV LA', category: 'ANIME', lang: 'es' }
+            { url: 'https://ramenparados.com/feed/', name: 'Ramen Para Dos', category: 'ANIME', lang: 'es' },
+            { url: 'https://areajugones.sport.es/anime/feed/', name: 'Areajugones', category: 'ANIME', lang: 'es' },
+            { url: 'https://www.crunchyroll.com/news/rss?lang=esES', name: 'Crunchyroll', category: 'ANIME', lang: 'es' }
         ];
 
         let countVideojuegos = 0;
@@ -263,11 +264,14 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     const rawTitle = extractTagValue(itemXml, 'title');
                     const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
-                    const rawLink = extractTagValue(itemXml, 'link').trim() || (itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '');
+                    let rawLink = extractTagValue(itemXml, 'link').trim();
+                    if (!rawLink || rawLink.startsWith('<')) {
+                        rawLink = itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '';
+                    }
                     const guid = extractTagValue(itemXml, 'guid').trim() || extractTagValue(itemXml, 'id').trim();
-                    const link = ensureAbsoluteUrl(rawLink || guid, feed.url);
+                    const link = ensureAbsoluteUrl(rawLink || (guid.startsWith('http') ? guid : ''), feed.url);
 
-                    if (!rawTitleClean || !link) continue;
+                    if (!rawTitleClean || !link || !link.startsWith('http')) continue;
 
                     const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
                     let fullDesc = cleanDescription(contentEncoded);
@@ -372,11 +376,14 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     const rawTitle = extractTagValue(itemXml, 'title');
                     const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
-                    const rawLink = extractTagValue(itemXml, 'link').trim() || (itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '');
+                    let rawLink = extractTagValue(itemXml, 'link').trim();
+                    if (!rawLink || rawLink.startsWith('<')) {
+                        rawLink = itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '';
+                    }
                     const guid = extractTagValue(itemXml, 'guid').trim() || extractTagValue(itemXml, 'id').trim();
-                    const link = ensureAbsoluteUrl(rawLink || guid, feed.url);
+                    const link = ensureAbsoluteUrl(rawLink || (guid.startsWith('http') ? guid : ''), feed.url);
 
-                    if (!rawTitleClean || !link) continue;
+                    if (!rawTitleClean || !link || !link.startsWith('http')) continue;
 
                     const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
                     let fullDesc = cleanDescription(contentEncoded);
