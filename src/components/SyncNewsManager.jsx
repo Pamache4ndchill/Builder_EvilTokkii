@@ -108,6 +108,39 @@ function extractTagValue(xml, tagName) {
     return regularMatch?.[1] || '';
 }
 
+const ANIME_KEYWORDS = [
+    'anime', 'manga', 'otaku', 'crunchyroll', 'animacion', 'animación',
+    'temporada', 'doblaje', 'doblaje latino', 'pelicula', 'película',
+    'demon slayer', 'kimetsu', 'jujutsu', 'dragon ball', 'naruto', 'one piece',
+    'chainsaw man', 'bleach', 'toei', 'mappa', 'ufotable', 'aniplex', 'boku no hero',
+    'my hero academia', 'spy x family', 'solo leveling', 'frieren', 'mononoke',
+    'dan da dan', 'dandadan', 'blue lock', 'kaiju', 'isekai', 'shingeki',
+    'attack on titan', 'gundam', 'evangelion', 'romance', 'manhwa', 'webtoon'
+];
+
+function isStrictCategory(category, title, description, sourceCategory) {
+    const text = `${title} ${description}`.toLowerCase();
+    
+    if (category === 'ANIME') {
+        const isPureGaming = (text.includes('gta 6') || text.includes('gta vi') || text.includes('playstation 5') || text.includes('xbox series') || text.includes('tarjeta gráfica') || text.includes('rtx 40') || text.includes('gameplay trailer') || text.includes('nintendo switch 2')) && !text.includes('anime') && !text.includes('manga');
+        if (isPureGaming) return false;
+
+        if (sourceCategory === 'ANIME') {
+            const hasAnimeMatch = ANIME_KEYWORDS.some(k => text.includes(k));
+            return hasAnimeMatch || !isPureGaming;
+        }
+        return ANIME_KEYWORDS.some(k => text.includes(k));
+    }
+
+    if (category === 'VIDEOJUEGOS') {
+        const isPureAnime = text.includes('estreno del anime') || text.includes('episodio del anime') || (text.includes('manga') && !text.includes('juego') && !text.includes('gameplay'));
+        if (isPureAnime) return false;
+        return true;
+    }
+
+    return true;
+}
+
 export default function SyncNewsManager({ supabase, triggerToast }) {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -123,20 +156,29 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             const { data, error } = await supabase
                 .from('news_articles')
                 .select('*')
+                .order('published_at', { ascending: false, nullsFirst: false })
                 .order('created_at', { ascending: false })
-                .limit(20);
+                .limit(60);
 
             if (error) throw error;
-            setArticles(data || []);
+            
+            // Orden descendente estricto: desde la más actual a la más vieja
+            const sorted = (data || []).sort((a, b) => {
+                const timeA = new Date(a.published_at || a.created_at || 0).getTime();
+                const timeB = new Date(b.published_at || b.created_at || 0).getTime();
+                return timeB - timeA;
+            });
+
+            setArticles(sorted);
 
             // Count today articles
-            const todayVg = (data || []).filter(a => {
+            const todayVg = sorted.filter(a => {
                 const isVg = a.category === 'VIDEOJUEGOS' || (a.content_blocks && JSON.stringify(a.content_blocks).includes('VIDEOJUEGOS'));
                 const isToday = (a.published_at || a.created_at || '').startsWith(todayDateStr);
                 return isVg && isToday;
             }).length;
 
-            const todayAn = (data || []).filter(a => {
+            const todayAn = sorted.filter(a => {
                 const isAn = a.category === 'ANIME' || (a.content_blocks && JSON.stringify(a.content_blocks).includes('ANIME'));
                 const isToday = (a.published_at || a.created_at || '').startsWith(todayDateStr);
                 return isAn && isToday;
@@ -182,11 +224,15 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
     const handleRunSync = async () => {
         if (isSyncing) return;
         setIsSyncing(true);
-        setSyncProgress('Iniciando sincronización de noticias...');
+        setSyncProgress('Iniciando sincronización estricta (3 Videojuegos + 3 Anime)...');
 
-        const feeds = [
+        // Feeds ordenados por prioridad y categoría estricta
+        const vgFeeds = [
             { url: 'https://www.3djuegos.com/universo/rss/rss.php', name: '3DJuegos', category: 'VIDEOJUEGOS', lang: 'es' },
-            { url: 'https://es.ign.com/feed.xml', name: 'IGN España', category: 'VIDEOJUEGOS', lang: 'es' },
+            { url: 'https://es.ign.com/feed.xml', name: 'IGN España', category: 'VIDEOJUEGOS', lang: 'es' }
+        ];
+
+        const animeFeeds = [
             { url: 'https://www.crunchyroll.com/news/rss?lang=esES', name: 'Crunchyroll', category: 'ANIME', lang: 'es' },
             { url: 'https://www.anmtvla.com/feeds/posts/default?alt=rss', name: 'ANMTV LA', category: 'ANIME', lang: 'es' }
         ];
@@ -196,11 +242,11 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         const targetLimit = 3;
 
         try {
-            for (const feed of feeds) {
-                if (feed.category === 'VIDEOJUEGOS' && countVideojuegos >= targetLimit) continue;
-                if (feed.category === 'ANIME' && countAnime >= targetLimit) continue;
+            // 1. Sincronizar exactamente 3 noticias de VIDEOJUEGOS
+            for (const feed of vgFeeds) {
+                if (countVideojuegos >= targetLimit) break;
+                setSyncProgress(`Consultando noticias de Videojuegos en ${feed.name}...`);
 
-                setSyncProgress(`Consultando ${feed.name} (${feed.category})...`);
                 let xml = '';
                 try {
                     xml = await fetchFeedContent(feed.url);
@@ -213,8 +259,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                 itemBlocks.shift();
 
                 for (const itemXml of itemBlocks) {
-                    if (feed.category === 'VIDEOJUEGOS' && countVideojuegos >= targetLimit) break;
-                    if (feed.category === 'ANIME' && countAnime >= targetLimit) break;
+                    if (countVideojuegos >= targetLimit) break;
 
                     const rawTitle = extractTagValue(itemXml, 'title');
                     const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
@@ -224,11 +269,18 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     if (!rawTitleClean || !link) continue;
 
+                    const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
+                    let fullDesc = cleanDescription(contentEncoded);
+
+                    // Validar categoría estricta de videojuegos
+                    if (!isStrictCategory('VIDEOJUEGOS', rawTitleClean, fullDesc, 'VIDEOJUEGOS')) {
+                        continue;
+                    }
+
                     const hash = getHash(link || `${feed.name}-${rawTitleClean}`);
                     const baseSlug = generateSlug(rawTitleClean || `${feed.name}-${hash}`);
                     const slug = `${baseSlug}-${hash}`;
 
-                    // Check if already exists
                     const { data: existing } = await supabase
                         .from('news_articles')
                         .select('id')
@@ -237,14 +289,10 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     if (existing) continue;
 
-                    setSyncProgress(`Guardando: "${rawTitleClean.substring(0, 35)}..."`);
+                    setSyncProgress(`[Videojuegos ${countVideojuegos + 1}/3] Guardando: "${rawTitleClean.substring(0, 30)}..."`);
 
-                    const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
-                    let fullDesc = cleanDescription(contentEncoded);
                     if (!fullDesc || fullDesc.length < 50) {
-                        fullDesc = feed.category === 'ANIME' 
-                            ? '¡Grandes novedades para los fans del anime! Mantente al día con todos los anuncios, trailers y fechas clave de esta producción.\n\nPuedes consultar todos los pormenores accediendo directamente a la fuente original de la noticia.'
-                            : '¡Mantente al día con las últimas novedades del mundo de los videojuegos! Hay grandes noticias sucediendo en este momento en la industria.\n\nHaz clic en el botón de abajo para leer el artículo completo con todos los detalles directamente en la fuente oficial.';
+                        fullDesc = '¡Mantente al día con las últimas novedades del mundo de los videojuegos! Hay grandes noticias sucediendo en este momento en la industria.\n\nHaz clic en el botón de abajo para leer el artículo completo con todos los detalles directamente en la fuente oficial.';
                     }
 
                     const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : fullDesc;
@@ -260,14 +308,8 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                         if (imgMatch) header_image = ensureAbsoluteUrl(imgMatch[1], link);
                     }
 
-                    if (header_image && (header_image.includes('blogger.googleusercontent.com') || header_image.includes('bp.blogspot.com'))) {
-                        header_image = header_image.replace(/\/s[0-9]+(-c)?\//i, '/s1600/').replace(/\/w[0-9]+-h[0-9]+[^/]*\//i, '/s1600/');
-                    }
-
                     if (!header_image) {
-                        header_image = feed.category === 'ANIME'
-                            ? 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80'
-                            : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
+                        header_image = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
                     }
 
                     const paragraphsHtml = formatParagraphs(fullDesc);
@@ -291,12 +333,12 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                         slug,
                         header_image,
                         content_blocks: [
-                            { type: 'metadata', category: feed.category, source: feed.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
+                            { type: 'metadata', category: 'VIDEOJUEGOS', source: feed.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
                             { type: 'text', content: articleHtml }
                         ],
                         author,
                         published_at,
-                        category: feed.category
+                        category: 'VIDEOJUEGOS'
                     };
 
                     const { error: insErr } = await supabase
@@ -304,8 +346,120 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                         .upsert(payload, { onConflict: 'slug' });
 
                     if (!insErr) {
-                        if (feed.category === 'VIDEOJUEGOS') countVideojuegos++;
-                        else countAnime++;
+                        countVideojuegos++;
+                    }
+                }
+            }
+
+            // 2. Sincronizar exactamente 3 noticias de ANIME
+            for (const feed of animeFeeds) {
+                if (countAnime >= targetLimit) break;
+                setSyncProgress(`Consultando noticias de Anime en ${feed.name}...`);
+
+                let xml = '';
+                try {
+                    xml = await fetchFeedContent(feed.url);
+                } catch (e) {
+                    console.warn(`Feed ${feed.name} falló:`, e);
+                    continue;
+                }
+
+                const itemBlocks = xml.includes('<item>') ? xml.split('<item>') : xml.split('<entry>');
+                itemBlocks.shift();
+
+                for (const itemXml of itemBlocks) {
+                    if (countAnime >= targetLimit) break;
+
+                    const rawTitle = extractTagValue(itemXml, 'title');
+                    const rawTitleClean = decodeHtmlEntities(rawTitle.trim());
+                    const rawLink = extractTagValue(itemXml, 'link').trim() || (itemXml.match(/<link[^>]*href=["']([^"']*)["']/i)?.[1] || '');
+                    const guid = extractTagValue(itemXml, 'guid').trim() || extractTagValue(itemXml, 'id').trim();
+                    const link = ensureAbsoluteUrl(rawLink || guid, feed.url);
+
+                    if (!rawTitleClean || !link) continue;
+
+                    const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
+                    let fullDesc = cleanDescription(contentEncoded);
+
+                    // Validar categoría estricta de anime (descartar notas de GTA, consolas o ajenas)
+                    if (!isStrictCategory('ANIME', rawTitleClean, fullDesc, feed.category)) {
+                        continue;
+                    }
+
+                    const hash = getHash(link || `${feed.name}-${rawTitleClean}`);
+                    const baseSlug = generateSlug(rawTitleClean || `${feed.name}-${hash}`);
+                    const slug = `${baseSlug}-${hash}`;
+
+                    const { data: existing } = await supabase
+                        .from('news_articles')
+                        .select('id')
+                        .eq('slug', slug)
+                        .maybeSingle();
+
+                    if (existing) continue;
+
+                    setSyncProgress(`[Anime ${countAnime + 1}/3] Guardando: "${rawTitleClean.substring(0, 30)}..."`);
+
+                    if (!fullDesc || fullDesc.length < 50) {
+                        fullDesc = '¡Grandes novedades para los fans del anime! Mantente al día con todos los anuncios, trailers y fechas clave de esta producción.\n\nPuedes consultar todos los pormenores accediendo directamente a la fuente original de la noticia.';
+                    }
+
+                    const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : fullDesc;
+
+                    // Extract image
+                    let header_image = '';
+                    const encMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
+                    const medMatch = itemXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || itemXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
+                    if (encMatch) header_image = encMatch[1];
+                    else if (medMatch) header_image = medMatch[1];
+                    else {
+                        const imgMatch = itemXml.match(/<img[^>]*src=["']([^"']*)["']/i);
+                        if (imgMatch) header_image = ensureAbsoluteUrl(imgMatch[1], link);
+                    }
+
+                    if (header_image && (header_image.includes('blogger.googleusercontent.com') || header_image.includes('bp.blogspot.com'))) {
+                        header_image = header_image.replace(/\/s[0-9]+(-c)?\//i, '/s1600/').replace(/\/w[0-9]+-h[0-9]+[^/]*\//i, '/s1600/');
+                    }
+
+                    if (!header_image) {
+                        header_image = 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80';
+                    }
+
+                    const paragraphsHtml = formatParagraphs(fullDesc);
+                    const articleHtml = `
+                        ${paragraphsHtml}
+                        <p style="margin-top: 2rem; text-align: center;">
+                            <a href="${link}" target="_blank" rel="noopener noreferrer" class="games-join-btn" style="display: inline-flex; text-decoration: none; padding: 1rem 2.5rem; background: var(--primary); color: white; border-radius: 30px; font-weight: bold; box-shadow: 0 5px 15px rgba(157, 78, 221, 0.4);">
+                                LEER ARTÍCULO COMPLETO EN ${feed.name.toUpperCase()}
+                            </a>
+                        </p>
+                    `;
+
+                    const author = pickAuthor(link);
+                    const pubDateStr = extractTagValue(itemXml, 'pubDate') || extractTagValue(itemXml, 'dc:date') || extractTagValue(itemXml, 'updated');
+                    const parsedDate = pubDateStr ? new Date(pubDateStr) : new Date();
+                    const published_at = Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
+
+                    const payload = {
+                        title: rawTitleClean,
+                        subtitle,
+                        slug,
+                        header_image,
+                        content_blocks: [
+                            { type: 'metadata', category: 'ANIME', source: feed.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
+                            { type: 'text', content: articleHtml }
+                        ],
+                        author,
+                        published_at,
+                        category: 'ANIME'
+                    };
+
+                    const { error: insErr } = await supabase
+                        .from('news_articles')
+                        .upsert(payload, { onConflict: 'slug' });
+
+                    if (!insErr) {
+                        countAnime++;
                     }
                 }
             }
