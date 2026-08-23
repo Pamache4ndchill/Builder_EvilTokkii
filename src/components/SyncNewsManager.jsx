@@ -92,15 +92,13 @@ function buildRobustArticleContent(title, cleanDesc, category, sourceName, sourc
         ? 'La reacción de los fanáticos no se ha hecho esperar en redes sociales y foros especializados, donde se debaten las implicaciones de este estreno dentro de la temporada actual. Con un calendario repleto de lanzamientos de alto perfil, esta producción se posiciona como una de las más seguidas y comentadas por los aficionados a la cultura otaku.'
         : 'La comunidad de jugadores ha recibido estos anuncios con gran entusiasmo, generando amplios debates sobre el futuro de la saga y las expectativas depositadas en este proyecto. En un año repleto de grandes estrenos y competencia en el sector, este movimiento refuerza la posición del título dentro del panorama internacional.';
 
-    const p4 = isAnime
-        ? 'Desde EvilTokkii continuaremos dándole cobertura a todas las actualizaciones, trailers y anuncios oficiales que surjan al respecto. Te invitamos a leer el reporte original y todos los pormenores accediendo directamente a la fuente oficial a través del enlace a continuación.'
-        : 'Desde EvilTokkii continuaremos siguiendo muy de cerca todos los avances, parches y novedades que se presenten sobre este título en nuestros directos y notas de actualidad. Puedes consultar el artículo completo y los detalles oficiales haciendo clic en el botón de abajo.';
+    
 
     return `
         <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p1}</p>
         <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p2}</p>
         <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p3}</p>
-        <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p4}</p>
+        
         <p style="margin-top: 2.5rem; text-align: center;">
             <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" class="games-join-btn" style="display: inline-flex; text-decoration: none; padding: 1rem 2.5rem; background: var(--primary); color: white; border-radius: 30px; font-weight: bold; box-shadow: 0 5px 15px rgba(157, 78, 221, 0.4);">
                 LEER ARTÍCULO COMPLETO EN ${sourceName.toUpperCase()}
