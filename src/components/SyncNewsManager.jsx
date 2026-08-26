@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Newspaper, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Trash2, Sparkles, Flame, Tv } from 'lucide-react';
+import { Newspaper, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Trash2, Sparkles, Flame, Tv, Gamepad2 } from 'lucide-react';
 
 const DEFAULT_AUTHORS = ['EVILTOKKII', 'REQUIEM373', 'ESPEEEOON', 'PAMACHE', 'NPEZE'];
 
@@ -132,7 +132,7 @@ function isStrictCategory(category, title, description) {
 export default function SyncNewsManager({ supabase, triggerToast }) {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncingCategory, setSyncingCategory] = useState(null); // 'VIDEOJUEGOS' | 'ANIME' | null
     const [syncProgress, setSyncProgress] = useState('');
     const [todayStats, setTodayStats] = useState({ videojuegos: 0, anime: 0 });
 
@@ -185,23 +185,19 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
     // Extrae imagen real y válida del item o de su página
     const extractRealImage = async (item, directXml = '') => {
-        // 1. Direct from item JSON
         let img = item.thumbnail || item.enclosure?.link || '';
         if (img && img.startsWith('http') && !img.includes('placeholder')) return img;
 
-        // 2. From description
         if (item.description) {
             const m = item.description.match(/<img[^>]*src=["']([^"']*)["']/i);
             if (m && m[1] && m[1].startsWith('http')) return m[1];
         }
 
-        // 3. From content
         if (item.content) {
             const m = item.content.match(/<img[^>]*src=["']([^"']*)["']/i);
             if (m && m[1] && m[1].startsWith('http')) return m[1];
         }
 
-        // 4. From XML if available
         if (directXml) {
             const enc = directXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
             const med = directXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || directXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
@@ -214,7 +210,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
     // Extrae artículos mediante rss2json (CORS friendly) y fallback con proxies
     const fetchNormalizedItems = async (source) => {
-        // 1. Intentar con rss2json (100% compatible con navegador)
         try {
             const r2jUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}`;
             const res = await fetch(r2jUrl);
@@ -224,7 +219,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     const parsedList = [];
                     for (const item of json.items) {
                         const image = await extractRealImage(item);
-                        // Solo incluir artículos que tengan imagen de portada propia
                         if (image && image.startsWith('http')) {
                             parsedList.push({
                                 title: item.title,
@@ -243,7 +237,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             console.warn(`rss2json failed for ${source.name}, trying proxy raw...`, e);
         }
 
-        // 2. Fallback con Proxies XML
+        // Fallback con Proxies XML
         const proxies = [
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -299,48 +293,45 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         return [];
     };
 
-    const handleRunSync = async () => {
-        if (isSyncing) return;
-        setIsSyncing(true);
-        setSyncProgress('Iniciando sincronización estricta con portadas HD (3 Videojuegos + 3 Anime)...');
+    // Sincroniza exclusivamente la categoría seleccionada (3 noticias)
+    const handleSyncCategory = async (category) => {
+        if (syncingCategory) return;
+        setSyncingCategory(category);
+        
+        const isVg = category === 'VIDEOJUEGOS';
+        setSyncProgress(`Iniciando sincronización de 3 noticias de ${isVg ? 'Videojuegos' : 'Anime'}...`);
 
-        // Fuentes 100% en Español con portadas HD garantizadas
-        const vgSources = [
+        const sources = isVg ? [
             { name: 'Areajugones', url: 'https://areajugones.sport.es/videojuegos/feed/' },
             { name: 'GeneracionXbox', url: 'https://generacionxbox.com/feed/' },
             { name: 'Nintenderos', url: 'https://www.nintenderos.com/feed/' },
             { name: '3DJuegos', url: 'https://www.3djuegos.com/universo/rss/rss.php' }
-        ];
-
-        const animeSources = [
+        ] : [
             { name: 'Areajugones Anime', url: 'https://areajugones.sport.es/anime/feed/' },
             { name: 'Crunchyroll', url: 'https://www.crunchyroll.com/news/rss?lang=esES' },
             { name: 'Ramen Para Dos', url: 'https://ramenparados.com/feed/' }
         ];
 
-        let countVideojuegos = 0;
-        let countAnime = 0;
+        let count = 0;
         const targetLimit = 3;
 
         try {
-            // 1. Sincronizar exactamente 3 noticias de VIDEOJUEGOS en Español con imagen real HD
-            for (const src of vgSources) {
-                if (countVideojuegos >= targetLimit) break;
-                setSyncProgress(`Consultando videojuegos en ${src.name}...`);
+            for (const src of sources) {
+                if (count >= targetLimit) break;
+                setSyncProgress(`Consultando noticias en ${src.name}...`);
 
                 const items = await fetchNormalizedItems(src);
                 for (const item of items) {
-                    if (countVideojuegos >= targetLimit) break;
+                    if (count >= targetLimit) break;
 
                     const titleClean = decodeHtmlEntities(item.title || '').trim();
                     const link = (item.link || '').trim();
                     const header_image = item.image;
 
-                    // Descartar si no tiene título, link o imagen real propia
                     if (!titleClean || !link || !link.startsWith('http') || !header_image || !header_image.startsWith('http')) continue;
 
                     let fullDesc = cleanDescription(item.description || '');
-                    if (!isStrictCategory('VIDEOJUEGOS', titleClean, fullDesc)) continue;
+                    if (!isStrictCategory(category, titleClean, fullDesc)) continue;
 
                     const hash = getHash(link || `${src.name}-${titleClean}`);
                     const baseSlug = generateSlug(titleClean || `${src.name}-${hash}`);
@@ -354,10 +345,10 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     if (existing) continue;
 
-                    setSyncProgress(`[Videojuegos ${countVideojuegos + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
+                    setSyncProgress(`[${isVg ? 'Videojuegos' : 'Anime'} ${count + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
 
                     const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : (fullDesc || titleClean);
-                    const articleHtml = buildRobustArticleContent(titleClean, fullDesc, 'VIDEOJUEGOS', src.name, link);
+                    const articleHtml = buildRobustArticleContent(titleClean, fullDesc, category, src.name, link);
                     const author = pickAuthor(link);
                     const parsedDate = item.date ? new Date(item.date) : new Date();
                     const published_at = Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
@@ -368,12 +359,12 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                         slug,
                         header_image,
                         content_blocks: [
-                            { type: 'metadata', category: 'VIDEOJUEGOS', source: src.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
+                            { type: 'metadata', category, source: src.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
                             { type: 'text', content: articleHtml }
                         ],
                         author,
                         published_at,
-                        category: 'VIDEOJUEGOS'
+                        category
                     };
 
                     const { error: insErr } = await supabase
@@ -381,82 +372,19 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                         .upsert(payload, { onConflict: 'slug' });
 
                     if (!insErr) {
-                        countVideojuegos++;
+                        count++;
                     }
                 }
             }
 
-            // 2. Sincronizar exactamente 3 noticias de ANIME en Español con imagen real HD de cada anime
-            for (const src of animeSources) {
-                if (countAnime >= targetLimit) break;
-                setSyncProgress(`Consultando anime en ${src.name}...`);
-
-                const items = await fetchNormalizedItems(src);
-                for (const item of items) {
-                    if (countAnime >= targetLimit) break;
-
-                    const titleClean = decodeHtmlEntities(item.title || '').trim();
-                    const link = (item.link || '').trim();
-                    const header_image = item.image;
-
-                    // Descartar si no tiene título, link o imagen real propia
-                    if (!titleClean || !link || !link.startsWith('http') || !header_image || !header_image.startsWith('http')) continue;
-
-                    let fullDesc = cleanDescription(item.description || '');
-                    if (!isStrictCategory('ANIME', titleClean, fullDesc)) continue;
-
-                    const hash = getHash(link || `${src.name}-${titleClean}`);
-                    const baseSlug = generateSlug(titleClean || `${src.name}-${hash}`);
-                    const slug = `${baseSlug}-${hash}`;
-
-                    const { data: existing } = await supabase
-                        .from('news_articles')
-                        .select('id')
-                        .eq('slug', slug)
-                        .maybeSingle();
-
-                    if (existing) continue;
-
-                    setSyncProgress(`[Anime ${countAnime + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
-
-                    const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : (fullDesc || titleClean);
-                    const articleHtml = buildRobustArticleContent(titleClean, fullDesc, 'ANIME', src.name, link);
-                    const author = pickAuthor(link);
-                    const parsedDate = item.date ? new Date(item.date) : new Date();
-                    const published_at = Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString();
-
-                    const payload = {
-                        title: titleClean,
-                        subtitle,
-                        slug,
-                        header_image,
-                        content_blocks: [
-                            { type: 'metadata', category: 'ANIME', source: src.name, source_url: link, source_hash: hash, imported_date: todayDateStr },
-                            { type: 'text', content: articleHtml }
-                        ],
-                        author,
-                        published_at,
-                        category: 'ANIME'
-                    };
-
-                    const { error: insErr } = await supabase
-                        .from('news_articles')
-                        .upsert(payload, { onConflict: 'slug' });
-
-                    if (!insErr) {
-                        countAnime++;
-                    }
-                }
-            }
-
-            setSyncProgress('¡Sincronización completada con éxito!');
-            triggerToast(`¡Sincronizadas ${countVideojuegos} noticias de Videojuegos y ${countAnime} de Anime con portadas HD!`);
+            setSyncProgress(`¡Completado! Se sincronizaron ${count} noticias de ${isVg ? 'Videojuegos' : 'Anime'}.`);
+            triggerToast(`¡Sincronizadas ${count} noticias de ${isVg ? 'Videojuegos' : 'Anime'} con éxito!`);
             await fetchRecentArticles();
         } catch (err) {
             console.error("Sync error:", err);
-            triggerToast(`Error durante la sincronización: ${err.message}`, 'bottom');
+            triggerToast(`Error al sincronizar ${category}: ${err.message}`, 'bottom');
         } finally {
-            setIsSyncing(false);
+            setSyncingCategory(null);
             setTimeout(() => setSyncProgress(''), 4000);
         }
     };
@@ -477,35 +405,60 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
             
             <div className="card animate-slide-down" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
-                <div>
+                <div style={{ maxWidth: '550px' }}>
                     <h2 style={{ margin: 0, fontSize: '1.6rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <Newspaper size={28} color="#38bdf8" /> Sincronizador Automático de Noticias
                     </h2>
                     <p style={{ margin: '6px 0 0 0', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                        Obtén 3 noticias diarias de Videojuegos y 3 de Anime 100% en español con portadas HD oficiales únicas para cada título.
+                        Genera noticias 100% en español con portadas HD oficiales. Elige la categoría que deseas sincronizar:
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    className="btn-submit"
-                    style={{
-                        width: 'auto',
-                        padding: '12px 24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        background: 'linear-gradient(135deg, #0284c7, #38bdf8)',
-                        color: '#fff',
-                        fontWeight: 700,
-                        boxShadow: '0 4px 15px rgba(56, 189, 248, 0.3)'
-                    }}
-                    onClick={handleRunSync}
-                    disabled={isSyncing}
-                >
-                    <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-                    {isSyncing ? 'Sincronizando...' : '🔄 Sincronizar Noticias Ahora'}
-                </button>
+                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        className="btn-submit"
+                        style={{
+                            width: 'auto',
+                            padding: '12px 20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                            color: '#fff',
+                            fontWeight: 700,
+                            boxShadow: '0 4px 15px rgba(236, 72, 153, 0.35)',
+                            borderRadius: '10px'
+                        }}
+                        onClick={() => handleSyncCategory('VIDEOJUEGOS')}
+                        disabled={!!syncingCategory}
+                    >
+                        <Flame size={18} className={syncingCategory === 'VIDEOJUEGOS' ? 'animate-spin' : ''} />
+                        {syncingCategory === 'VIDEOJUEGOS' ? 'Sincronizando...' : '🎮 3 de Videojuegos'}
+                    </button>
+
+                    <button
+                        type="button"
+                        className="btn-submit"
+                        style={{
+                            width: 'auto',
+                            padding: '12px 20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            background: 'linear-gradient(135deg, #8b5cf6, #a855f7)',
+                            color: '#fff',
+                            fontWeight: 700,
+                            boxShadow: '0 4px 15px rgba(168, 85, 247, 0.35)',
+                            borderRadius: '10px'
+                        }}
+                        onClick={() => handleSyncCategory('ANIME')}
+                        disabled={!!syncingCategory}
+                    >
+                        <Tv size={18} className={syncingCategory === 'ANIME' ? 'animate-spin' : ''} />
+                        {syncingCategory === 'ANIME' ? 'Sincronizando...' : '📺 3 de Anime'}
+                    </button>
+                </div>
             </div>
 
             {syncProgress && (
@@ -516,28 +469,74 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-                <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
-                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(236, 72, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                        <Flame size={26} />
-                    </div>
-                    <div>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Noticias Videojuegos Hoy</span>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)' }}>
-                            {todayStats.videojuegos} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.videojuegos >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.videojuegos >= 3 ? '✅ Completo' : '⚠️ Pendiente'}</span>
+                <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(236, 72, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                            <Flame size={26} />
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Noticias Videojuegos Hoy</span>
+                            <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)' }}>
+                                {todayStats.videojuegos} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.videojuegos >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.videojuegos >= 3 ? '✅ Completo' : '⚠️ Pendiente'}</span>
+                            </div>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => handleSyncCategory('VIDEOJUEGOS')}
+                        disabled={!!syncingCategory}
+                        style={{
+                            padding: '8px 14px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            background: 'rgba(236, 72, 153, 0.15)',
+                            border: '1px solid rgba(236, 72, 153, 0.3)',
+                            color: '#f43f5e',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        <RefreshCw size={13} className={syncingCategory === 'VIDEOJUEGOS' ? 'animate-spin' : ''} />
+                        Generar
+                    </button>
                 </div>
 
-                <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(168, 85, 247, 0.05)', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
-                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}>
-                        <Tv size={26} />
-                    </div>
-                    <div>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Noticias Anime Hoy</span>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)' }}>
-                            {todayStats.anime} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.anime >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.anime >= 3 ? '✅ Completo' : '⚠️ Pendiente'}</span>
+                <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(168, 85, 247, 0.05)', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}>
+                            <Tv size={26} />
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Noticias Anime Hoy</span>
+                            <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)' }}>
+                                {todayStats.anime} / 3 <span style={{ fontSize: '0.85rem', color: todayStats.anime >= 3 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{todayStats.anime >= 3 ? '✅ Completo' : '⚠️ Pendiente'}</span>
+                            </div>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => handleSyncCategory('ANIME')}
+                        disabled={!!syncingCategory}
+                        style={{
+                            padding: '8px 14px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            background: 'rgba(168, 85, 247, 0.15)',
+                            border: '1px solid rgba(168, 85, 247, 0.3)',
+                            color: '#a855f7',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        <RefreshCw size={13} className={syncingCategory === 'ANIME' ? 'animate-spin' : ''} />
+                        Generar
+                    </button>
                 </div>
             </div>
 
@@ -561,7 +560,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     </div>
                 ) : articles.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        No hay noticias en la base de datos. Haz clic en "Sincronizar Noticias Ahora" para importar las primeras.
+                        No hay noticias en la base de datos. Usa los botones superiores para importar noticias de Videojuegos o Anime.
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
