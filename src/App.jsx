@@ -1917,14 +1917,18 @@ function App() {
   const saveMostStreamedItem = async (item) => {
     setSubmittingId(item.id);
     try {
-      const { error } = await supabase
-        .from('most_streamed')
-        .upsert({ 
+      const payload = { 
           id: item.id,
           title: item.title, 
-          image_url: item.image_url || '', 
+          image_url: item.image_url || '',
           updated_at: new Date().toISOString() 
-        });
+      };
+      if (item.description !== undefined) {
+          payload.description = item.description;
+      }
+      const { error } = await supabase
+        .from('most_streamed')
+        .upsert(payload);
       
       if (error) throw error;
       
@@ -3780,6 +3784,17 @@ function App() {
                           className="form-control" 
                           value={item.title} 
                           onChange={(e) => handleMostStreamedChange(item.id, 'title', e.target.value)} 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Descripción del Juego / Contenido</label>
+                        <textarea 
+                          className="form-control" 
+                          rows="3"
+                          placeholder="Escribe una pequeña descripción del contenido en directo..."
+                          value={item.description || ''} 
+                          onChange={(e) => handleMostStreamedChange(item.id, 'description', e.target.value)} 
+                          style={{ resize: 'vertical' }}
                         />
                       </div>
                       <div className="form-group">
