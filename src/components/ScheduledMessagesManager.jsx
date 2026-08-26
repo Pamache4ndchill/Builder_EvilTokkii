@@ -85,20 +85,20 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
         }
     }, [triggerToast, addLog]);
 
+    const [showTokenModal, setShowTokenModal] = useState(false);
+    const [tokenInput, setTokenInput] = useState('');
+
     // Conectar automáticamente a Twitch
     const handleConnectBot = async () => {
         if (isConnecting) return;
-        setIsConnecting(true);
 
         let activeToken = botOauth;
         if (!activeToken) {
-            const redirectUri = window.location.origin + window.location.pathname;
-            const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=chat%3Aread+chat%3Aedit+channel%3Amoderate`;
-            
-            addLog('info', 'Abriendo autorización de Twitch para conectar la cuenta...');
-            window.location.href = authUrl;
+            setShowTokenModal(true);
             return;
         }
+
+        setIsConnecting(true);
 
         if (wsRef.current) {
             try { wsRef.current.close(); } catch (e) {}
@@ -768,6 +768,114 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
                 </div>
             )}
 
+
+            {/* Modal para Vincular Token de Eviltokki_exe */}
+            {showTokenModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: '20px'
+                }}>
+                    <div className="card animate-slide-down" style={{ width: '100%', maxWidth: '500px', padding: '28px', border: '1px solid rgba(145, 70, 255, 0.4)', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(145, 70, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9146FF' }}>
+                                <ShieldCheck size={24} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)' }}>
+                                    Conectar Bot: {botUsername}
+                                </h3>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Configuración rápida de conexión para #{botChannel}</span>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                            Para que <strong>{botUsername}</strong> pueda escribir los mensajes en el chat de <strong>#{botChannel}</strong>, introduce su clave de acceso OAuth de Twitch (solo se hace una sola vez):
+                        </p>
+
+                        <div className="form-group" style={{ marginBottom: '16px' }}>
+                            <label className="form-label" style={{ fontSize: '0.85rem' }}>Twitch OAuth Token de {botUsername}</label>
+                            <input 
+                                type="password"
+                                className="form-control"
+                                placeholder="oauth:xxxxxxxxxxxxxxxxx"
+                                value={tokenInput}
+                                onChange={(e) => setTokenInput(e.target.value.trim())}
+                                autoFocus
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                    Inicia sesión con <strong>{botUsername}</strong> y copia el token
+                                </small>
+                                <a 
+                                    href="https://twitchtokengenerator.com/quick/fXQcQ5j8Z9" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    style={{ color: '#9146FF', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'underline' }}
+                                >
+                                    🔑 Obtener Token en 1 clic
+                                </a>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+                            <button
+                                type="button"
+                                onClick={() => { setShowTokenModal(false); setTokenInput(''); }}
+                                style={{
+                                    padding: '10px 18px',
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    color: 'var(--text-muted)',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-submit"
+                                style={{
+                                    width: 'auto',
+                                    padding: '10px 24px',
+                                    background: 'linear-gradient(135deg, #9146FF, #772CE8)',
+                                    color: '#fff',
+                                    borderRadius: '8px',
+                                    fontWeight: 700
+                                }}
+                                onClick={() => {
+                                    if (tokenInput.trim()) {
+                                        const cleanTok = tokenInput.trim();
+                                        setBotOauth(cleanTok);
+                                        localStorage.setItem('twitch_bot_oauth', cleanTok);
+                                        setShowTokenModal(false);
+                                        setTokenInput('');
+                                        triggerToast('✅ Token guardado. Conectando al bot...');
+                                        // Trigger connect
+                                        setTimeout(() => {
+                                            handleConnectBot();
+                                        }, 100);
+                                    } else {
+                                        triggerToast('⚠️ Introduce un token válido');
+                                    }
+                                }}
+                            >
+                                Guardar y Conectar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
