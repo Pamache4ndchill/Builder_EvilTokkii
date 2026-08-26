@@ -369,21 +369,76 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         }
     };
 
-    const handleAddTrackToQueue = async (track, requestedBy = 'Streamer') => {
-        if (!spotifyToken) return;
+    // Get active or first available Spotify device
+    const getAvailableDeviceId = async () => {
+        if (!spotifyToken) return null;
         try {
-            const res = await fetch('https://api.spotify.com/v1/me/player/queue?uri=' + encodeURIComponent(track.uri), {
+            const res = await fetch('https://api.spotify.com/v1/me/player/devices', {
+                headers: { Authorization: 'Bearer ' + spotifyToken }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const devices = data.devices || [];
+                const active = devices.find(d => d.is_active);
+                return active ? active.id : (devices[0] ? devices[0].id : null);
+            }
+        } catch (e) {
+            console.error('Error fetching devices:', e);
+        }
+        return null;
+    };
+
+    const handleAddTrackToQueue = async (track, requestedBy = 'Streamer') => {
+        if (!spotifyToken) {
+            triggerToast('⚠️ Conecta tu cuenta de Spotify primero');
+            return;
+        }
+
+        try {
+            const deviceId = await getAvailableDeviceId();
+            const deviceParam = deviceId ? ('&device_id=' + deviceId) : '';
+
+            // 1. Try to add to Spotify Queue
+            const res = await fetch('https://api.spotify.com/v1/me/player/queue?uri=' + encodeURIComponent(track.uri) + deviceParam, {
                 method: 'POST',
                 headers: { Authorization: 'Bearer ' + spotifyToken }
             });
 
+            let addedSuccessfully = false;
+
             if (res.ok || res.status === 204) {
-                triggerToast('🎵 Añadida a la cola: "' + track.name + '"');
+                addedSuccessfully = true;
+                triggerToast('🎵 Añadida a la cola de Spotify: "' + track.name + '"');
+            } else if (res.status === 404 || res.status === 403) {
+                // If queue fails because nothing is playing, try starting playback
+                const playRes = await fetch('https://api.spotify.com/v1/me/player/play' + (deviceId ? '?device_id=' + deviceId : ''), {
+                    method: 'PUT',
+                    headers: { 
+                        Authorization: 'Bearer ' + spotifyToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ uris: [track.uri] })
+                });
+
+                if (playRes.ok || playRes.status === 204) {
+                    addedSuccessfully = true;
+                    triggerToast('▶️ Reproduciendo en Spotify: "' + track.name + '"');
+                    setTimeout(fetchCurrentPlayback, 600);
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    console.warn('Queue/Play response:', res.status, errData);
+                    triggerToast('⚠️ Abre Spotify en tu PC o móvil e inicia cualquier pista para activar la sesión.');
+                }
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                console.warn('Queue error:', res.status, errData);
+                triggerToast('⚠️ Spotify: ' + (errData?.error?.message || 'Abre Spotify para activar el reproductor.'));
             }
 
+            // 2. Register in Supabase queue / history
             if (supabase) {
                 await supabase.from('song_requests').insert([{
-                    title: track.name + ' - ' + track.artists.map(a => a.name).join(', '),
+                    title: track.name + ' - ' + (track.artists ? track.artists.map(a => a.name).join(', ') : ''),
                     video_id: track.id,
                     requested_by: requestedBy,
                     status: 'pending'
@@ -393,8 +448,11 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
 
             setSearchQuery('');
             setSearchResults([]);
+            setTimeout(fetchCurrentPlayback, 800);
+
         } catch (err) {
-            triggerToast('⚠️ Error al añadir a la cola. Asegúrate de tener Spotify abierto.');
+            console.error('Error adding track:', err);
+            triggerToast('⚠️ Error: Asegúrate de tener la app de Spotify abierta.');
         }
     };
 
