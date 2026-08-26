@@ -5,6 +5,7 @@ import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
 import TierlistsManager from './components/TierlistsManager';
 import SyncNewsManager from './components/SyncNewsManager';
+import ScheduledMessagesManager from './components/ScheduledMessagesManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -3818,147 +3819,13 @@ function App() {
             </div>
           </div>
         ) : view === 'view_scheduled_messages' ? (
-          <div className="builder-view">
-            <div className="builder-header animate-slide-down">
+          <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                Mensajes Programados (Twitch Bot)
-              </h1>
             </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              
-              {/* Left Column: Configuration & Status */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div className="card animate-slide-down" style={{ animationDelay: '0.1s' }}>
-                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0 }}>
-                    <Settings size={20} />
-                    Configuración del Bot
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
-                    Introduce los datos de tu cuenta bot de Twitch para poder interactuar en el chat.
-                  </p>
-
-                  <div className="form-group">
-                    <label className="form-label">Twitch OAuth Token</label>
-                    <input 
-                      type="password" 
-                      className="form-control" 
-                      placeholder="oauth:xxxx..."
-                      value={botOauth}
-                      onChange={(e) => setBotOauth(e.target.value)}
-                    />
-                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
-                      Consigue tu token en <a href="https://twitchtokengenerator.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>twitchtokengenerator.com</a>
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Usuario del Bot</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="Nombre de la cuenta bot"
-                      value={botUsername}
-                      onChange={(e) => setBotUsername(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Canal de Destino</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="Nombre del canal (ej: eviltokkii)"
-                      value={botChannel}
-                      onChange={(e) => setBotChannel(e.target.value)}
-                    />
-                  </div>
-
-
-
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                    {!isBotConnected ? (
-                      <button 
-                        className="btn-submit" 
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#22C55E' }}
-                        onClick={connectTwitchBot}
-                      >
-                        <Play size={18} /> Conectar Bot
-                      </button>
-                    ) : (
-                      <button 
-                        className="btn-submit" 
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#EF4444' }}
-                        onClick={disconnectTwitchBot}
-                      >
-                        <Square size={18} /> Desconectar Bot
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="card animate-slide-down" style={{ animationDelay: '0.2s' }}>
-                  <button 
-                    className="btn-submit" 
-                    style={{ width: '100%', padding: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '1.1rem', background: 'var(--primary)' }}
-                    onClick={() => {
-                      if (!isBotConnected) {
-                        triggerToast("⚠️ Conéctate a Twitch primero.");
-                      } else {
-                        setShowInstantModal(true);
-                      }
-                    }}
-                  >
-                    <Send size={20} /> Enviar mensaje ahora
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: Scheduled Messages & Logs */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-
-                <div className="card animate-slide-down" style={{ animationDelay: '0.2s', height: '475px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                      Consola de Eventos
-                    </h2>
-                    <button 
-                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}
-                      onClick={() => setBotLogs([])}
-                    >
-                      Limpiar consola
-                    </button>
-                  </div>
-                  
-                  <div style={{ 
-                    background: '#0F172A', 
-                    border: '1px solid var(--border-color)', 
-                    borderRadius: '8px', 
-                    padding: '12px', 
-                    fontFamily: 'monospace', 
-                    fontSize: '0.85rem', 
-                    color: '#38BDF8', 
-                    height: '370px', 
-                    overflowY: 'auto',
-                    boxSizing: 'border-box'
-                  }}>
-                    <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '4px' }}>
-                      {botLogs.map((log, index) => (
-                        <div key={index} style={{ whiteSpace: 'pre-wrap' }}>{log}</div>
-                      ))}
-                    </div>
-                    {botLogs.length === 0 && (
-                      <div style={{ color: '#64748B', fontStyle: 'italic' }}>Esperando eventos del bot de Twitch...</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-            </div>
+            <ScheduledMessagesManager supabase={supabase} triggerToast={triggerToast} />
           </div>
         ) : view === 'view_commands' ? (
           <div className="builder-view" style={{ maxWidth: '800px', margin: '0 auto' }}>
