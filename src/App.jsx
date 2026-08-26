@@ -6,6 +6,7 @@ import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './com
 import TierlistsManager from './components/TierlistsManager';
 import SyncNewsManager from './components/SyncNewsManager';
 import ScheduledMessagesManager from './components/ScheduledMessagesManager';
+import SpotifySongRequestManager from './components/SpotifySongRequestManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -970,6 +971,52 @@ function App() {
   const handleSongRequest = async (query, requester) => {
     try {
       addBotLog(`[Twitch Chat] Song Request por @${requester}: "${query}"`);
+      
+      // Check if Spotify is active
+      const spotifyToken = localStorage.getItem('spotify_access_token');
+      if (spotifyToken) {
+        try {
+          let querySearch = query.trim();
+          let track = null;
+          if (querySearch.includes('spotify.com/track/')) {
+            const trackId = querySearch.split('track/')[1]?.split('?')[0];
+            const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+              headers: { Authorization: `Bearer ${spotifyToken}` }
+            });
+            if (res.ok) track = await res.json();
+          } else {
+            const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(querySearch)}&type=track&limit=1`, {
+              headers: { Authorization: `Bearer ${spotifyToken}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              track = data.tracks?.items?.[0];
+            }
+          }
+
+          if (track) {
+            await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${spotifyToken}` }
+            });
+
+            await supabase.from('song_requests').insert([{
+              title: `${track.name} - ${track.artists.map(a => a.name).join(', ')}`,
+              video_id: track.id,
+              requested_by: requester,
+              status: 'pending'
+            }]);
+
+            addBotLog(`[Spotify] Añadida a la cola: "${track.name}" por @${requester}`);
+            enviarMensajeTwitch(`@${requester} ¡Canción añadida a la cola de Spotify! 🎵 "${track.name}" - ${track.artists.map(a => a.name).join(', ')}`, true);
+            fetchSongs();
+            return;
+          }
+        } catch (spErr) {
+          console.warn("Spotify queue error, using fallback:", spErr);
+        }
+      }
+
       const song = await searchYouTube(query);
       
       // Check database to see if we need to auto-play (nothing playing or pending)
@@ -5060,386 +5107,13 @@ function App() {
             </div>
           </div>
         ) : view === 'view_song_request' ? (
-          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%' }}>
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
             <div className="builder-header animate-slide-down">
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                Song Request Widget (Twitch)
-              </h1>
             </div>
-
-            {/* Top Row: 3 equal-height Columns */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px', alignItems: 'stretch' }}>
-              
-              {/* Column 1: Player Card */}
-              <div className="card animate-slide-down" style={{ animationDelay: '0.1s', display: 'flex', flexDirection: 'column', margin: 0, justifyContent: 'space-between' }}>
-                <div>
-                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, fontSize: '1.25rem' }}>
-                    <Play size={18} />
-                    Reproductor Activo
-                  </h2>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={isPlayerEnabledInDashboard} 
-                        onChange={(e) => setIsPlayerEnabledInDashboard(e.target.checked)}
-                      />
-                      Reproducir en este panel
-                    </label>
-                  </div>
-
-                  {currentSong ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ 
-                        height: isPlayerEnabledInDashboard ? '150px' : '50px', 
-                        background: '#000', 
-                        borderRadius: '8px', 
-                        overflow: 'hidden', 
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '1px solid rgba(168, 85, 247, 0.2)'
-                      }}>
-                        {isPlayerEnabledInDashboard ? (
-                          <YoutubePlayer videoId={currentSong.video_id} onEnded={playNextSong} volume={playerVolume} isPlaying={currentSong.is_playing !== false} />
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                            <Wifi size={14} color="#22C55E" />
-                            {currentSong.is_playing !== false ? 'Reproduciendo en OBS' : 'Pausado en OBS'}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minWidth: 0 }}>
-                        <div style={{ overflow: 'hidden', marginRight: '5px', minWidth: 0, flex: 1 }}>
-                          <h4 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {currentSong.title}
-                          </h4>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Por: <strong>@{currentSong.requested_by}</strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Playback Control Bar */}
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', marginTop: '5px' }}>
-                        <button 
-                          onClick={handleTogglePlayPause}
-                          style={{
-                            background: 'var(--primary)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '36px',
-                            height: '36px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 10px rgba(168, 85, 247, 0.3)'
-                          }}
-                          title={currentSong.is_playing !== false ? "Pausar" : "Reproducir"}
-                        >
-                          {currentSong.is_playing !== false ? <Pause size={18} /> : <Play size={18} />}
-                        </button>
-
-                        <button 
-                          onClick={handleSkipSong}
-                          style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            color: 'var(--text-main)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '50%',
-                            width: '36px',
-                            height: '36px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer'
-                          }}
-                          title="Siguiente Canción"
-                        >
-                          <SkipForward size={18} />
-                        </button>
-                      </div>
-
-                      {/* Volume Slider */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max="100" 
-                          value={playerVolume} 
-                          onChange={(e) => setPlayerVolume(Number(e.target.value))} 
-                          style={{ flex: 1, accentColor: 'var(--primary)', height: '4px' }}
-                        />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, width: '25px', textAlign: 'right' }}>{playerVolume}%</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ 
-                      padding: '20px 10px', 
-                      textAlign: 'center', 
-                      background: 'rgba(15, 23, 42, 0.3)', 
-                      borderRadius: '8px', 
-                      border: '1px dashed var(--border-color)',
-                      color: 'var(--text-muted)',
-                      fontSize: '0.8rem'
-                    }}>
-                      Sin reproducción activa.
-                      <button 
-                        className="btn-add" 
-                        onClick={playNextSong}
-                        style={{ margin: '8px auto 0 auto', display: 'block', height: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}
-                        disabled={songRequests.length === 0}
-                      >
-                        Iniciar
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Column 2: OBS Setup Card */}
-              <div className="card animate-slide-down" style={{ 
-                animationDelay: '0.2s', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                margin: 0, 
-                justifyContent: 'space-between'
-              }}>
-                <div>
-                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 0, fontSize: '1.25rem' }}>
-                    <LayoutTemplate size={18} />
-                    Integración OBS
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4', marginBottom: '8px' }}>
-                    Para reproducir el audio en directo y mostrar el widget animado:
-                  </p>
-                  <ol style={{ color: 'var(--text-muted)', fontSize: '0.8rem', paddingLeft: '18px', margin: '0 0 10px 0', lineHeight: '1.4' }}>
-                    <li style={{ marginBottom: '4px' }}>Copia la URL: <code style={{ color: '#E9D5FF', background: 'rgba(168, 85, 247, 0.1)', padding: '2px 4px', borderRadius: '4px', display: 'inline-block', fontSize: '0.7rem', wordBreak: 'break-all', marginTop: '1px' }}>{`${window.location.origin}${window.location.pathname}${window.location.pathname.endsWith('/') ? '' : '/'}?overlay=true`}</code></li>
-                    <li style={{ marginBottom: '4px' }}>En OBS, añade una fuente de <strong>Navegador</strong>.</li>
-                    <li>Activa <strong>"Controlar audio mediante OBS"</strong>.</li>
-                  </ol>
-                  <div className="form-group" style={{ marginTop: '10px' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '2px', display: 'block' }}>Comando personalizado chat</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="Ej: !sr o !pedir"
-                      value={songRequestCommand}
-                      onChange={(e) => setSongRequestCommand(e.target.value)}
-                      style={{ fontSize: '0.8rem', padding: '6px' }}
-                    />
-                  </div>
-                </div>
-                <button 
-                  className="btn-add"
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}${window.location.pathname.endsWith('/') ? '' : '/'}?overlay=true`);
-                    triggerToast("📋 Enlace copiado al portapapeles");
-                  }}
-                  style={{ width: '100%', height: 'auto', padding: '8px', fontSize: '0.8rem', marginTop: '10px' }}
-                >
-                  <Copy size={14} /> Copiar URL del Widget
-                </button>
-                <button 
-                  className="btn-submit"
-                  onClick={handleReloadOBS}
-                  style={{ width: '100%', height: 'auto', padding: '8px', fontSize: '0.8rem', marginTop: '10px', background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', border: '1px solid rgba(168, 85, 247, 0.2)' }}
-                >
-                  Forzar Recarga de OBS
-                </button>
-              </div>
-
-              {/* Column 3: Manual Add Card */}
-              <div className="card animate-slide-down" style={{ animationDelay: '0.15s', display: 'flex', flexDirection: 'column', margin: 0, justifyContent: 'space-between' }}>
-                <div>
-                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 0, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>
-                    <Plus size={18} />
-                    Añadir Manualmente
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4', marginBottom: '10px' }}>
-                    Introduce el nombre de la canción o pega el link de YouTube directamente:
-                  </p>
-                  <form onSubmit={handleManualAdd} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      placeholder="Canción o URL de YouTube..."
-                      value={manualQuery}
-                      onChange={(e) => setManualQuery(e.target.value)}
-                      style={{ fontSize: '0.85rem', padding: '8px' }}
-                    />
-                    <button type="submit" className="btn-submit" style={{ width: '100%', marginTop: '5px', padding: '8px', fontSize: '0.85rem' }}>
-                      Añadir a la Cola
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Bottom Row: Song Queue (Full Width, Fixed Height) */}
-            <div className="card animate-slide-down" style={{ 
-              animationDelay: '0.25s', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              height: '350px',
-              margin: 0
-            }}>
-              <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: 0, fontSize: '1.25rem', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <List size={18} />
-                  Cola de Reproducción ({songRequests.length})
-                </div>
-                {songRequests.length > 0 && (
-                  <button 
-                    onClick={handleClearQueue}
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      color: '#EF4444',
-                      border: '1px solid rgba(239, 68, 68, 0.2)',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.8rem',
-                      cursor: 'pointer',
-                      height: 'auto',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                    title="Limpiar toda la cola"
-                  >
-                    <Trash2 size={14} /> Limpiar Cola
-                  </button>
-                )}
-              </h2>
-              
-              <div style={{ 
-                flex: 1, 
-                overflowY: 'auto', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '8px',
-                paddingRight: '5px',
-                marginTop: '10px'
-              }}>
-                {allSongs.map((song, index) => {
-                  const isPlaying = song.status === 'playing';
-                  const isDone = song.status === 'played' || song.status === 'skipped';
-                  
-                  return (
-                    <div key={song.id} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      padding: '8px 12px',
-                      background: isPlaying ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                      borderRadius: '6px',
-                      border: isPlaying ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
-                      minWidth: 0,
-                      opacity: isDone ? 0.5 : 1
-                    }}>
-                      <div style={{ overflow: 'hidden', marginRight: '8px', minWidth: 0, flex: 1 }}>
-                        <div style={{ 
-                          fontSize: '0.85rem', 
-                          fontWeight: 600, 
-                          whiteSpace: 'nowrap', 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis',
-                          textDecoration: isDone ? 'line-through' : 'none'
-                        }}>
-                          {index + 1}. {song.title}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Por: @{song.requested_by} • <span style={{ textTransform: 'uppercase', fontSize: '0.65rem', color: isPlaying ? '#A855F7' : '#94A3B8' }}>{song.status}</span>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-                        {song.status === 'pending' && (
-                          <div style={{ display: 'flex', gap: '2px', marginRight: '4px' }}>
-                            <button
-                              onClick={() => handleMoveSong(song.id, 'up')}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--highlight)',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center'
-                              }}
-                              title="Subir en la cola"
-                            >
-                              <ChevronUp size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleMoveSong(song.id, 'down')}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--highlight)',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center'
-                              }}
-                              title="Bajar en la cola"
-                            >
-                              <ChevronDown size={14} />
-                            </button>
-                          </div>
-                        )}
-                        {!isPlaying && (
-                          <button 
-                            onClick={() => handlePlaySpecificSong(song)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#22C55E',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                            title="Reproducir ahora"
-                          >
-                            <Play size={14} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => handleDeleteSongFromQueue(song.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#EF4444',
-                            cursor: 'pointer',
-                            padding: '2px',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                          title="Eliminar de la cola"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {songRequests.length === 0 && (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', padding: '15px', fontSize: '0.8rem' }}>
-                    No hay canciones pendientes en la cola. ¡Usa tu comando en el chat para pedir canciones!
-                  </div>
-                )}
-              </div>
-            </div>
+            <SpotifySongRequestManager supabase={supabase} triggerToast={triggerToast} />
           </div>
         ) : view === 'view_tierlists' ? (
           <div className="builder-view" style={{ maxWidth: '100%', margin: 0, padding: '1.5rem 2rem' }}>
