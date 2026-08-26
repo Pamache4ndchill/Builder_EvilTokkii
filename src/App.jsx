@@ -3771,62 +3771,125 @@ function App() {
                   Cargando juegos desde Supabase...
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
                   {mostStreamed.map((item, index) => (
-                    <div key={item.id} className="card" style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border-color)', position: 'relative', borderRadius: '12px', padding: '20px' }}>
-                      <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'var(--primary)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.8rem', zIndex: 2 }}>
-                        {index + 1}
+                    <div 
+                      key={item.id} 
+                      className="card animate-slide-down" 
+                      style={{ 
+                        background: 'var(--bg-card-hover)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '16px', 
+                        padding: '20px 24px',
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: '24px',
+                        flexWrap: 'wrap',
+                        position: 'relative'
+                      }}
+                    >
+                      {/* Left: Thumbnail Preview & Number */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <div style={{
+                          width: '90px',
+                          height: '130px',
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                          background: '#0d0714',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative'
+                        }}>
+                          {item.image_url ? (
+                            <img 
+                              src={item.image_url.startsWith('http') ? getDisplayUrl(item.image_url) : `${CLOUDFLARE_R2_BASE_URL}/${item.image_url}`} 
+                              alt={item.title} 
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => { e.target.style.display = 'none'; }} 
+                            />
+                          ) : (
+                            <Gamepad2 size={28} color="var(--text-muted)" />
+                          )}
+                          <span style={{
+                            position: 'absolute',
+                            top: '6px',
+                            left: '6px',
+                            background: 'var(--primary)',
+                            color: '#fff',
+                            fontWeight: 800,
+                            fontSize: '0.75rem',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+                          }}>
+                            #{index + 1}
+                          </span>
+                        </div>
                       </div>
-                      <div className="form-group">
-                        <label className="form-label">Título del Juego</label>
-                        <input 
-                          type="text" 
-                          className="form-control" 
-                          value={item.title} 
-                          onChange={(e) => handleMostStreamedChange(item.id, 'title', e.target.value)} 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Descripción del Juego / Contenido</label>
-                        <textarea 
-                          className="form-control" 
-                          rows="3"
-                          placeholder="Escribe una pequeña descripción del contenido en directo..."
-                          value={item.description || ''} 
-                          onChange={(e) => handleMostStreamedChange(item.id, 'description', e.target.value)} 
-                          style={{ resize: 'vertical' }}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">URL de la Imagen (R2)</label>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <input 
-                            type="text" 
+
+                      {/* Middle: Fields (Title + Image URL in row 1, Description in row 2) */}
+                      <div style={{ flex: 1, minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Título del Juego</label>
+                            <input 
+                              type="text" 
+                              className="form-control" 
+                              value={item.title} 
+                              onChange={(e) => handleMostStreamedChange(item.id, 'title', e.target.value)} 
+                              placeholder="Ej: Grand Theft Auto V"
+                            />
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>URL de la Imagen (R2)</label>
+                            <input 
+                              type="text" 
+                              className="form-control" 
+                              value={item.image_url} 
+                              placeholder="Imagenes/Nombre.png o https://..."
+                              onChange={(e) => handleMostStreamedChange(item.id, 'image_url', e.target.value)} 
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Descripción del Juego / Contenido</label>
+                          <textarea 
                             className="form-control" 
-                            value={item.image_url} 
-                            placeholder="Imagenes/Nombre.png"
-                            onChange={(e) => handleMostStreamedChange(item.id, 'image_url', e.target.value)} 
+                            rows="2"
+                            placeholder="Escribe una pequeña descripción del contenido en directo sin límite de caracteres..."
+                            value={item.description || ''} 
+                            onChange={(e) => handleMostStreamedChange(item.id, 'description', e.target.value)} 
+                            style={{ resize: 'vertical', minHeight: '60px' }}
                           />
                         </div>
                       </div>
-                      {item.image_url && (
-                        <div className="image-preview-wrapper" style={{ height: '120px', marginBottom: '15px', borderRadius: '8px', overflow: 'hidden' }}>
-                          <img 
-                            src={item.image_url.startsWith('http') ? getDisplayUrl(item.image_url) : `${CLOUDFLARE_R2_BASE_URL}/${item.image_url}`} 
-                            alt={item.title} 
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.classList.add('error'); }} 
-                          />
-                        </div>
-                      )}
-                      <button 
-                        className="btn-submit" 
-                        style={{ width: '100%', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} 
-                        onClick={() => saveMostStreamedItem(item)}
-                        disabled={submittingId === item.id}
-                      >
-                        {submittingId === item.id ? 'Guardando...' : <><Save size={16} /> Guardar Cambios</>}
-                      </button>
+
+                      {/* Right: Save Button */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <button 
+                          className="btn-submit" 
+                          style={{ 
+                            width: 'auto', 
+                            padding: '12px 20px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: '8px',
+                            background: 'linear-gradient(135deg, var(--primary), #772ce8)',
+                            color: '#fff',
+                            borderRadius: '10px',
+                            fontWeight: 700
+                          }} 
+                          onClick={() => saveMostStreamedItem(item)}
+                          disabled={submittingId === item.id}
+                        >
+                          {submittingId === item.id ? 'Guardando...' : <><Save size={16} /> Guardar</>}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
