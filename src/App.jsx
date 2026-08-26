@@ -1008,7 +1008,17 @@ function App() {
             }]);
 
             addBotLog(`[Spotify] Añadida a la cola: "${track.name}" por @${requester}`);
-            enviarMensajeTwitch(`@${requester} ¡Canción añadida a la cola de Spotify! 🎵 "${track.name}" - ${track.artists.map(a => a.name).join(', ')}`, true);
+            
+            const template = localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}';
+            const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
+            const finalMsg = template
+              .replace(/{user}/gi, requester)
+              .replace(/{requester}/gi, requester)
+              .replace(/{song}/gi, track.name)
+              .replace(/{title}/gi, track.name)
+              .replace(/{artist}/gi, artistsStr);
+              
+            enviarMensajeTwitch(finalMsg, true);
             fetchSongs();
             return;
           }

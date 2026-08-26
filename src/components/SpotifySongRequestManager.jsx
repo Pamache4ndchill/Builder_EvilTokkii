@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-    Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, 
+    Play, MessageSquare, Pause, SkipForward, SkipBack, Volume2, VolumeX, 
     Music, Search, Plus, Trash2, CheckCircle2, AlertCircle, 
     ExternalLink, RefreshCw, Radio, Sparkles, Disc3, ShieldCheck
 } from 'lucide-react';
@@ -34,6 +34,8 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [responseTemplate, setResponseTemplate] = useState(() => localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}');
+    const [srCommandPrefix, setSrCommandPrefix] = useState(() => localStorage.getItem('spotify_sr_prefix') || '!sr');
 
     const pollIntervalRef = useRef(null);
 
@@ -573,6 +575,55 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     
                     {/* Widget OBS URL Card */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(29, 185, 84, 0.3)' }}>
+                        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <MessageSquare size={16} color="#1DB954" /> Mensaje de Respuesta en el Chat
+                        </h4>
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
+                            Personaliza el mensaje que el bot enviará al chat de Twitch al añadir una canción:
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <textarea 
+                                className="form-control"
+                                rows="2"
+                                value={responseTemplate}
+                                onChange={(e) => setResponseTemplate(e.target.value)}
+                                placeholder='@{user} ¡Canción añadida a la cola! 🎵 "{song}" - {artist}'
+                                style={{ fontSize: '0.85rem', resize: 'vertical' }}
+                            />
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }}>{'{user}'} : Usuario</span>
+                                <span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }}>{'{song}'} : Canción</span>
+                                <span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }}>{'{artist}'} : Artista</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const def = '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}';
+                                        setResponseTemplate(def);
+                                        localStorage.setItem('spotify_sr_response_template', def);
+                                        triggerToast('Mensaje restaurado a predeterminado');
+                                    }}
+                                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', fontSize: '0.75rem', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                    Restablecer
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-submit"
+                                    style={{ width: 'auto', padding: '6px 16px', fontSize: '0.78rem', background: '#1DB954', color: '#000', fontWeight: 700, borderRadius: '6px' }}
+                                    onClick={() => {
+                                        localStorage.setItem('spotify_sr_response_template', responseTemplate);
+                                        triggerToast('✅ Plantilla de mensaje guardada');
+                                    }}
+                                >
+                                    Guardar Mensaje
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
                         <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <ExternalLink size={16} color="#A855F7" /> Widget para OBS Studio
