@@ -129,7 +129,7 @@ function isStrictCategory(category, title, description) {
     return true;
 }
 
-export default function SyncNewsManager({ supabase, triggerToast }) {
+export default function SyncNewsManager({ supabase, triggerToast, onSyncComplete }) {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(false);
     const [syncingCategory, setSyncingCategory] = useState(null); // 'VIDEOJUEGOS' | 'ANIME' | null
@@ -380,6 +380,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             setSyncProgress(`¡Completado! Se sincronizaron ${count} noticias de ${isVg ? 'Videojuegos' : 'Anime'}.`);
             triggerToast(`¡Sincronizadas ${count} noticias de ${isVg ? 'Videojuegos' : 'Anime'} con éxito!`);
             await fetchRecentArticles();
+            if (onSyncComplete) onSyncComplete();
         } catch (err) {
             console.error("Sync error:", err);
             triggerToast(`Error al sincronizar ${category}: ${err.message}`, 'bottom');
@@ -396,6 +397,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             if (error) throw error;
             triggerToast("Noticia eliminada correctamente");
             fetchRecentArticles();
+            if (onSyncComplete) onSyncComplete();
         } catch (err) {
             triggerToast(`Error al eliminar: ${err.message}`, 'bottom');
         }

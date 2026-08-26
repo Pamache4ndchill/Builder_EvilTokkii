@@ -1869,7 +1869,7 @@ function App() {
   };
 
   useEffect(() => {
-    if (view === 'create_content_item' || view === 'create' || view === 'view_twitch' || view === 'view_participations' || view === 'view_most_streamed') {
+    if (view === 'create_content_item' || view === 'create' || view === 'view_sync_news' || view === 'view_twitch' || view === 'view_participations' || view === 'view_most_streamed') {
       fetchLibraryItems();
       if (view === 'view_most_streamed') fetchMostStreamed();
     }
@@ -2992,7 +2992,7 @@ function App() {
       ) : view !== 'home' && view !== 'view_tierlists' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
-                           view === 'create' ? savedNews : 
+                           (view === 'create' || view === 'view_sync_news') ? savedNews : 
                            view === 'view_scheduled_messages' ? scheduledMessages :
                            view === 'view_commands' ? chatCommands :
                            libraryItems.filter(item => {
@@ -3006,7 +3006,7 @@ function App() {
 
         const iconName = view === 'view_participations' ? <Users size={24} color="var(--primary)" /> :
                          view === 'view_twitch' ? <LayoutTemplate size={24} color="var(--primary)" /> :
-                         view === 'create' ? <Newspaper size={24} color="var(--primary)" /> : 
+                         (view === 'create' || view === 'view_sync_news') ? <Newspaper size={24} color="var(--primary)" /> : 
                          view === 'view_scheduled_messages' ? <MessageSquare size={24} color="var(--primary)" /> :
                          view === 'view_commands' ? <Settings size={24} color="var(--primary)" /> :
                          view === 'create_content_item' ? <LayoutTemplate size={24} color="var(--primary)" /> :
@@ -3015,7 +3015,7 @@ function App() {
 
         const titleText = view === 'view_participations' ? 'Librería de Eventos' :
                           view === 'view_twitch' ? 'Canjes por Tipo' :
-                          view === 'create' ? 'Noticias' : 
+                          (view === 'create' || view === 'view_sync_news') ? 'Noticias' : 
                           view === 'view_scheduled_messages' ? 'Mensajes Programados' :
                           view === 'view_commands' ? 'Comandos Creados' :
                           view === 'create_content_item' ? 'Sorteos y Eventos' :
@@ -3034,7 +3034,8 @@ function App() {
                   title={view === 'view_scheduled_messages' ? "Crear nuevo mensaje" : view === 'view_commands' ? "Crear nuevo comando" : `Crear nuevo ${tipoItem}`}
                   onClick={() => {
                     setEditingItemId(null);
-                    if (view === 'create') {
+                    if (view === 'create' || view === 'view_sync_news') {
+                      setView('create');
                       setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
                     } else if (view === 'view_scheduled_messages') {
                       setEditingMsg({ id: 'new', text: '', intervalMs: 300000, active: true, minChatMessages: 20 });
@@ -3099,7 +3100,7 @@ function App() {
                           setCmdFormDesc(item.description || '');
                           setCmdFormResponses(item.responses);
                         } else {
-                          handleEditItem(item.id, view === 'create' ? 'noticia' : null);
+                          handleEditItem(item.id, (view === 'create' || view === 'view_sync_news') ? 'noticia' : null);
                         }
                       }}
                     >
@@ -3128,7 +3129,7 @@ function App() {
                       <div className="news-item-date" style={{ textTransform: 'capitalize', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div>
                           {view === 'view_twitch' ? 'Categoría Twitch' : 
-                           view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : 
+                           (view === 'create' || view === 'view_sync_news') ? `Noticia • ${item.author || 'Sin Autor'}` : 
                            view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
                            view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
                            (item.tipo || 'Objeto')} 
@@ -5506,13 +5507,16 @@ function App() {
             <TierlistsManager supabase={supabase} triggerToast={triggerToast} />
           </div>
         ) : view === 'view_sync_news' ? (
-          <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem' }}>
-            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
+          <div className="builder-view">
+            <div className="builder-header animate-slide-down">
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+                Sincronizador de Noticias
+              </h1>
             </div>
-            <SyncNewsManager supabase={supabase} triggerToast={triggerToast} />
+            <SyncNewsManager supabase={supabase} triggerToast={triggerToast} onSyncComplete={fetchLibraryItems} />
           </div>
         ) : (
           <div className="builder-view">
