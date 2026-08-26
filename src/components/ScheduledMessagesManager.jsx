@@ -46,7 +46,7 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
     });
 
     // Modales y formularios
-    const [editingMsg, setEditingMsg] = useState(null); // { id, text, intervalMinutes, minChatMessages, active }
+    const [editingMsg, setEditingMsg] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [instantMsgText, setInstantMsgText] = useState('');
 
@@ -59,7 +59,6 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
         setBotLogs(prev => [{ id: Date.now() + Math.random(), time, type, message }, ...prev.slice(0, 99)]);
     }, []);
 
-    // Guardar configuración en localStorage
     useEffect(() => {
         localStorage.setItem('twitch_bot_channel', botChannel);
         localStorage.setItem('twitch_bot_username', botUsername);
@@ -88,7 +87,6 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
         if (isConnecting) return;
         setIsConnecting(true);
 
-        // Si no hay OAuth token configurado, abrimos la autorización directa de Twitch
         let activeToken = botOauth;
         if (!activeToken) {
             const redirectUri = window.location.origin + window.location.pathname;
@@ -188,7 +186,7 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
         return true;
     };
 
-    // Planificador de mensajes independientes
+    // Planificador de mensajes
     useEffect(() => {
         intervalsRef.current.forEach(clearInterval);
         intervalsRef.current = [];
@@ -344,71 +342,165 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
                 </div>
             </div>
 
-            {/* Ajustes Rápidos / Opcionales de Canal */}
-            <div className="card animate-slide-down" style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)' }}>
-                <div 
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-                    onClick={() => setShowAdvancedConfig(!showAdvancedConfig)}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                        <Settings size={16} />
-                        <span>Configuración de Canal: <strong>#{botChannel}</strong> (Bot: <strong>{botUsername}</strong>)</span>
+            {/* Grid Principal: Consola a la Izquierda y Configuración a la Derecha */}
+            <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: '24px', alignItems: 'start' }}>
+                
+                {/* Columna Izquierda: Consola de Chat en Vivo + Chat Instantáneo + Ajustes */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    
+                    {/* Consola de Eventos */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '480px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Terminal size={16} color="#38bdf8" /> Consola de Chat en Vivo
+                            </h4>
+                            <button
+                                type="button"
+                                onClick={() => setBotLogs([])}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}
+                            >
+                                Limpiar consola
+                            </button>
+                        </div>
+
+                        <div style={{
+                            flex: 1,
+                            background: '#090d16',
+                            border: '1px solid rgba(255,255,255,0.06)',
+                            borderRadius: '10px',
+                            padding: '12px',
+                            fontFamily: 'Consolas, monospace',
+                            fontSize: '0.82rem',
+                            overflowY: 'auto',
+                            display: 'flex',
+                            flexDirection: 'column-reverse',
+                            gap: '6px'
+                        }}>
+                            {botLogs.map(log => (
+                                <div key={log.id} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>
+                                    <span style={{ color: '#64748b' }}>[{log.time}] </span>
+                                    {log.type === 'chat' && <span style={{ color: '#38bdf8' }}>{log.message}</span>}
+                                    {log.type === 'sent' && <span style={{ color: '#a855f7', fontWeight: 600 }}>{log.message}</span>}
+                                    {log.type === 'success' && <span style={{ color: '#22c55e' }}>{log.message}</span>}
+                                    {log.type === 'error' && <span style={{ color: '#ef4444' }}>{log.message}</span>}
+                                    {log.type === 'info' && <span style={{ color: '#94a3b8' }}>{log.message}</span>}
+                                    {log.type === 'warn' && <span style={{ color: '#f59e0b' }}>{log.message}</span>}
+                                </div>
+                            ))}
+                            {botLogs.length === 0 && (
+                                <div style={{ color: '#475569', fontStyle: 'italic', textAlign: 'center', marginTop: '3rem' }}>
+                                    Esperando eventos del chat de Twitch...
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <button style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}>
-                        {showAdvancedConfig ? 'Ocultar ajustes' : 'Cambiar canal / cuenta'}
-                        {showAdvancedConfig ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </button>
+
+                    {/* Enviar Mensaje Rápido */}
+                    <div className="card animate-slide-down" style={{ padding: '20px' }}>
+                        <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Send size={16} color="#9146FF" /> Enviar Mensaje Instantáneo
+                        </h4>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <input 
+                                type="text"
+                                className="form-control"
+                                placeholder="Escribe algo en el chat de Twitch..."
+                                value={instantMsgText}
+                                onChange={(e) => setInstantMsgText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && instantMsgText.trim()) {
+                                        sendChatMessage(instantMsgText.trim(), true);
+                                        setInstantMsgText('');
+                                    }
+                                }}
+                            />
+                            <button
+                                type="button"
+                                className="btn-submit"
+                                style={{
+                                    width: 'auto',
+                                    padding: '0 18px',
+                                    background: 'var(--primary)',
+                                    color: '#fff',
+                                    borderRadius: '8px'
+                                }}
+                                onClick={() => {
+                                    if (instantMsgText.trim()) {
+                                        sendChatMessage(instantMsgText.trim(), true);
+                                        setInstantMsgText('');
+                                    }
+                                }}
+                                disabled={!isBotConnected || !instantMsgText.trim()}
+                            >
+                                Enviar
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Ajustes Opcionales de Canal */}
+                    <div className="card animate-slide-down" style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)' }}>
+                        <div 
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                            onClick={() => setShowAdvancedConfig(!showAdvancedConfig)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                <Settings size={15} />
+                                <span>Canal: <strong>#{botChannel}</strong> (Bot: <strong>{botUsername}</strong>)</span>
+                            </div>
+                            <button style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}>
+                                {showAdvancedConfig ? 'Ocultar' : 'Ajustes'}
+                                {showAdvancedConfig ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                            </button>
+                        </div>
+
+                        {showAdvancedConfig && (
+                            <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Canal de Twitch</label>
+                                    <input 
+                                        type="text"
+                                        className="form-control"
+                                        value={botChannel}
+                                        onChange={(e) => setBotChannel(e.target.value.toLowerCase().trim())}
+                                        placeholder="eviltokkii"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Usuario del Bot</label>
+                                    <input 
+                                        type="text"
+                                        className="form-control"
+                                        value={botUsername}
+                                        onChange={(e) => setBotUsername(e.target.value.trim())}
+                                        placeholder="eviltokkii"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Token OAuth (Opcional)</label>
+                                    <input 
+                                        type="password"
+                                        className="form-control"
+                                        value={botOauth}
+                                        onChange={(e) => setBotOauth(e.target.value.trim())}
+                                        placeholder="oauth:xxxx..."
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                 </div>
 
-                {showAdvancedConfig && (
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-                        <div>
-                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Canal de Twitch (Destino)</label>
-                            <input 
-                                type="text"
-                                className="form-control"
-                                value={botChannel}
-                                onChange={(e) => setBotChannel(e.target.value.toLowerCase().trim())}
-                                placeholder="eviltokkii"
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Usuario del Bot</label>
-                            <input 
-                                type="text"
-                                className="form-control"
-                                value={botUsername}
-                                onChange={(e) => setBotUsername(e.target.value.trim())}
-                                placeholder="eviltokkii"
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Token OAuth (Opcional)</label>
-                            <input 
-                                type="password"
-                                className="form-control"
-                                value={botOauth}
-                                onChange={(e) => setBotOauth(e.target.value.trim())}
-                                placeholder="oauth:xxxx..."
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Grid Principal: Mensajes Programados + Consola y Chat Rápido */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', alignItems: 'start' }}>
-                
-                {/* Columna Izquierda: Lista de Mensajes Programados */}
+                {/* Columna Derecha: Configuración y Lista de Mensajes Programados */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div className="card animate-slide-down" style={{ padding: '24px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                             <div>
                                 <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Clock size={20} color="#38bdf8" /> Mensajes Activos ({messages.filter(m => m.active).length}/{messages.length})
+                                    <Clock size={20} color="#38bdf8" /> Mensajes Programados ({messages.filter(m => m.active).length}/{messages.length})
                                 </h3>
                                 <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                    Se envían periódicamente al chat respetando el tráfico de usuarios.
+                                    Configura los mensajes periódicos que el bot enviará al chat de Twitch.
                                 </p>
                             </div>
 
@@ -546,100 +638,6 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
                             </div>
                         )}
                     </div>
-                </div>
-
-                {/* Columna Derecha: Chat Instantáneo y Consola en Vivo */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
-                    {/* Enviar Mensaje Rápido */}
-                    <div className="card animate-slide-down" style={{ padding: '20px' }}>
-                        <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Send size={16} color="#9146FF" /> Enviar Mensaje Instantáneo
-                        </h4>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input 
-                                type="text"
-                                className="form-control"
-                                placeholder="Escribe algo en el chat de Twitch..."
-                                value={instantMsgText}
-                                onChange={(e) => setInstantMsgText(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && instantMsgText.trim()) {
-                                        sendChatMessage(instantMsgText.trim(), true);
-                                        setInstantMsgText('');
-                                    }
-                                }}
-                            />
-                            <button
-                                type="button"
-                                className="btn-submit"
-                                style={{
-                                    width: 'auto',
-                                    padding: '0 18px',
-                                    background: 'var(--primary)',
-                                    color: '#fff',
-                                    borderRadius: '8px'
-                                }}
-                                onClick={() => {
-                                    if (instantMsgText.trim()) {
-                                        sendChatMessage(instantMsgText.trim(), true);
-                                        setInstantMsgText('');
-                                    }
-                                }}
-                                disabled={!isBotConnected || !instantMsgText.trim()}
-                            >
-                                Enviar
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Consola de Eventos */}
-                    <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '420px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                            <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Terminal size={16} color="#38bdf8" /> Consola de Chat en Vivo
-                            </h4>
-                            <button
-                                type="button"
-                                onClick={() => setBotLogs([])}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}
-                            >
-                                Limpiar
-                            </button>
-                        </div>
-
-                        <div style={{
-                            flex: 1,
-                            background: '#090d16',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            borderRadius: '10px',
-                            padding: '12px',
-                            fontFamily: 'Consolas, monospace',
-                            fontSize: '0.8rem',
-                            overflowY: 'auto',
-                            display: 'flex',
-                            flexDirection: 'column-reverse',
-                            gap: '6px'
-                        }}>
-                            {botLogs.map(log => (
-                                <div key={log.id} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>
-                                    <span style={{ color: '#64748b' }}>[{log.time}] </span>
-                                    {log.type === 'chat' && <span style={{ color: '#38bdf8' }}>{log.message}</span>}
-                                    {log.type === 'sent' && <span style={{ color: '#a855f7', fontWeight: 600 }}>{log.message}</span>}
-                                    {log.type === 'success' && <span style={{ color: '#22c55e' }}>{log.message}</span>}
-                                    {log.type === 'error' && <span style={{ color: '#ef4444' }}>{log.message}</span>}
-                                    {log.type === 'info' && <span style={{ color: '#94a3b8' }}>{log.message}</span>}
-                                    {log.type === 'warn' && <span style={{ color: '#f59e0b' }}>{log.message}</span>}
-                                </div>
-                            ))}
-                            {botLogs.length === 0 && (
-                                <div style={{ color: '#475569', fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>
-                                    Esperando eventos del chat de Twitch...
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
                 </div>
 
             </div>
