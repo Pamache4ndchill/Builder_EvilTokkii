@@ -72,7 +72,6 @@ function cleanDescription(html) {
 function buildRobustArticleContent(title, cleanDesc, category, sourceName, sourceUrl) {
     const isAnime = category === 'ANIME';
     
-    // Extract base sentences from cleanDesc
     const rawSentences = (cleanDesc || '').split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 25);
     const mainCore = rawSentences.slice(0, 3).join('. ') + (rawSentences.length > 0 ? '.' : '');
 
@@ -92,13 +91,10 @@ function buildRobustArticleContent(title, cleanDesc, category, sourceName, sourc
         ? 'La reacción de los fanáticos no se ha hecho esperar en redes sociales y foros especializados, donde se debaten las implicaciones de este estreno dentro de la temporada actual. Con un calendario repleto de lanzamientos de alto perfil, esta producción se posiciona como una de las más seguidas y comentadas por los aficionados a la cultura otaku.'
         : 'La comunidad de jugadores ha recibido estos anuncios con gran entusiasmo, generando amplios debates sobre el futuro de la saga y las expectativas depositadas en este proyecto. En un año repleto de grandes estrenos y competencia en el sector, este movimiento refuerza la posición del título dentro del panorama internacional.';
 
-    
-
     return `
         <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p1}</p>
         <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p2}</p>
         <p style="margin-bottom: 1.5rem; text-align: justify; line-height: 1.8;">${p3}</p>
-        
         <p style="margin-top: 2.5rem; text-align: center;">
             <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" class="games-join-btn" style="display: inline-flex; text-decoration: none; padding: 1rem 2.5rem; background: var(--primary); color: white; border-radius: 30px; font-weight: bold; box-shadow: 0 5px 15px rgba(157, 78, 221, 0.4);">
                 LEER ARTÍCULO COMPLETO EN ${sourceName.toUpperCase()}
@@ -187,6 +183,35 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         fetchRecentArticles();
     }, []);
 
+    // Extrae imagen real y válida del item o de su página
+    const extractRealImage = async (item, directXml = '') => {
+        // 1. Direct from item JSON
+        let img = item.thumbnail || item.enclosure?.link || '';
+        if (img && img.startsWith('http') && !img.includes('placeholder')) return img;
+
+        // 2. From description
+        if (item.description) {
+            const m = item.description.match(/<img[^>]*src=["']([^"']*)["']/i);
+            if (m && m[1] && m[1].startsWith('http')) return m[1];
+        }
+
+        // 3. From content
+        if (item.content) {
+            const m = item.content.match(/<img[^>]*src=["']([^"']*)["']/i);
+            if (m && m[1] && m[1].startsWith('http')) return m[1];
+        }
+
+        // 4. From XML if available
+        if (directXml) {
+            const enc = directXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
+            const med = directXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || directXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
+            if (enc && enc[1].startsWith('http')) return enc[1];
+            if (med && med[1].startsWith('http')) return med[1];
+        }
+
+        return '';
+    };
+
     // Extrae artículos mediante rss2json (CORS friendly) y fallback con proxies
     const fetchNormalizedItems = async (source) => {
         // 1. Intentar con rss2json (100% compatible con navegador)
@@ -196,21 +221,22 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
-                    return json.items.map(item => {
-                        let img = item.thumbnail || item.enclosure?.link || '';
-                        if (!img && item.description) {
-                            const match = item.description.match(/<img[^>]*src=["']([^"']*)["']/i);
-                            if (match) img = match[1];
+                    const parsedList = [];
+                    for (const item of json.items) {
+                        const image = await extractRealImage(item);
+                        // Solo incluir artículos que tengan imagen de portada propia
+                        if (image && image.startsWith('http')) {
+                            parsedList.push({
+                                title: item.title,
+                                link: item.link,
+                                description: item.description || item.content,
+                                image,
+                                date: item.pubDate || new Date().toISOString(),
+                                sourceName: source.name
+                            });
                         }
-                        return {
-                            title: item.title,
-                            link: item.link,
-                            description: item.description || item.content,
-                            image: img,
-                            date: item.pubDate || new Date().toISOString(),
-                            sourceName: source.name
-                        };
-                    });
+                    }
+                    if (parsedList.length > 0) return parsedList;
                 }
             }
         } catch (e) {
@@ -248,15 +274,8 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                             const contentEncoded = extractTagValue(itemXml, 'content:encoded') || extractTagValue(itemXml, 'summary') || extractTagValue(itemXml, 'description');
                             
-                            let header_image = '';
-                            const encMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']*)["']/i);
-                            const medMatch = itemXml.match(/<media:content[^>]*url=["']([^"']*)["']/i) || itemXml.match(/<media:thumbnail[^>]*url=["']([^"']*)["']/i);
-                            if (encMatch) header_image = encMatch[1];
-                            else if (medMatch) header_image = medMatch[1];
-                            else {
-                                const imgMatch = itemXml.match(/<img[^>]*src=["']([^"']*)["']/i);
-                                if (imgMatch) header_image = ensureAbsoluteUrl(imgMatch[1], link);
-                            }
+                            const image = await extractRealImage({ description: contentEncoded, link }, itemXml);
+                            if (!image || !image.startsWith('http')) continue;
 
                             const pubDateStr = extractTagValue(itemXml, 'pubDate') || extractTagValue(itemXml, 'dc:date') || extractTagValue(itemXml, 'updated');
 
@@ -264,7 +283,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                                 title: rawTitleClean,
                                 link,
                                 description: contentEncoded,
-                                image: header_image,
+                                image,
                                 date: pubDateStr || new Date().toISOString(),
                                 sourceName: source.name
                             });
@@ -283,20 +302,20 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
     const handleRunSync = async () => {
         if (isSyncing) return;
         setIsSyncing(true);
-        setSyncProgress('Iniciando sincronización estricta en español (3 Videojuegos + 3 Anime)...');
+        setSyncProgress('Iniciando sincronización estricta con portadas HD (3 Videojuegos + 3 Anime)...');
 
-        // Fuentes 100% en Español
+        // Fuentes 100% en Español con portadas HD garantizadas
         const vgSources = [
-            { name: '3DJuegos', url: 'https://www.3djuegos.com/universo/rss/rss.php' },
             { name: 'Areajugones', url: 'https://areajugones.sport.es/videojuegos/feed/' },
             { name: 'GeneracionXbox', url: 'https://generacionxbox.com/feed/' },
-            { name: 'Nintenderos', url: 'https://www.nintenderos.com/feed/' }
+            { name: 'Nintenderos', url: 'https://www.nintenderos.com/feed/' },
+            { name: '3DJuegos', url: 'https://www.3djuegos.com/universo/rss/rss.php' }
         ];
 
         const animeSources = [
-            { name: 'Ramen Para Dos', url: 'https://ramenparados.com/feed/' },
-            { name: 'Areajugones', url: 'https://areajugones.sport.es/anime/feed/' },
-            { name: 'Crunchyroll', url: 'https://www.crunchyroll.com/news/rss?lang=esES' }
+            { name: 'Areajugones Anime', url: 'https://areajugones.sport.es/anime/feed/' },
+            { name: 'Crunchyroll', url: 'https://www.crunchyroll.com/news/rss?lang=esES' },
+            { name: 'Ramen Para Dos', url: 'https://ramenparados.com/feed/' }
         ];
 
         let countVideojuegos = 0;
@@ -304,7 +323,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
         const targetLimit = 3;
 
         try {
-            // 1. Sincronizar exactamente 3 noticias de VIDEOJUEGOS en Español
+            // 1. Sincronizar exactamente 3 noticias de VIDEOJUEGOS en Español con imagen real HD
             for (const src of vgSources) {
                 if (countVideojuegos >= targetLimit) break;
                 setSyncProgress(`Consultando videojuegos en ${src.name}...`);
@@ -315,7 +334,10 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     const titleClean = decodeHtmlEntities(item.title || '').trim();
                     const link = (item.link || '').trim();
-                    if (!titleClean || !link || !link.startsWith('http')) continue;
+                    const header_image = item.image;
+
+                    // Descartar si no tiene título, link o imagen real propia
+                    if (!titleClean || !link || !link.startsWith('http') || !header_image || !header_image.startsWith('http')) continue;
 
                     let fullDesc = cleanDescription(item.description || '');
                     if (!isStrictCategory('VIDEOJUEGOS', titleClean, fullDesc)) continue;
@@ -335,8 +357,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     setSyncProgress(`[Videojuegos ${countVideojuegos + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
 
                     const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : (fullDesc || titleClean);
-                    let header_image = item.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
-
                     const articleHtml = buildRobustArticleContent(titleClean, fullDesc, 'VIDEOJUEGOS', src.name, link);
                     const author = pickAuthor(link);
                     const parsedDate = item.date ? new Date(item.date) : new Date();
@@ -366,7 +386,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                 }
             }
 
-            // 2. Sincronizar exactamente 3 noticias de ANIME en Español
+            // 2. Sincronizar exactamente 3 noticias de ANIME en Español con imagen real HD de cada anime
             for (const src of animeSources) {
                 if (countAnime >= targetLimit) break;
                 setSyncProgress(`Consultando anime en ${src.name}...`);
@@ -377,7 +397,10 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
 
                     const titleClean = decodeHtmlEntities(item.title || '').trim();
                     const link = (item.link || '').trim();
-                    if (!titleClean || !link || !link.startsWith('http')) continue;
+                    const header_image = item.image;
+
+                    // Descartar si no tiene título, link o imagen real propia
+                    if (!titleClean || !link || !link.startsWith('http') || !header_image || !header_image.startsWith('http')) continue;
 
                     let fullDesc = cleanDescription(item.description || '');
                     if (!isStrictCategory('ANIME', titleClean, fullDesc)) continue;
@@ -397,8 +420,6 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                     setSyncProgress(`[Anime ${countAnime + 1}/3] Guardando: "${titleClean.substring(0, 30)}..."`);
 
                     const subtitle = fullDesc.length > 200 ? fullDesc.substring(0, 197) + '...' : (fullDesc || titleClean);
-                    let header_image = item.image || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80';
-
                     const articleHtml = buildRobustArticleContent(titleClean, fullDesc, 'ANIME', src.name, link);
                     const author = pickAuthor(link);
                     const parsedDate = item.date ? new Date(item.date) : new Date();
@@ -429,7 +450,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
             }
 
             setSyncProgress('¡Sincronización completada con éxito!');
-            triggerToast(`¡Sincronizadas ${countVideojuegos} noticias de Videojuegos y ${countAnime} de Anime!`);
+            triggerToast(`¡Sincronizadas ${countVideojuegos} noticias de Videojuegos y ${countAnime} de Anime con portadas HD!`);
             await fetchRecentArticles();
         } catch (err) {
             console.error("Sync error:", err);
@@ -461,7 +482,7 @@ export default function SyncNewsManager({ supabase, triggerToast }) {
                         <Newspaper size={28} color="#38bdf8" /> Sincronizador Automático de Noticias
                     </h2>
                     <p style={{ margin: '6px 0 0 0', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                        Obtén 3 noticias diarias de Videojuegos y 3 de Anime 100% en español con contenido editorial robusto y uniforme.
+                        Obtén 3 noticias diarias de Videojuegos y 3 de Anime 100% en español con portadas HD oficiales únicas para cada título.
                     </p>
                 </div>
 
