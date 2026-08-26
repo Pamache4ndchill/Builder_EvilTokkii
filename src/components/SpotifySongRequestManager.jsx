@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-    Play, MessageSquare, Pause, SkipForward, SkipBack, Volume2, VolumeX, 
+    Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, 
     Music, Search, Plus, Trash2, CheckCircle2, AlertCircle, 
-    ExternalLink, RefreshCw, Radio, Sparkles, Disc3, ShieldCheck
+    ExternalLink, RefreshCw, Radio, Sparkles, Disc3, ShieldCheck, MessageSquare
 } from 'lucide-react';
 
 const SPOTIFY_CLIENT_ID = '467b4e8480964c26913cb87d276ed20c';
@@ -16,9 +16,30 @@ const SPOTIFY_SCOPES = [
     'playlist-modify-private'
 ].join(' ');
 
+// PKCE Helpers
+function generateRandomString(length) {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    const values = crypto.getRandomValues(new Uint8Array(length));
+    return values.reduce((acc, x) => acc + possible[x % possible.length], "");
+}
+
+async function sha256(plain) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return window.crypto.subtle.digest('SHA-256', data);
+}
+
+function base64encode(input) {
+    return btoa(String.fromCharCode(...new Uint8Array(input)))
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+}
+
 export default function SpotifySongRequestManager({ supabase, triggerToast }) {
     // Spotify Auth State
     const [spotifyToken, setSpotifyToken] = useState(() => localStorage.getItem('spotify_access_token') || '');
+    const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem('spotify_refresh_token') || '');
     const [spotifyUser, setSpotifyUser] = useState(null);
     const [activeDevice, setActiveDevice] = useState(null);
     
@@ -35,35 +56,120 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [responseTemplate, setResponseTemplate] = useState(() => localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}');
-    const [srCommandPrefix, setSrCommandPrefix] = useState(() => localStorage.getItem('spotify_sr_prefix') || '!sr');
 
     const pollIntervalRef = useRef(null);
 
-    // Detect OAuth token in URL hash from Spotify redirect
-    useEffect(() => {
-        const hash = window.location.hash;
-        if (hash && hash.includes('access_token=')) {
-            const params = new URLSearchParams(hash.substring(1));
-            const token = params.get('access_token');
-            if (token) {
-                setSpotifyToken(token);
-                localStorage.setItem('spotify_access_token', token);
-                window.history.replaceState(null, '', window.location.pathname);
-                triggerToast('✅ ¡Spotify conectado con éxito!');
+    // Helper: Refresh Access Token with PKCE
+    const refreshSpotifyToken = useCallback(async () => {
+        const rToken = localStorage.getItem('spotify_refresh_token');
+        if (!rToken) return;
+
+        try {
+            const body = new URLSearchParams({
+                client_id: SPOTIFY_CLIENT_ID,
+                grant_type: 'refresh_token',
+                refresh_token: rToken
+            });
+
+            const res = await fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString()
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.access_token) {
+                    setSpotifyToken(data.access_token);
+                    localStorage.setItem('spotify_access_token', data.access_token);
+                    if (data.refresh_token) {
+                        setRefreshToken(data.refresh_token);
+                        localStorage.setItem('spotify_refresh_token', data.refresh_token);
+                    }
+                }
             }
+        } catch (e) {
+            console.error('Error refreshing token:', e);
+        }
+    }, []);
+
+    // Handle PKCE Code Exchange on Redirect
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+
+        if (code) {
+            const codeVerifier = localStorage.getItem('spotify_code_verifier');
+            const redirectUri = window.location.origin + window.location.pathname;
+
+            const exchangeCode = async () => {
+                try {
+                    const body = new URLSearchParams({
+                        client_id: SPOTIFY_CLIENT_ID,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: redirectUri,
+                        code_verifier: codeVerifier || ''
+                    });
+
+                    const res = await fetch('https://accounts.spotify.com/api/token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString()
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        setSpotifyToken(data.access_token);
+                        localStorage.setItem('spotify_access_token', data.access_token);
+                        if (data.refresh_token) {
+                            setRefreshToken(data.refresh_token);
+                            localStorage.setItem('spotify_refresh_token', data.refresh_token);
+                        }
+                        localStorage.removeItem('spotify_code_verifier');
+                        window.history.replaceState(null, '', window.location.pathname);
+                        triggerToast('✅ ¡Spotify conectado con éxito!');
+                    } else {
+                        const errData = await res.json();
+                        console.error('Token exchange error:', errData);
+                    }
+                } catch (err) {
+                    console.error('Exchange fetch failed:', err);
+                }
+            };
+
+            exchangeCode();
         }
     }, [triggerToast]);
 
-    // Handle Login with Spotify
-    const handleConnectSpotify = () => {
+    // Handle Login with Spotify using PKCE (response_type=code)
+    const handleConnectSpotify = async () => {
+        const codeVerifier = generateRandomString(64);
+        const hashed = await sha256(codeVerifier);
+        const codeChallenge = base64encode(hashed);
+
+        localStorage.setItem('spotify_code_verifier', codeVerifier);
+
         const redirectUri = window.location.origin + window.location.pathname;
-        const authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(SPOTIFY_SCOPES)}&show_dialog=true`;
-        window.location.href = authUrl;
+        const params = new URLSearchParams({
+            client_id: SPOTIFY_CLIENT_ID,
+            response_type: 'code',
+            redirect_uri: redirectUri,
+            scope: SPOTIFY_SCOPES,
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
+            show_dialog: 'true'
+        });
+
+        window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
     };
 
     const handleDisconnectSpotify = () => {
         setSpotifyToken('');
+        setRefreshToken('');
         localStorage.removeItem('spotify_access_token');
+        localStorage.removeItem('spotify_refresh_token');
+        localStorage.removeItem('spotify_code_verifier');
         setSpotifyUser(null);
         setCurrentTrack(null);
         triggerToast('Spotify desconectado');
@@ -74,26 +180,25 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         if (!token) return;
         try {
             const res = await fetch('https://api.spotify.com/v1/me', {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: 'Bearer ' + token }
             });
             if (res.ok) {
                 const data = await res.json();
                 setSpotifyUser(data);
             } else if (res.status === 401) {
-                setSpotifyToken('');
-                localStorage.removeItem('spotify_access_token');
+                refreshSpotifyToken();
             }
         } catch (err) {
             console.error('Error fetching Spotify profile:', err);
         }
-    }, []);
+    }, [refreshSpotifyToken]);
 
     // Fetch Current Playback from Spotify
     const fetchCurrentPlayback = useCallback(async () => {
         if (!spotifyToken) return;
         try {
             const res = await fetch('https://api.spotify.com/v1/me/player', {
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
             if (res.status === 200) {
                 const data = await res.json();
@@ -115,16 +220,14 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                     }
                 }
             } else if (res.status === 204) {
-                // No active playback
                 setIsPlaying(false);
             } else if (res.status === 401) {
-                setSpotifyToken('');
-                localStorage.removeItem('spotify_access_token');
+                refreshSpotifyToken();
             }
         } catch (err) {
             console.error('Error polling playback:', err);
         }
-    }, [spotifyToken]);
+    }, [spotifyToken, refreshSpotifyToken]);
 
     // Poll current playback every 2.5 seconds
     useEffect(() => {
@@ -181,7 +284,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         try {
             await fetch(endpoint, {
                 method: 'PUT',
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
             setIsPlaying(!isPlaying);
             setTimeout(fetchCurrentPlayback, 400);
@@ -195,7 +298,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         try {
             await fetch('https://api.spotify.com/v1/me/player/next', {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
             triggerToast('⏭️ Pista siguiente');
             setTimeout(fetchCurrentPlayback, 500);
@@ -209,7 +312,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         try {
             await fetch('https://api.spotify.com/v1/me/player/previous', {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
             setTimeout(fetchCurrentPlayback, 500);
         } catch (e) {
@@ -222,9 +325,9 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         localStorage.setItem('spotify_player_volume', newVol);
         if (!spotifyToken) return;
         try {
-            await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${newVol}`, {
+            await fetch('https://api.spotify.com/v1/me/player/volume?volume_percent=' + newVol, {
                 method: 'PUT',
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
         } catch (e) {}
     };
@@ -237,12 +340,11 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
 
         try {
             let query = searchQuery.trim();
-            // If it's a direct Spotify URL
             if (query.includes('spotify.com/track/')) {
                 const trackId = query.split('track/')[1]?.split('?')[0];
                 if (trackId) {
-                    const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-                        headers: { Authorization: `Bearer ${spotifyToken}` }
+                    const res = await fetch('https://api.spotify.com/v1/tracks/' + trackId, {
+                        headers: { Authorization: 'Bearer ' + spotifyToken }
                     });
                     if (res.ok) {
                         const track = await res.json();
@@ -253,8 +355,8 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                 }
             }
 
-            const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5`, {
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+            const res = await fetch('https://api.spotify.com/v1/search?q=' + encodeURIComponent(query) + '&type=track&limit=5', {
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
             if (res.ok) {
                 const data = await res.json();
@@ -270,20 +372,18 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
     const handleAddTrackToQueue = async (track, requestedBy = 'Streamer') => {
         if (!spotifyToken) return;
         try {
-            // 1. Add to Spotify Queue
-            const res = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+            const res = await fetch('https://api.spotify.com/v1/me/player/queue?uri=' + encodeURIComponent(track.uri), {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${spotifyToken}` }
+                headers: { Authorization: 'Bearer ' + spotifyToken }
             });
 
             if (res.ok || res.status === 204) {
-                triggerToast(`🎵 Añadida a la cola: "${track.name}"`);
+                triggerToast('🎵 Añadida a la cola: "' + track.name + '"');
             }
 
-            // 2. Save in Supabase for logs and OBS overlay
             if (supabase) {
                 await supabase.from('song_requests').insert([{
-                    title: `${track.name} - ${track.artists.map(a => a.name).join(', ')}`,
+                    title: track.name + ' - ' + track.artists.map(a => a.name).join(', '),
                     video_id: track.id,
                     requested_by: requestedBy,
                     status: 'pending'
@@ -310,7 +410,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
         const totalSeconds = Math.floor(ms / 1000);
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
-        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
     };
 
     return (
@@ -348,7 +448,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                         fontSize: '0.85rem'
                     }}>
                         <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: spotifyToken ? '#1DB954' : '#ef4444', boxShadow: spotifyToken ? '0 0 10px #1DB954' : 'none' }}></span>
-                        {spotifyToken ? (spotifyUser ? `SPOTIFY: ${spotifyUser.display_name?.toUpperCase()}` : 'SPOTIFY CONECTADO') : 'DESCONECTADO'}
+                        {spotifyToken ? (spotifyUser ? ('SPOTIFY: ' + spotifyUser.display_name?.toUpperCase()) : 'SPOTIFY CONECTADO') : 'DESCONECTADO'}
                     </div>
 
                     {!spotifyToken ? (
@@ -443,7 +543,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                                 <div style={{ height: '6px', width: '100%', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', overflow: 'hidden' }}>
                                     <div style={{
                                         height: '100%',
-                                        width: `${durationMs > 0 ? (progressMs / durationMs) * 100 : 0}%`,
+                                        width: (durationMs > 0 ? (progressMs / durationMs) * 100 : 0) + '%',
                                         background: '#1DB954',
                                         transition: 'width 1s linear'
                                     }} />
@@ -571,10 +671,10 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
 
                 </div>
 
-                {/* Right Column: OBS Overlay Info & Queue */}
+                {/* Right Column: Message template, OBS Overlay Info & Queue */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     
-                    {/* Widget OBS URL Card */}
+                    {/* Message Template Card */}
                     <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(29, 185, 84, 0.3)' }}>
                         <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <MessageSquare size={16} color="#1DB954" /> Mensaje de Respuesta en el Chat
@@ -624,6 +724,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                         </div>
                     </div>
 
+                    {/* Widget OBS URL Card */}
                     <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
                         <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <ExternalLink size={16} color="#A855F7" /> Widget para OBS Studio
@@ -636,7 +737,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                                 type="text" 
                                 className="form-control" 
                                 readOnly 
-                                value={`${window.location.origin}/?overlay=song_request`} 
+                                value={window.location.origin + '/?overlay=song_request'} 
                                 style={{ fontSize: '0.8rem', background: 'rgba(0,0,0,0.4)' }}
                             />
                             <button
@@ -644,7 +745,7 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                                 className="btn-submit"
                                 style={{ width: 'auto', padding: '0 14px', background: 'var(--primary)', color: '#fff', borderRadius: '8px', fontSize: '0.8rem' }}
                                 onClick={() => {
-                                    navigator.clipboard.writeText(`${window.location.origin}/?overlay=song_request`);
+                                    navigator.clipboard.writeText(window.location.origin + '/?overlay=song_request');
                                     triggerToast('📋 Enlace de OBS copiado');
                                 }}
                             >
