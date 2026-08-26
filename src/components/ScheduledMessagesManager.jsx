@@ -7,7 +7,7 @@ import {
 
 const TWITCH_CLIENT_ID = 'crp2lmk3jqaqxwymxixn38nf3xxn2b';
 const DEFAULT_CHANNEL = 'eviltokkii';
-const DEFAULT_USERNAME = 'eviltokkii';
+const DEFAULT_USERNAME = 'Eviltokki_exe';
 
 const DEFAULT_TEMPLATES = [
     { text: "🌟 ¡No olvides seguir el canal y activar la campanita para no perderte ningún directo!", interval: 10, minChat: 10 },
@@ -19,7 +19,10 @@ const DEFAULT_TEMPLATES = [
 export default function ScheduledMessagesManager({ supabase, triggerToast }) {
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
-    const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || DEFAULT_USERNAME);
+    const [botUsername, setBotUsername] = useState(() => {
+        const saved = localStorage.getItem('twitch_bot_username');
+        return (saved && saved.toLowerCase() !== 'eviltokkii') ? saved : 'Eviltokki_exe';
+    });
     const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || '');
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 
