@@ -1394,8 +1394,8 @@ function App() {
     }
   };
   
-  const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || '');
-  const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || '');
+  const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:ol3ji2g72r1t2u7grlrhf6iu7744yg');
+  const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'Eviltokki_exe');
   const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || 'eviltokkii');
   const [isBotConnected, setIsBotConnected] = useState(false);
   const [botLogs, setBotLogs] = useState([]);
@@ -1861,14 +1861,15 @@ function App() {
 
   // Auto-conectar el bot de Twitch de forma permanente al abrir el Builder
   useEffect(() => {
-    const savedOauth = localStorage.getItem('twitch_bot_oauth');
-    const savedUser = localStorage.getItem('twitch_bot_username');
-    if (savedOauth && savedUser) {
-      const timer = setTimeout(() => {
-        connectTwitchBot();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
+    // Save defaults to localStorage if not set
+    if (!localStorage.getItem('twitch_bot_oauth')) localStorage.setItem('twitch_bot_oauth', 'oauth:ol3ji2g72r1t2u7grlrhf6iu7744yg');
+    if (!localStorage.getItem('twitch_bot_username')) localStorage.setItem('twitch_bot_username', 'Eviltokki_exe');
+    if (!localStorage.getItem('twitch_bot_channel')) localStorage.setItem('twitch_bot_channel', 'eviltokkii');
+
+    const timer = setTimeout(() => {
+      connectTwitchBot();
+    }, 1200);
+    return () => clearTimeout(timer);
   }, [botOauth, botUsername, botChannel]);
 
   // Validar sesión y username al cargar

@@ -6,6 +6,7 @@ import {
 
 const DEFAULT_CHANNEL = 'eviltokkii';
 const DEFAULT_USERNAME = 'Eviltokki_exe';
+const DEFAULT_OAUTH = 'oauth:ol3ji2g72r1t2u7grlrhf6iu7744yg';
 
 export default function BotCredentialsManager({ 
     supabase, 
@@ -19,7 +20,7 @@ export default function BotCredentialsManager({
 }) {
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || DEFAULT_USERNAME);
-    const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || '');
+    const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:ol3ji2g72r1t2u7grlrhf6iu7744yg');
     const [showPassword, setShowPassword] = useState(false);
     const [testMessage, setTestMessage] = useState('¡Hola chat! Soy Eviltokki_exe y estoy listo para acompañar el stream 🤖💜');
     const [isSaving, setIsSaving] = useState(false);
