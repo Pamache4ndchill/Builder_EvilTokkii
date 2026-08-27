@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-    Play, Square, Send, Plus, Trash2, Edit3, Settings, 
+    Play, Square, Send, Megaphone, Plus, Trash2, Edit3, Settings, 
     Wifi, WifiOff, MessageSquare, Clock, CheckCircle2, 
     AlertCircle, Sparkles, RefreshCw, ChevronDown, ChevronUp, Terminal, ShieldCheck
 } from 'lucide-react';
@@ -49,6 +49,7 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
     const [editingMsg, setEditingMsg] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [instantMsgText, setInstantMsgText] = useState('');
+    const [instantAnnounceText, setInstantAnnounceText] = useState('');
 
     const wsRef = useRef(null);
     const intervalsRef = useRef([]);
@@ -440,7 +441,7 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
                     {/* Enviar Mensaje Rápido */}
                     <div className="card animate-slide-down" style={{ padding: '20px' }}>
                         <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Send size={16} color="#9146FF" /> Enviar Mensaje Instantáneo
+                            <Send size={16} color="#EC4899" /> Enviar Mensaje Instantáneo
                         </h4>
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <input 
@@ -475,6 +476,62 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
                                 disabled={!isBotConnected || !instantMsgText.trim()}
                             >
                                 Enviar
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Enviar Anuncio Instantáneo (/announce por defecto) */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(145, 70, 255, 0.4)', background: 'linear-gradient(135deg, rgba(145, 70, 255, 0.08), rgba(15, 23, 42, 0.6))' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Megaphone size={16} color="#A855F7" /> Enviar Anuncio Destacado (/announce)
+                            </h4>
+                            <span style={{ fontSize: '0.72rem', color: '#C084FC', fontWeight: 700, padding: '2px 8px', background: 'rgba(145, 70, 255, 0.2)', borderRadius: '12px', border: '1px solid rgba(145, 70, 255, 0.3)' }}>
+                                Banner Twitch
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <input 
+                                type="text"
+                                className="form-control"
+                                placeholder="Escribe un anuncio para destacarlo en grande en el chat..."
+                                value={instantAnnounceText}
+                                onChange={(e) => setInstantAnnounceText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && instantAnnounceText.trim()) {
+                                        const textToSend = instantAnnounceText.trim().startsWith('/announce') 
+                                            ? instantAnnounceText.trim() 
+                                            : `/announce ${instantAnnounceText.trim()}`;
+                                        sendChatMessage(textToSend, true);
+                                        setInstantAnnounceText('');
+                                    }
+                                }}
+                                style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }}
+                            />
+                            <button
+                                type="button"
+                                className="btn-submit"
+                                style={{
+                                    width: 'auto',
+                                    padding: '0 20px',
+                                    background: 'linear-gradient(135deg, #9146FF, #772CE8)',
+                                    color: '#fff',
+                                    fontWeight: 700,
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 12px rgba(145, 70, 255, 0.35)'
+                                }}
+                                onClick={() => {
+                                    if (instantAnnounceText.trim()) {
+                                        const textToSend = instantAnnounceText.trim().startsWith('/announce') 
+                                            ? instantAnnounceText.trim() 
+                                            : `/announce ${instantAnnounceText.trim()}`;
+                                        sendChatMessage(textToSend, true);
+                                        setInstantAnnounceText('');
+                                    }
+                                }}
+                                disabled={!isBotConnected || !instantAnnounceText.trim()}
+                            >
+                                Anunciar
                             </button>
                         </div>
                     </div>
