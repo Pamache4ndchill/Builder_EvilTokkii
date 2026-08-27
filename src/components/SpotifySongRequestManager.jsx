@@ -40,7 +40,9 @@ export default function SpotifySongRequestManager({
     supabase, 
     triggerToast, 
     songRequestCommand: propCmd, 
-    setSongRequestCommand: propSetCmd 
+    setSongRequestCommand: propSetCmd,
+    isSongRequestEnabled: propEnabled,
+    setIsSongRequestEnabled: propSetEnabled
 }) {
     // Spotify Auth State
     const [spotifyToken, setSpotifyToken] = useState(() => localStorage.getItem('spotify_access_token') || '');
@@ -64,6 +66,10 @@ export default function SpotifySongRequestManager({
     const songRequestCommand = propCmd !== undefined ? propCmd : localCmd;
     const setSongRequestCommand = propSetCmd !== undefined ? propSetCmd : setLocalCmd;
     const [customCommandInput, setCustomCommandInput] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+
+    const [localEnabled, setLocalEnabled] = useState(() => localStorage.getItem('song_request_enabled') !== 'false');
+    const isSongRequestEnabled = propEnabled !== undefined ? propEnabled : localEnabled;
+    const setIsSongRequestEnabled = propSetEnabled !== undefined ? propSetEnabled : setLocalEnabled;
 
     const [responseTemplate, setResponseTemplate] = useState(() => localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}');
 
@@ -503,6 +509,36 @@ export default function SpotifySongRequestManager({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                    {/* Botón ON / OFF Peticiones de Chat */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const nextState = !isSongRequestEnabled;
+                            setIsSongRequestEnabled(nextState);
+                            localStorage.setItem('song_request_enabled', nextState ? 'true' : 'false');
+                            triggerToast(nextState ? '🟢 Peticiones de chat ACTIVADAS' : '🔴 Peticiones de chat PAUSADAS');
+                        }}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 18px',
+                            borderRadius: '30px',
+                            border: isSongRequestEnabled ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+                            background: isSongRequestEnabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: isSongRequestEnabled ? '#22c55e' : '#ef4444',
+                            fontWeight: 800,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: isSongRequestEnabled ? '0 0 14px rgba(34, 197, 94, 0.2)' : 'none'
+                        }}
+                        title={isSongRequestEnabled ? "Haz clic para pausar peticiones de canciones desde Twitch" : "Haz clic para reactivar peticiones de canciones desde Twitch"}
+                    >
+                        <Radio size={15} />
+                        <span>{isSongRequestEnabled ? 'PETICIONES: ACTIVAS' : 'PETICIONES: PAUSADAS'}</span>
+                    </button>
+
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',

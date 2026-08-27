@@ -769,10 +769,15 @@ function App() {
   const [playerVolume, setPlayerVolume] = useState(() => Number(localStorage.getItem('song_player_volume')) || 50);
   const [isPlayerEnabledInDashboard, setIsPlayerEnabledInDashboard] = useState(() => localStorage.getItem('dashboard_player_enabled') === 'true');
   const [songRequestCommand, setSongRequestCommand] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+  const [isSongRequestEnabled, setIsSongRequestEnabled] = useState(() => localStorage.getItem('song_request_enabled') !== 'false');
 
   useEffect(() => {
     localStorage.setItem('song_request_command', songRequestCommand);
   }, [songRequestCommand]);
+
+  useEffect(() => {
+    localStorage.setItem('song_request_enabled', isSongRequestEnabled ? 'true' : 'false');
+  }, [isSongRequestEnabled]);
 
   const [allSongs, setAllSongs] = useState([]);
   const [chatCommands, setChatCommands] = useState([]);
@@ -1557,12 +1562,17 @@ function App() {
             const isSongRequest = textLower.startsWith('!songrequest ');
 
             if (isCustomCmd || isDefaultSr || isSongRequest) {
-              let prefixLen = customPrefix.length;
-              if (isDefaultSr) prefixLen = 4;
-              if (isSongRequest) prefixLen = 13;
-              const query = text.slice(prefixLen).trim();
-              if (query) {
-                handleSongRequest(query, user);
+              if (!isSongRequestEnabled) {
+                addBotLog(`[Song Request Pausado] Pedido de @${user} rechazado porque el Song Request está desactivado.`);
+                enviarMensajeTwitch(`@${user} ⚠️ El Song Request está pausado por el streamer en este momento.`, true);
+              } else {
+                let prefixLen = customPrefix.length;
+                if (isDefaultSr) prefixLen = 4;
+                if (isSongRequest) prefixLen = 13;
+                const query = text.slice(prefixLen).trim();
+                if (query) {
+                  handleSongRequest(query, user);
+                }
               }
             } else if (textLower === "!song" || textLower === "!currentsong" || textLower === "!cancion") {
               handleGetActiveSong();
@@ -5395,6 +5405,8 @@ function App() {
               triggerToast={triggerToast} 
               songRequestCommand={songRequestCommand}
               setSongRequestCommand={setSongRequestCommand}
+              isSongRequestEnabled={isSongRequestEnabled}
+              setIsSongRequestEnabled={setIsSongRequestEnabled}
             />
           </div>
         ) : view === 'view_tierlists' ? (
