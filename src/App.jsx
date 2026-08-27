@@ -3244,7 +3244,7 @@ function App() {
             />
           </div>
         </aside>
-      ) : ['create', 'create_content_item', 'view_participations', 'view_twitch', 'view_scheduled_messages', 'view_commands'].includes(view) && (() => {
+      ) : ['create', 'create_content_item', 'view_participations', 'view_twitch', 'view_commands'].includes(view) && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
@@ -4192,7 +4192,7 @@ function App() {
             </div>
           </div>
         ) : view === 'view_scheduled_messages' ? (
-          <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem' }}>
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
             <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
