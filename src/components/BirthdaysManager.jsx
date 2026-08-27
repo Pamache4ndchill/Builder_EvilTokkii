@@ -180,7 +180,7 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
             triggerToast('⚠️ Función de envío no disponible');
             return;
         }
-        const text = (item.message || DEFAULT_MESSAGE_TEMPLATE).replace(/{user}/gi, '@' + item.username);
+        const text = (item.message || DEFAULT_MESSAGE_TEMPLATE).replace(/@{user}/gi, '@' + item.username).replace(/{user}/gi, '@' + item.username).replace(/@{usuario}/gi, '@' + item.username).replace(/{usuario}/gi, '@' + item.username);
         enviarMensajeTwitch(text);
         triggerToast('🚀 Mensaje enviado al chat para @' + item.username);
     };
@@ -598,7 +598,7 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                                 Mensaje para el chat:
                                             </div>
                                             <div style={{ fontSize: '0.82rem', color: '#e2e8f0', fontStyle: 'italic', wordBreak: 'break-word' }}>
-                                                "{(b.message || DEFAULT_MESSAGE_TEMPLATE).replace(/{user}/gi, '@' + b.username)}"
+                                                "{(b.message || DEFAULT_MESSAGE_TEMPLATE).replace(/@{user}/gi, '@' + b.username).replace(/{user}/gi, '@' + b.username).replace(/@{usuario}/gi, '@' + b.username).replace(/{usuario}/gi, '@' + b.username)}"
                                             </div>
                                         </div>
 

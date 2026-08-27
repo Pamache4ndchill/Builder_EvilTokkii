@@ -1524,7 +1524,7 @@ function App() {
                   detectedBirthdayUsersRef.current.add(userLower);
                   const defMsg = '¡Feliz cumpleaños @{user}! 🎉🎂 Toda la comunidad de EvilTokkii te desea un día increíble y lleno de bendiciones 🥳💜';
                   const template = matchedBday.message || defMsg;
-                  const welcomeGreeting = `✨ ¡Bienvenido/a @${user}! ` + template.replace(/{user}/gi, `@${user}`);
+                  const welcomeGreeting = `✨ ¡Bienvenido/a @${user}! ` + template.replace(/@{user}/gi, `@${user}`).replace(/{user}/gi, `@${user}`).replace(/@{usuario}/gi, `@${user}`).replace(/{usuario}/gi, `@${user}`);
                   
                   addBotLog(`[Cumpleaños] 🎂 ¡@${user} (cumpleañero de hoy) acaba de escribir en el chat! Enviando felicitaciones de bienvenida...`);
                   enviarMensajeTwitch(welcomeGreeting, true);
