@@ -1439,6 +1439,8 @@ function App() {
   const intervalsRef = useRef([]);
   const userMessagesCountRef = useRef(0);
   const detectedBirthdayUsersRef = useRef(new Set());
+  const scheduledTimestampsRef = useRef({});
+  const scheduledChatCountsRef = useRef({});
 
   const addBotLog = (text) => {
     const time = new Date().toLocaleTimeString();
@@ -1723,40 +1725,62 @@ function App() {
     }
   };
 
+  // Reloj Maestro Global Persistente con Timestamps Reales (Inmune a re-renders)
   useEffect(() => {
-    clearAllIntervals();
-    userMessagesCountRef.current = 0;
-    
-    if (isBotConnected && scheduledMessages.length > 0) {
-      const activeMsgs = scheduledMessages.filter(m => m.active && m.text);
-      if (activeMsgs.length > 0) {
-        addBotLog(`[Temporizador Global] ⏱️ ${activeMsgs.length} mensaje(s) programado(s) corriendo en segundo plano continuo.`);
-        
-        activeMsgs.forEach(msg => {
-          let lastSentCount = 0;
-          const intervalMs = (Number(msg.intervalMinutes) || 10) * 60000;
-          const threshold = msg.minChatMessages !== undefined ? Number(msg.minChatMessages) : 10;
-          
-          const timer = setInterval(() => {
-            const currentCount = userMessagesCountRef.current;
-            const diff = currentCount - lastSentCount;
-            if (threshold <= 0 || diff >= threshold) {
-              enviarMensajeTwitch(msg.text, true);
-              lastSentCount = currentCount;
-            } else {
-              addBotLog(`[Temporizador Global] Esperando chat: "${msg.text.substring(0, 20)}..." (${diff}/${threshold} mensajes de chat recibidos)`);
-            }
-          }, intervalMs);
-          
-          intervalsRef.current.push(timer);
-        });
-      }
+    if (intervalsRef.current) {
+      intervalsRef.current.forEach(t => clearInterval(t));
+      intervalsRef.current = [];
     }
-    
+
+    if (!isBotConnected) return;
+
+    // Inicializar timestamps para mensajes nuevos que no tengan uno asignado
+    scheduledMessages.forEach(msg => {
+      if (msg.active && !scheduledTimestampsRef.current[msg.id]) {
+        scheduledTimestampsRef.current[msg.id] = Date.now();
+        scheduledChatCountsRef.current[msg.id] = userMessagesCountRef.current;
+      }
+    });
+
+    const masterTimer = setInterval(() => {
+      if (!isBotConnected) return;
+      const now = Date.now();
+
+      scheduledMessages.forEach(msg => {
+        if (!msg.active || !msg.text) return;
+
+        const intervalMinutes = Math.max(1, Number(msg.intervalMinutes) || 10);
+        const intervalMs = intervalMinutes * 60 * 1000;
+        const lastSent = scheduledTimestampsRef.current[msg.id] || 0;
+        const timeElapsed = now - lastSent;
+
+        if (timeElapsed >= intervalMs) {
+          const currentChats = userMessagesCountRef.current;
+          const lastChats = scheduledChatCountsRef.current[msg.id] || 0;
+          const diffChats = currentChats - lastChats;
+          const threshold = msg.minChatMessages !== undefined ? Number(msg.minChatMessages) : 0;
+
+          if (threshold <= 0 || diffChats >= threshold) {
+            addBotLog(`⏱️ [Disparo Programado - cada ${intervalMinutes}m]: "${msg.text.substring(0, 25)}..."`);
+            enviarMensajeTwitch(msg.text, true);
+            scheduledTimestampsRef.current[msg.id] = now;
+            scheduledChatCountsRef.current[msg.id] = currentChats;
+          } else {
+            addBotLog(`⏳ [En Espera de Chat] "${msg.text.substring(0, 20)}..." (${diffChats}/${threshold} msgs de chat)`);
+          }
+        }
+      });
+    }, 5000); // Revisa cada 5 segundos con precisión absoluta
+
+    intervalsRef.current.push(masterTimer);
+
     return () => {
-      clearAllIntervals();
+      if (intervalsRef.current) {
+        intervalsRef.current.forEach(t => clearInterval(t));
+        intervalsRef.current = [];
+      }
     };
-  }, [isBotConnected, scheduledMessages, botChannel]);
+  }, [isBotConnected, scheduledMessages]);
 
   useEffect(() => {
     localStorage.setItem('twitch_bot_oauth', botOauth);

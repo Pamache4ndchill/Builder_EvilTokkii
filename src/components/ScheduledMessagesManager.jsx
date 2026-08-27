@@ -392,14 +392,22 @@ export default function ScheduledMessagesManager({
     // Timers are managed globally in App.jsx to avoid restarts when navigating
 
     const handleToggleMessage = async (id) => {
+        let targetMsg = null;
         let newActiveState = true;
+
         setMessages(prev => prev.map(m => {
             if (m.id === id) {
                 newActiveState = !m.active;
-                return { ...m, active: !m.active };
+                targetMsg = { ...m, active: newActiveState };
+                return targetMsg;
             }
             return m;
         }));
+
+        // Si se acaba de activar (LANZAR), enviar una primera emisión al instante
+        if (newActiveState && targetMsg && targetMsg.text && isBotConnected) {
+            sendChatMessage(targetMsg.text, true);
+        }
 
         if (supabase) {
             try {

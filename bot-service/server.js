@@ -147,34 +147,54 @@ async function sendChatMessage(text) {
 }
 
 // ==============================================================================
-// 3. TEMPORIZADORES DE MENSAJES PROGRAMADOS Y CUMPLEAÑOS
+// 3. RELOJ MAESTRO PERSISTENTE 24/7 (TIMESTAMPS EXACTOS)
 // ==============================================================================
+const botTimestamps = {};
+const botChatCounts = {};
+let masterBotTimer = null;
+
 function startScheduledTimers() {
-    activeScheduledTimers.forEach(clearInterval);
-    activeScheduledTimers.length = 0;
+    if (masterBotTimer) clearInterval(masterBotTimer);
 
     const activeMsgs = scheduledMessagesList.filter(m => m.active !== false && m.text);
-    console.log(`⏱️ Iniciando temporizadores para ${activeMsgs.length} mensaje(s) programado(s)...`);
+    console.log(`⏱️ [Reloj Maestro 24/7] Monitoreando ${activeMsgs.length} mensaje(s) programado(s)...`);
 
     activeMsgs.forEach(msg => {
-        let lastSentCount = 0;
-        const intervalMinutes = msg.interval_minutes || msg.intervalMinutes || 10;
-        const intervalMs = intervalMinutes * 60000;
-        const threshold = msg.min_chat_messages !== undefined ? msg.min_chat_messages : (msg.minChatMessages || 10);
-
-        const timer = setInterval(() => {
-            const currentCount = userMessagesCount;
-            const diff = currentCount - lastSentCount;
-            if (threshold <= 0 || diff >= threshold) {
-                sendChatMessage(msg.text);
-                lastSentCount = currentCount;
-            } else {
-                console.log(`[Poco Tráfico] Omitido "${msg.text.substring(0, 15)}..." (${currentCount - lastSentCount}/${threshold} msgs)`);
-            }
-        }, intervalMs);
-
-        activeScheduledTimers.push(timer);
+        const id = msg.id || msg.text;
+        if (!botTimestamps[id]) {
+            botTimestamps[id] = Date.now();
+            botChatCounts[id] = userMessagesCount;
+        }
     });
+
+    masterBotTimer = setInterval(() => {
+        const now = Date.now();
+        scheduledMessagesList.forEach(msg => {
+            if (msg.active === false || !msg.text) return;
+
+            const id = msg.id || msg.text;
+            const intervalMinutes = Math.max(1, Number(msg.interval_minutes || msg.intervalMinutes) || 10);
+            const intervalMs = intervalMinutes * 60 * 1000;
+            const lastSent = botTimestamps[id] || 0;
+            const timeElapsed = now - lastSent;
+
+            if (timeElapsed >= intervalMs) {
+                const currentChats = userMessagesCount;
+                const lastChats = botChatCounts[id] || 0;
+                const diffChats = currentChats - lastChats;
+                const threshold = msg.min_chat_messages !== undefined ? Number(msg.min_chat_messages) : 0;
+
+                if (threshold <= 0 || diffChats >= threshold) {
+                    console.log(`📢 [24/7 Disparo Programado cada ${intervalMinutes}m]: "${msg.text.substring(0, 30)}..."`);
+                    sendChatMessage(msg.text);
+                    botTimestamps[id] = now;
+                    botChatCounts[id] = currentChats;
+                } else {
+                    console.log(`⏳ [24/7 En Espera de Chat] "${msg.text.substring(0, 20)}..." (${diffChats}/${threshold} msgs)`);
+                }
+            }
+        });
+    }, 5000);
 }
 
 function startBirthdaysTimer() {
