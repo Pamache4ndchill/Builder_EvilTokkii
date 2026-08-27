@@ -1432,17 +1432,30 @@ function App() {
     setBotLogs(prev => [`[${time}] ${text}`, ...prev.slice(0, 99)]);
   };
 
+  const isManuallyDisconnectedRef = useRef(false);
+  const reconnectTimeoutRef = useRef(null);
+  const pingIntervalRef = useRef(null);
+
   const connectTwitchBot = () => {
     if (!botOauth || !botUsername || !botChannel) {
-      triggerToast("⚠️ Por favor rellena todos los campos de configuración del bot.");
+      return;
+    }
+    
+    isManuallyDisconnectedRef.current = false;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       return;
     }
     
     if (wsRef.current) {
-      wsRef.current.close();
+      try { wsRef.current.close(); } catch(e) {}
     }
     
-    addBotLog("Conectando a Twitch IRC...");
+    addBotLog("Conectando a Twitch IRC (Modo Permanente)...");
     
     try {
       const ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
@@ -1457,6 +1470,14 @@ function App() {
         ws.send(`NICK ${botUsername.toLowerCase()}`);
         ws.send(`JOIN #${botChannel.toLowerCase()}`);
         addBotLog(`Autenticación enviada para el bot ${botUsername} en el canal #${botChannel}`);
+
+        // Keep-alive heartbeat every 4 minutes
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send("PING :tmi.twitch.tv");
+          }
+        }, 240000);
       };
 
       ws.onmessage = (event) => {
@@ -1540,11 +1561,21 @@ function App() {
 
       ws.onclose = () => {
         setIsBotConnected(false);
-        addBotLog("Conexión con Twitch IRC cerrada.");
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        
+        if (!isManuallyDisconnectedRef.current) {
+          addBotLog("Conexión con Twitch IRC cerrada. Reintentando en 5 segundos automáticamente...");
+          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectTwitchBot();
+          }, 5000);
+        } else {
+          addBotLog("Conexión con Twitch IRC cerrada.");
+        }
       };
 
       ws.onerror = (error) => {
-        addBotLog(`Error de WebSocket.`);
+        addBotLog("Aviso de WebSocket Twitch IRC.");
       };
     } catch (e) {
       addBotLog(`Error al inicializar WebSocket: ${e.message}`);
@@ -1559,6 +1590,9 @@ function App() {
   };
 
   const disconnectTwitchBot = () => {
+    isManuallyDisconnectedRef.current = true;
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -1782,6 +1816,18 @@ function App() {
     setTwitchGiveawayParticipants([]);
     setTwitchGiveawayWinner(null);
   };
+
+  // Auto-conectar el bot de Twitch de forma permanente al abrir el Builder
+  useEffect(() => {
+    const savedOauth = localStorage.getItem('twitch_bot_oauth');
+    const savedUser = localStorage.getItem('twitch_bot_username');
+    if (savedOauth && savedUser) {
+      const timer = setTimeout(() => {
+        connectTwitchBot();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [botOauth, botUsername, botChannel]);
 
   // Validar sesión y username al cargar
   useEffect(() => {
