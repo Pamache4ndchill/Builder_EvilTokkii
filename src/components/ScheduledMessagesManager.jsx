@@ -237,6 +237,34 @@ export default function ScheduledMessagesManager({
         setBotLogs(prev => [{ id: Date.now() + Math.random(), time, type, message }, ...prev.slice(0, 99)]);
     }, []);
 
+    // Sincronizar en tiempo real con Supabase
+    useEffect(() => {
+        const fetchRemoteMessages = async () => {
+            if (!supabase) return;
+            try {
+                const { data, error } = await supabase
+                    .from('twitch_scheduled_messages')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+
+                if (!error && data && data.length > 0) {
+                    const formatted = data.map(d => ({
+                        id: d.id,
+                        text: d.text,
+                        intervalMinutes: d.interval_minutes || 10,
+                        minChatMessages: d.min_chat_messages !== undefined ? d.min_chat_messages : 10,
+                        active: d.active !== false
+                    }));
+                    setMessages(formatted);
+                    localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(formatted));
+                }
+            } catch (e) {
+                console.warn("Supabase fetch note:", e.message);
+            }
+        };
+        fetchRemoteMessages();
+    }, [supabase]);
+
     useEffect(() => {
         localStorage.setItem('twitch_bot_channel', botChannel);
         localStorage.setItem('twitch_bot_username', botUsername);
@@ -362,40 +390,93 @@ export default function ScheduledMessagesManager({
 
     // Timers are managed globally in App.jsx to avoid restarts when navigating
 
-    const handleToggleMessage = (id) => {
-        setMessages(prev => prev.map(m => m.id === id ? { ...m, active: !m.active } : m));
+    const handleToggleMessage = async (id) => {
+        let newActiveState = true;
+        setMessages(prev => prev.map(m => {
+            if (m.id === id) {
+                newActiveState = !m.active;
+                return { ...m, active: !m.active };
+            }
+            return m;
+        }));
+
+        if (supabase) {
+            try {
+                await supabase
+                    .from('twitch_scheduled_messages')
+                    .update({ active: newActiveState, updated_at: new Date().toISOString() })
+                    .eq('id', String(id));
+            } catch (err) {
+                console.warn("Supabase toggle note:", err.message);
+            }
+        }
     };
 
-    const handleDeleteMessage = (id) => {
+    const handleDeleteMessage = async (id) => {
         if (!window.confirm('¿Eliminar este mensaje programado?')) return;
         setMessages(prev => prev.filter(m => m.id !== id));
         triggerToast('Mensaje programado eliminado');
+
+        if (supabase) {
+            try {
+                await supabase
+                    .from('twitch_scheduled_messages')
+                    .delete()
+                    .eq('id', String(id));
+            } catch (err) {
+                console.warn("Supabase delete note:", err.message);
+            }
+        }
     };
 
     const handleSaveMessage = (e) => {
         e.preventDefault();
         if (!editingMsg.text.trim()) return;
 
+        const targetId = editingMsg.id === 'new' ? 'msg_' + Date.now() : String(editingMsg.id);
+        const intervalMins = Math.max(1, Number(editingMsg.intervalMinutes) || 10);
+        const minChats = Math.max(0, Number(editingMsg.minChatMessages) || 0);
+        const cleanText = editingMsg.text.trim();
+
         if (editingMsg.id === 'new') {
-            setMessages(prev => [
-                ...prev,
-                {
-                    id: Date.now(),
-                    text: editingMsg.text.trim(),
-                    intervalMinutes: Math.max(1, Number(editingMsg.intervalMinutes) || 5),
-                    minChatMessages: Math.max(0, Number(editingMsg.minChatMessages) || 0),
-                    active: true
-                }
-            ]);
+            const newRecord = {
+                id: targetId,
+                text: cleanText,
+                intervalMinutes: intervalMins,
+                minChatMessages: minChats,
+                active: true
+            };
+            setMessages(prev => [...prev, newRecord]);
             triggerToast('Nuevo mensaje programado creado');
+
+            if (supabase) {
+                supabase.from('twitch_scheduled_messages').upsert({
+                    id: targetId,
+                    text: cleanText,
+                    interval_minutes: intervalMins,
+                    min_chat_messages: minChats,
+                    active: true,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                }).catch(e => console.warn("Supabase insert note:", e));
+            }
         } else {
             setMessages(prev => prev.map(m => m.id === editingMsg.id ? {
                 ...m,
-                text: editingMsg.text.trim(),
-                intervalMinutes: Math.max(1, Number(editingMsg.intervalMinutes) || 5),
-                minChatMessages: Math.max(0, Number(editingMsg.minChatMessages) || 0)
+                text: cleanText,
+                intervalMinutes: intervalMins,
+                minChatMessages: minChats
             } : m));
             triggerToast('Mensaje programado actualizado');
+
+            if (supabase) {
+                supabase.from('twitch_scheduled_messages').update({
+                    text: cleanText,
+                    interval_minutes: intervalMins,
+                    min_chat_messages: minChats,
+                    updated_at: new Date().toISOString()
+                }).eq('id', targetId).catch(e => console.warn("Supabase update note:", e));
+            }
         }
 
         setIsModalOpen(false);
