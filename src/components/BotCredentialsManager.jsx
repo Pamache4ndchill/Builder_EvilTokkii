@@ -20,7 +20,14 @@ export default function BotCredentialsManager({
 }) {
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || DEFAULT_USERNAME);
-    const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
+    const [botOauth, setBotOauth] = useState(() => {
+    const saved = localStorage.getItem('twitch_bot_oauth');
+    if (!saved || saved.includes('ol3ji2g7')) {
+      localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
+      return 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z';
+    }
+    return saved;
+  });
     const [showPassword, setShowPassword] = useState(false);
     const [testMessage, setTestMessage] = useState('¡Hola chat! Soy Eviltokki_exe y estoy listo para acompañar el stream 🤖💜');
     const [isSaving, setIsSaving] = useState(false);
