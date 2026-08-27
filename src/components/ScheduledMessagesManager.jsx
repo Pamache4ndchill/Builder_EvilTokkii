@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-    Play, Square, Send, Megaphone, Plus, Trash2, Edit3, Settings, 
+    Play, Square, Send, Smile, Megaphone, Plus, Trash2, Edit3, Settings, 
     Wifi, WifiOff, MessageSquare, Clock, CheckCircle2, 
     AlertCircle, Sparkles, RefreshCw, ChevronDown, ChevronUp, Terminal, ShieldCheck
 } from 'lucide-react';
@@ -8,6 +8,167 @@ import {
 const TWITCH_CLIENT_ID = 'crp2lmk3jqaqxwymxixn38nf3xxn2b';
 const DEFAULT_CHANNEL = 'eviltokkii';
 const DEFAULT_USERNAME = 'Eviltokki_exe';
+
+
+const EMOJI_CATEGORIES = {
+    destacados: {
+        label: '⭐ Stream & Twitch',
+        emojis: ['✨', '🌟', '💜', '💛', '📢', '🔔', '🎮', '🎁', '🚀', '💬', '👑', '🥳', '🎉', '🎂', '🐱', '🔥', '💯', '⚡', '🍣', '👾', '💎', '🏆', '🥇', '🍿', '🍕']
+    },
+    caritas: {
+        label: '😀 Caritas & Gestos',
+        emojis: [
+            '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '🥹', '☺️', '😊', '😇', '🙂', '😉', '😌', 
+            '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸', 
+            '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', 
+            '😭', '😮‍💨', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', 
+            '🤔', '🫣', '🤭', '🫢', '🫡', '🤫', '🫠', '🤥', '😶', '😐', '😑', '🫥', '😯', '😦', '😧', '😮', 
+            '😲', '🥱', '😴', '🤤', '😪', '😵', '😵‍💫', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', 
+            '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃'
+        ]
+    },
+    manos: {
+        label: '👋 Manos & Gestos',
+        emojis: [
+            '👋', '🤚', '🖐️', '✋', '🖖', '🫱', '🫲', '🫳', '🫴', '🫵', '👉', '👈', '👆', '👇', '☝️', '👍', 
+            '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '🫶', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', 
+            '🦾', '🦿', '🦵', '🦶', '👂', '🦻', '👃', '🫀', '🫁', '🧠', '👀', '👁️', '👅', '👄'
+        ]
+    },
+    corazones: {
+        label: '💜 Corazones & Símbolos',
+        emojis: [
+            '💜', '💛', '❤️', '🧡', '💚', '💙', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '❣️', '💕', '💞', 
+            '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☯️', '⚛️', '💮', '🛑', '⛔', '⭕', '❌', 
+            '❗', '❓', '❕', '❔', '⚠️', '🚸', '🔱', '🔰', '♻️', '❇️', '✳️', '❎', '✅', '💠', '🔷', 
+            '🔶', '🔹', '🔸', '🔘', '🔲', '🔳', '⚪', '⚫', '🔴', '🔵', '🟣', '🟢', '🟡', '🟠'
+        ]
+    },
+    gaming: {
+        label: '🎮 Gaming & Música',
+        emojis: [
+            '🎮', '🕹️', '👾', '🎲', '🎯', '🎳', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎪', '🎭', '🎨', 
+            '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸', '🪕', '🎻', '🎟️', '🎫', '📺', '📻', 
+            '📹', '📽️', '💻', '🖥️', '📱', '🔋', '🔌', '💡', '📡', '🎙️', '🔊', '🔉', '🔈', '🔇', '📢', 
+            '📣', '🔔', '🔕', '🃏', '🀄', '🪄', '🪅', '🪆', '🪁', '🎈', '🎏', '🎀'
+        ]
+    },
+    comida: {
+        label: '🍕 Comida & Fiesta',
+        emojis: [
+            '🍕', '🍔', '🍟', '🌭', '🍿', '🍣', '🍙', '🍘', '🥟', '🍢', '🍡', '🍧', '🍨', '🍦', '🍰', 
+            '🎂', '🧁', '🍮', '🍩', '🍪', '🍫', '🍬', '🍭', '🍯', '☕', '🍵', '🧃', '🥤', '🧋', '🍶', 
+            '🍾', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃', '🥢', '🍽️', '🥣', '🌮', '🌯', '🫔', '🥗'
+        ]
+    },
+    efectos: {
+        label: '🌟 Efectos & Animales',
+        emojis: [
+            '✨', '🌟', '⭐', '🌠', '💫', '💥', '☄️', '☀️', '🌙', '⚡', '🔥', '🌈', '🌸', '🌺', '🌻', 
+            '🌹', '🍀', '🍁', '🐱', '🐱‍👤', '🐾', '🦄', '🦊', '🐼', '🐨', '🐯', '🦁', '🐸', '🐙', '🦋', 
+            '👑', '💎', '💍', '🔮', '🧿', '🚀', '🛸', '🌍', '🪐', '🐶', '🐺', '🐵', '🙈', '🙉', '🙊'
+        ]
+    }
+};
+
+function EmojiPickerPopover({ onSelectEmoji, onClose }) {
+    const [activeTab, setActiveTab] = useState('destacados');
+
+    return (
+        <div 
+            className="card animate-slide-down"
+            style={{
+                position: 'absolute',
+                bottom: '100%',
+                right: '0',
+                marginBottom: '10px',
+                width: '340px',
+                maxHeight: '280px',
+                background: '#0f172a',
+                border: '1.5px solid rgba(145, 70, 255, 0.4)',
+                borderRadius: '14px',
+                boxShadow: '0 12px 35px rgba(0, 0, 0, 0.6), 0 0 20px rgba(145, 70, 255, 0.25)',
+                zIndex: 1000,
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+            }}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '6px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#A855F7', fontWeight: 700 }}>
+                    {EMOJI_CATEGORIES[activeTab].label}
+                </span>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}
+                >
+                    ✕
+                </button>
+            </div>
+
+            {/* Category Tabs */}
+            <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {Object.entries(EMOJI_CATEGORIES).map(([key, cat]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setActiveTab(key)}
+                        style={{
+                            padding: '3px 8px',
+                            fontSize: '0.7rem',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: activeTab === key ? 'rgba(145, 70, 255, 0.3)' : 'rgba(255,255,255,0.05)',
+                            color: activeTab === key ? '#fff' : 'var(--text-muted)',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        {cat.label.split(' ')[0]}
+                    </button>
+                ))}
+            </div>
+
+            {/* Emojis Grid */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '6px',
+                maxHeight: '180px',
+                overflowY: 'auto',
+                padding: '4px'
+            }}>
+                {EMOJI_CATEGORIES[activeTab].emojis.map((emoji, idx) => (
+                    <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                            onSelectEmoji(emoji);
+                        }}
+                        style={{
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            borderRadius: '8px',
+                            fontSize: '1.25rem',
+                            padding: '4px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s, background 0.1s'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.2)'; e.currentTarget.style.background = 'rgba(145, 70, 255, 0.2)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; }}
+                    >
+                        {emoji}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 const DEFAULT_TEMPLATES = [
     { text: "🌟 ¡No olvides seguir el canal y activar la campanita para no perderte ningún directo!", interval: 10, minChat: 10 },
@@ -67,6 +228,9 @@ export default function ScheduledMessagesManager({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [instantMsgText, setInstantMsgText] = useState('');
     const [instantAnnounceText, setInstantAnnounceText] = useState('');
+    const [showInstantEmoji, setShowInstantEmoji] = useState(false);
+    const [showAnnounceEmoji, setShowAnnounceEmoji] = useState(false);
+    const [showModalEmoji, setShowModalEmoji] = useState(false);
 
     const wsRef = useRef(null);
     const intervalsRef = useRef([]);
@@ -564,12 +728,12 @@ export default function ScheduledMessagesManager({
                         </div>
                     </div>
 
-                    {/* Enviar Mensaje Rápido */}
-                    <div className="card animate-slide-down" style={{ padding: '20px' }}>
+                    {/* Enviar Mensaje Rápido con Emojis */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', position: 'relative' }}>
                         <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Send size={16} color="#EC4899" /> Enviar Mensaje Instantáneo
                         </h4>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
                             <input 
                                 type="text"
                                 className="form-control"
@@ -583,6 +747,35 @@ export default function ScheduledMessagesManager({
                                     }
                                 }}
                             />
+
+                            <button
+                                type="button"
+                                title="Insertar Emojis"
+                                onClick={() => setShowInstantEmoji(!showInstantEmoji)}
+                                style={{
+                                    padding: '0 12px',
+                                    background: showInstantEmoji ? 'rgba(236, 72, 153, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                                    borderRadius: '8px',
+                                    fontSize: '1.15rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                😊
+                            </button>
+
+                            {showInstantEmoji && (
+                                <EmojiPickerPopover 
+                                    onSelectEmoji={(emoji) => {
+                                        setInstantMsgText(prev => prev + emoji);
+                                    }}
+                                    onClose={() => setShowInstantEmoji(false)}
+                                />
+                            )}
+
                             <button
                                 type="button"
                                 className="btn-submit"
@@ -606,8 +799,8 @@ export default function ScheduledMessagesManager({
                         </div>
                     </div>
 
-                    {/* Enviar Anuncio Instantáneo (/announce por defecto) */}
-                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(145, 70, 255, 0.4)', background: 'linear-gradient(135deg, rgba(145, 70, 255, 0.08), rgba(15, 23, 42, 0.6))' }}>
+                    {/* Enviar Anuncio Instantáneo con Emojis */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(145, 70, 255, 0.4)', background: 'linear-gradient(135deg, rgba(145, 70, 255, 0.08), rgba(15, 23, 42, 0.6))', position: 'relative' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                             <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <Megaphone size={16} color="#A855F7" /> Enviar Anuncio Destacado (/announce)
@@ -616,7 +809,7 @@ export default function ScheduledMessagesManager({
                                 Banner Twitch
                             </span>
                         </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
                             <input 
                                 type="text"
                                 className="form-control"
@@ -634,6 +827,35 @@ export default function ScheduledMessagesManager({
                                 }}
                                 style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }}
                             />
+
+                            <button
+                                type="button"
+                                title="Insertar Emojis"
+                                onClick={() => setShowAnnounceEmoji(!showAnnounceEmoji)}
+                                style={{
+                                    padding: '0 12px',
+                                    background: showAnnounceEmoji ? 'rgba(145, 70, 255, 0.35)' : 'rgba(255, 255, 255, 0.06)',
+                                    border: '1px solid rgba(145, 70, 255, 0.3)',
+                                    borderRadius: '8px',
+                                    fontSize: '1.15rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                😊
+                            </button>
+
+                            {showAnnounceEmoji && (
+                                <EmojiPickerPopover 
+                                    onSelectEmoji={(emoji) => {
+                                        setInstantAnnounceText(prev => prev + emoji);
+                                    }}
+                                    onClose={() => setShowAnnounceEmoji(false)}
+                                />
+                            )}
+
                             <button
                                 type="button"
                                 className="btn-submit"
@@ -696,9 +918,27 @@ export default function ScheduledMessagesManager({
 
                         <form onSubmit={handleSaveMessage} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', position: 'relative' }}>
             <label className="form-label" style={{ margin: 0 }}>Contenido del Mensaje</label>
-            <span style={{ fontSize: '0.72rem', color: '#9146FF', fontWeight: 600 }}>💡 Tip: Usa /announce para resaltar</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#9146FF', fontWeight: 600 }}>💡 Tip: Usa /announce para resaltar</span>
+                <button
+                    type="button"
+                    onClick={() => setShowModalEmoji(!showModalEmoji)}
+                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', padding: '2px 6px', fontSize: '0.9rem', cursor: 'pointer' }}
+                    title="Insertar emojis"
+                >
+                    😊 Emojis
+                </button>
+                {showModalEmoji && (
+                    <EmojiPickerPopover 
+                        onSelectEmoji={(emoji) => {
+                            setEditingMsg(prev => ({ ...prev, text: (prev.text || '') + emoji }));
+                        }}
+                        onClose={() => setShowModalEmoji(false)}
+                    />
+                )}
+            </div>
          </div>
                                 <textarea
                                     className="form-control"
