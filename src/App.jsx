@@ -1563,8 +1563,8 @@ function App() {
 
             if (isCustomCmd || isDefaultSr || isSongRequest) {
               if (!isSongRequestEnabled) {
-                addBotLog(`[Song Request Pausado] Pedido de @${user} rechazado porque el Song Request está desactivado.`);
-                enviarMensajeTwitch(`@${user} ⚠️ El Song Request está pausado por el streamer en este momento.`, true);
+                // Silencio total en el chat cuando esté pausado
+                return;
               } else {
                 let prefixLen = customPrefix.length;
                 if (isDefaultSr) prefixLen = 4;
