@@ -516,6 +516,7 @@ export default function SpotifySongRequestManager({
                             const nextState = !isSongRequestEnabled;
                             setIsSongRequestEnabled(nextState);
                             localStorage.setItem('song_request_enabled', nextState ? 'true' : 'false');
+                            window.dispatchEvent(new Event('storage'));
                             triggerToast(nextState ? '🟢 Peticiones de chat ACTIVADAS' : '🔴 Peticiones de chat PAUSADAS');
                         }}
                         style={{

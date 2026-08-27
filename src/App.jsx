@@ -1553,28 +1553,17 @@ function App() {
               console.warn("Error detecting birthday chatter:", bdayErr);
             }
 
-            // Song Request Command Parsers
+            // Song Request Command Parsers (Control Estricto)
             const activeCmd = (songRequestCommand || '!sr').toLowerCase().trim();
-            const textLower = text.toLowerCase();
+            const textLower = text.toLowerCase().trim();
             const customPrefix = activeCmd + ' ';
-            const isCustomCmd = textLower.startsWith(customPrefix);
-            const isDefaultSr = textLower.startsWith('!sr ');
-            const isSongRequest = textLower.startsWith('!songrequest ');
 
-            if (isCustomCmd || isDefaultSr || isSongRequest) {
-              if (!isSongRequestEnabled) {
-                // Silencio total en el chat cuando esté pausado
-                return;
-              } else {
-                let prefixLen = customPrefix.length;
-                if (isDefaultSr) prefixLen = 4;
-                if (isSongRequest) prefixLen = 13;
-                const query = text.slice(prefixLen).trim();
-                if (query) {
-                  handleSongRequest(query, user);
-                }
+            if (isSongRequestEnabled && textLower.startsWith(customPrefix)) {
+              const query = text.trim().slice(customPrefix.length).trim();
+              if (query) {
+                handleSongRequest(query, user);
               }
-            } else if (textLower === "!song" || textLower === "!currentsong" || textLower === "!cancion") {
+            } else if (isSongRequestEnabled && (textLower === "!song" || textLower === "!currentsong")) {
               handleGetActiveSong();
             } else if (text === "!skip") {
               if (user.toLowerCase() === botChannel.toLowerCase() || user.toLowerCase() === botUsername.toLowerCase()) {
