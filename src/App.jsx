@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
@@ -9,6 +9,7 @@ import ScheduledMessagesManager from './components/ScheduledMessagesManager';
 import SpotifySongRequestManager from './components/SpotifySongRequestManager';
 import BirthdaysManager from './components/BirthdaysManager';
 import BotCredentialsManager from './components/BotCredentialsManager';
+import UserPermissionsManager from './components/UserPermissionsManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -505,7 +506,13 @@ function App() {
     setConfirmModal({ show: false, message: '', onConfirm: null });
   };
 
+  const isPamacheAdmin = (sessionEmail && sessionEmail.toLowerCase() === 'pamacheyt@gmail.com') ||
+                         (sessionUsername && sessionUsername.toLowerCase() === 'pamache_') ||
+                         sessionPermissions === '*' ||
+                         (typeof sessionPermissions === 'object' && sessionPermissions?.email?.toLowerCase() === 'pamacheyt@gmail.com');
+
   const hasAccess = (requiredPermission) => {
+    if (requiredPermission === 'user_permissions') return isPamacheAdmin;
     if (sessionPermissions === '*') return true;
     if (typeof sessionPermissions === 'object' && sessionPermissions !== null) {
       if (sessionPermissions.approved === false) return false;
@@ -3340,7 +3347,28 @@ function App() {
               Gestiona el contenido estructurado de la web. Selecciona una acción para comenzar.
             </p>
             
-            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
+            {isPamacheAdmin && (
+              <>
+                <h2 className="section-title" style={{ marginTop: '2rem', marginBottom: '1.2rem', color: '#F59E0B', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(245, 158, 11, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Crown size={22} color="#F59E0B" /> Panel de Superadministrador (Pamache)
+                </h2>
+                <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                  <div 
+                    className="dashboard-card" 
+                    style={{ border: '1.5px solid rgba(245, 158, 11, 0.4)', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(15, 23, 42, 0.6))' }} 
+                    onClick={() => restrictedNavigate('view_user_permissions', 'user_permissions')}
+                  >
+                    <div className="icon-bg" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B' }}>
+                      <ShieldCheck size={36} />
+                    </div>
+                    <h3 style={{ color: '#F59E0B' }}>Gestión de Permisos</h3>
+                    <p>Activa o desactiva casillas del Builder para cada usuario con interruptores On/Off sin entrar a Supabase.</p>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.5rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
               Herramientas de la Web
             </h2>
             <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: '3rem', gap: '1.5rem' }}>
@@ -5225,6 +5253,19 @@ function App() {
             })()}
               </div>
             </div>
+          </div>
+        ) : view === 'view_user_permissions' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+            </div>
+            <UserPermissionsManager 
+              supabase={supabase} 
+              triggerToast={triggerToast} 
+              sessionEmail={sessionEmail}
+            />
           </div>
         ) : view === 'view_bot_credentials' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
