@@ -14,8 +14,8 @@ const WebSocket = require('ws');
 const { createClient } = require('@supabase/supabase-js');
 
 // Configuración por defecto
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://cqwugfvxqfvhfmsdfmup.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxd3VnZnZ4cWZ2aGZtc2RmbXVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAzNTQ5ODAsImV4cCI6MjA1NTkzMDk4MH0.Qd8f08f8n4fWf-D5-k0r4-5_6789_abcdef';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hddzijixsigsqsmabtej.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp';
 
 const BOT_CHANNEL = (process.env.BOT_CHANNEL || 'eviltokkii').toLowerCase().trim();
 const BOT_USERNAME = (process.env.BOT_USERNAME || 'Eviltokki_exe').trim();
@@ -173,7 +173,8 @@ function startScheduledTimers() {
             if (msg.active === false || !msg.text) return;
 
             const id = msg.id || msg.text;
-            const intervalMinutes = Math.max(1, Number(msg.interval_minutes || msg.intervalMinutes) || 10);
+            const rawMins = msg.interval_minutes || msg.intervalMinutes || (msg.intervalMs ? msg.intervalMs / 60000 : 10);
+            const intervalMinutes = Math.max(1, parseInt(rawMins, 10) || 10);
             const intervalMs = intervalMinutes * 60 * 1000;
             const lastSent = botTimestamps[id] || 0;
             const timeElapsed = now - lastSent;

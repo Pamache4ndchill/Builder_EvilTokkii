@@ -1749,7 +1749,8 @@ function App() {
       scheduledMessages.forEach(msg => {
         if (!msg.active || !msg.text) return;
 
-        const intervalMinutes = Math.max(1, Number(msg.intervalMinutes) || 10);
+        const rawMins = msg.intervalMinutes || msg.interval_minutes || (msg.intervalMs ? msg.intervalMs / 60000 : 10);
+        const intervalMinutes = Math.max(1, parseInt(rawMins, 10) || 10);
         const intervalMs = intervalMinutes * 60 * 1000;
         const lastSent = scheduledTimestampsRef.current[msg.id] || 0;
         const timeElapsed = now - lastSent;
