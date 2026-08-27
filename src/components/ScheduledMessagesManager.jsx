@@ -146,6 +146,7 @@ function EmojiPickerPopover({ onSelectEmoji, onClose }) {
                         type="button"
                         onClick={() => {
                             onSelectEmoji(emoji);
+                            if (onClose) onClose();
                         }}
                         style={{
                             background: 'rgba(255, 255, 255, 0.03)',
@@ -481,6 +482,7 @@ export default function ScheduledMessagesManager({
 
         setIsModalOpen(false);
         setEditingMsg(null);
+        setShowModalEmoji(false);
     };
 
     return (
