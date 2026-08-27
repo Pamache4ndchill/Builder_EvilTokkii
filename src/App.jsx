@@ -3055,7 +3055,7 @@ function App() {
             />
           </div>
         </aside>
-      ) : view !== 'home' && view !== 'view_tierlists' && view !== 'view_sync_news' && view !== 'view_most_streamed' && view !== 'view_song_request' && view !== 'view_reports' && view !== 'view_minijuegos' && (() => {
+      ) : ['create', 'create_content_item', 'view_participations', 'view_twitch', 'view_scheduled_messages', 'view_commands'].includes(view) && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
