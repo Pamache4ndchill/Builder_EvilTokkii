@@ -20,7 +20,7 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'Eviltokki_exe');
-    const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:ol3ji2g72r1t2u7grlrhf6iu7744yg');
+    const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 
     // Estado del bot y WebSocket
