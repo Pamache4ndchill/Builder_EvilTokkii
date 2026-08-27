@@ -1473,14 +1473,14 @@ function App() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        addBotLog("¡Conectado a Twitch IRC WebSocket!");
-        setIsBotConnected(true);
+        addBotLog("¡Conectado al WebSocket de Twitch!");
         
         const formattedOauth = botOauth.startsWith('oauth:') ? botOauth : 'oauth:' + botOauth;
         ws.send(`PASS ${formattedOauth}`);
-        ws.send(`NICK ${botUsername.toLowerCase()}`);
-        ws.send(`JOIN #${botChannel.toLowerCase()}`);
-        addBotLog(`Autenticación enviada para el bot ${botUsername} en el canal #${botChannel}`);
+        ws.send(`NICK ${botUsername.toLowerCase().trim()}`);
+        ws.send(`JOIN #${botChannel.toLowerCase().trim()}`);
+        setIsBotConnected(true);
+        addBotLog(`Autenticación enviada para @${botUsername} en el canal #${botChannel}`);
 
         // Keep-alive heartbeat every 4 minutes
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -1496,7 +1496,17 @@ function App() {
         
         if (rawMessage.startsWith("PING")) {
           ws.send("PONG :tmi.twitch.tv");
-          addBotLog("PING recibido -> PONG enviado (Keep-alive)");
+          return;
+        }
+
+        if (rawMessage.includes("001") || rawMessage.includes("366")) {
+          setIsBotConnected(true);
+          addBotLog(`✅ Bot @${botUsername} sincronizado y listo en #${botChannel}`);
+        }
+
+        if (rawMessage.includes("Login authentication failed")) {
+          setIsBotConnected(false);
+          addBotLog("❌ Twitch: Falló la autenticación. Por favor actualiza el Token OAuth.");
           return;
         }
         

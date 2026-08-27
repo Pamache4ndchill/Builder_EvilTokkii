@@ -35,6 +35,12 @@ export default function ScheduledMessagesManager({
     // Estado del bot y WebSocket
     // Using global isBotConnected from App.jsx
     const [isConnecting, setIsConnecting] = useState(false);
+
+    useEffect(() => {
+        if (isBotConnected) {
+            setIsConnecting(false);
+        }
+    }, [isBotConnected]);
     const [localLogs, setLocalLogs] = useState([]);
     const botLogs = propBotLogs !== undefined ? propBotLogs : localLogs;
     const setBotLogs = propSetBotLogs !== undefined ? propSetBotLogs : setLocalLogs;
