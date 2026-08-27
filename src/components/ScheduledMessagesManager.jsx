@@ -16,7 +16,16 @@ const DEFAULT_TEMPLATES = [
     { text: "🎁 ¿Quieres participar en los sorteos? ¡Canjea tus puntos del canal en la tienda!", interval: 25, minChat: 15 }
 ];
 
-export default function ScheduledMessagesManager({ supabase, triggerToast }) {
+export default function ScheduledMessagesManager({ 
+    supabase, 
+    triggerToast, 
+    isBotConnected, 
+    connectTwitchBot, 
+    disconnectTwitchBot, 
+    enviarMensajeTwitch, 
+    botLogs: propBotLogs, 
+    setBotLogs: propSetBotLogs 
+}) {
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'Eviltokki_exe');
@@ -24,9 +33,11 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 
     // Estado del bot y WebSocket
-    const [isBotConnected, setIsBotConnected] = useState(false);
+    // Using global isBotConnected from App.jsx
     const [isConnecting, setIsConnecting] = useState(false);
-    const [botLogs, setBotLogs] = useState([]);
+    const [localLogs, setLocalLogs] = useState([]);
+    const botLogs = propBotLogs !== undefined ? propBotLogs : localLogs;
+    const setBotLogs = propSetBotLogs !== undefined ? propSetBotLogs : setLocalLogs;
     const [chatActivityCount, setChatActivityCount] = useState(0);
 
     // Mensajes Programados
@@ -162,71 +173,25 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
     };
 
     const handleDisconnectBot = () => {
-        if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
+        if (disconnectTwitchBot) {
+            disconnectTwitchBot();
+            triggerToast('🔴 Bot desconectado manualmente');
         }
-        intervalsRef.current.forEach(clearInterval);
-        intervalsRef.current = [];
-        setIsBotConnected(false);
-        addLog('warn', 'Bot desconectado manualmente.');
-        triggerToast('🔴 Bot desconectado');
     };
 
     const sendChatMessage = async (text, isManual = false) => {
-        let formattedText = (text || '').trim();
-
-        if (formattedText.startsWith('/announcement ') || formattedText.startsWith('/announce ') || formattedText.startsWith('.announcement ') || formattedText.startsWith('.announce ')) {
-            const content = formattedText.replace(/^[/\.](announcement|announce)\s+/i, '');
-            try {
-                const cleanToken = botOauth.replace(/^oauth:/i, '');
-                const valRes = await fetch('https://id.twitch.tv/oauth2/validate', {
-                    headers: { 'Authorization': `OAuth ${cleanToken}` }
-                });
-                if (valRes.ok) {
-                    const authInfo = await valRes.json();
-                    const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${botChannel.toLowerCase().replace(/^#/, '')}`, {
-                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Client-Id': authInfo.client_id }
-                    });
-                    if (userRes.ok) {
-                        const userData = await userRes.json();
-                        if (userData.data && userData.data.length > 0) {
-                            const bId = userData.data[0].id;
-                            const annRes = await fetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${bId}&moderator_id=${authInfo.user_id}`, {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${cleanToken}`,
-                                    'Client-Id': authInfo.client_id,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ message: content.substring(0, 500), color: 'primary' })
-                            });
-                            if (annRes.status === 204 || annRes.ok) {
-                                addLog('sent', `📢 [Anuncio Oficial Enviado]: ${content}`);
-                                if (isManual) triggerToast('📢 Anuncio oficial enviado al chat');
-                                return true;
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                console.warn('Helix announcement fallback in component:', err);
-            }
-            formattedText = content;
-        }
-
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        if (!isBotConnected) {
             triggerToast('⚠️ Conecta el bot a Twitch primero');
-            addLog('error', 'No se pudo enviar el mensaje: Bot desconectado.');
             return false;
         }
-
-        wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${formattedText}`);
-        addLog('sent', `[Enviado al chat] ${formattedText}`);
-        if (isManual) {
-            triggerToast('Mensaje enviado al chat');
+        if (enviarMensajeTwitch) {
+            await enviarMensajeTwitch(text, !isManual);
+            if (isManual) {
+                triggerToast(text.startsWith('/announce') ? '📢 Anuncio enviado al chat' : 'Mensaje enviado al chat');
+            }
+            return true;
         }
-        return true;
+        return false;
     };
 
     // Planificador de mensajes

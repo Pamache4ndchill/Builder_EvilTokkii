@@ -4198,7 +4198,16 @@ function App() {
                 <ChevronLeft size={18} /> Volver
               </button>
             </div>
-            <ScheduledMessagesManager supabase={supabase} triggerToast={triggerToast} />
+            <ScheduledMessagesManager 
+              supabase={supabase} 
+              triggerToast={triggerToast}
+              isBotConnected={isBotConnected}
+              connectTwitchBot={connectTwitchBot}
+              disconnectTwitchBot={disconnectTwitchBot}
+              enviarMensajeTwitch={enviarMensajeTwitch}
+              botLogs={botLogs}
+              setBotLogs={setBotLogs}
+            />
           </div>
         ) : view === 'view_commands' ? (
           <div className="builder-view" style={{ maxWidth: '800px', margin: '0 auto' }}>
