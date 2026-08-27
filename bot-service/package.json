@@ -4,7 +4,8 @@
   "description": "Bot 24/7 de Twitch para EvilTokkii con integración a Supabase, Anuncios Helix, Cumpleaños y Mensajes Programados",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo 'Bot ready'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
