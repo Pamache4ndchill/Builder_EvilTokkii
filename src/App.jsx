@@ -1429,6 +1429,7 @@ function App() {
   const wsRef = useRef(null);
   const intervalsRef = useRef([]);
   const userMessagesCountRef = useRef(0);
+  const detectedBirthdayUsersRef = useRef(new Set());
 
   const addBotLog = (text) => {
     const time = new Date().toLocaleTimeString();
@@ -1500,6 +1501,37 @@ function App() {
             addBotLog(`Chat - ${user}: ${text}`);
             if (user.toLowerCase() !== botUsername.toLowerCase()) {
               userMessagesCountRef.current += 1;
+            }
+
+            // Birthday Viewer Chat Presence Detector
+            try {
+              const userLower = user.toLowerCase().trim();
+              const savedBdays = localStorage.getItem('twitch_viewers_birthdays');
+              if (savedBdays) {
+                const parsedBdays = JSON.parse(savedBdays);
+                const now = new Date();
+                const curDay = now.getDate();
+                const curMonth = now.getMonth() + 1;
+
+                const matchedBday = parsedBdays.find(b => 
+                  Number(b.day) === curDay && 
+                  Number(b.month) === curMonth && 
+                  b.active !== false && 
+                  b.username.toLowerCase().trim() === userLower
+                );
+
+                if (matchedBday && !detectedBirthdayUsersRef.current.has(userLower)) {
+                  detectedBirthdayUsersRef.current.add(userLower);
+                  const defMsg = '¡Feliz cumpleaños @{user}! 🎉🎂 Toda la comunidad de EvilTokkii te desea un día increíble y lleno de bendiciones 🥳💜';
+                  const template = matchedBday.message || defMsg;
+                  const welcomeGreeting = `✨ ¡Bienvenido/a @${user}! ` + template.replace(/{user}/gi, `@${user}`);
+                  
+                  addBotLog(`[Cumpleaños] 🎂 ¡@${user} (cumpleañero de hoy) acaba de escribir en el chat! Enviando felicitaciones de bienvenida...`);
+                  enviarMensajeTwitch(welcomeGreeting, true);
+                }
+              }
+            } catch (bdayErr) {
+              console.warn("Error detecting birthday chatter:", bdayErr);
             }
 
             // Song Request Command Parsers
