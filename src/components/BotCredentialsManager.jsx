@@ -228,12 +228,12 @@ export default function BotCredentialsManager({
                                         Token OAuth de Twitch Chat:
                                     </label>
                                     <a
-                                        href="https://twitchapps.com/tmi/"
+                                        href="https://twitchtokengenerator.com/"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         style={{ color: '#9146FF', fontSize: '0.75rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
                                     >
-                                        <ExternalLink size={12} /> Generar Token en twitchapps.com/tmi
+                                        <ExternalLink size={12} /> Generar Token en twitchtokengenerator.com
                                     </a>
                                 </div>
                                 <div style={{ position: 'relative' }}>
@@ -256,7 +256,7 @@ export default function BotCredentialsManager({
                                     </button>
                                 </div>
                                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
-                                    Inicia sesión en twitchapps.com/tmi con la cuenta de <strong>{botUsername || 'Eviltokki_exe'}</strong> para obtener este código.
+                                    Inicia sesión en twitchtokengenerator.com con la cuenta de <strong>{botUsername || 'Eviltokki_exe'}</strong> para obtener este código.
                                 </span>
                             </div>
 
