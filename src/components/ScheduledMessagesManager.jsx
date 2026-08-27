@@ -440,56 +440,12 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
                         </div>
                     </div>
 
-                    {/* Ajustes Opcionales de Canal */}
-                    <div className="card animate-slide-down" style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)' }}>
-                        <div 
-                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-                            onClick={() => setShowAdvancedConfig(!showAdvancedConfig)}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                <Settings size={15} />
-                                <span>Canal: <strong>#{botChannel}</strong> (Bot: <strong>{botUsername}</strong>)</span>
-                            </div>
-                            <button style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}>
-                                {showAdvancedConfig ? 'Ocultar' : 'Ajustes'}
-                                {showAdvancedConfig ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                            </button>
+                    {/* Info de Cuenta Bot */}
+                    <div className="card animate-slide-down" style={{ padding: '14px 18px', background: 'rgba(145, 70, 255, 0.05)', border: '1px solid rgba(145, 70, 255, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            <ShieldCheck size={16} color="#9146FF" />
+                            <span>Canal: <strong>#{botChannel}</strong> • Bot: <strong style={{ color: '#9146FF' }}>@{botUsername}</strong></span>
                         </div>
-
-                        {showAdvancedConfig && (
-                            <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Canal de Twitch</label>
-                                    <input 
-                                        type="text"
-                                        className="form-control"
-                                        value={botChannel}
-                                        onChange={(e) => setBotChannel(e.target.value.toLowerCase().trim())}
-                                        placeholder="eviltokkii"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Usuario del Bot</label>
-                                    <input 
-                                        type="text"
-                                        className="form-control"
-                                        value={botUsername}
-                                        onChange={(e) => setBotUsername(e.target.value.trim())}
-                                        placeholder="eviltokkii"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Token OAuth (Opcional)</label>
-                                    <input 
-                                        type="password"
-                                        className="form-control"
-                                        value={botOauth}
-                                        onChange={(e) => setBotOauth(e.target.value.trim())}
-                                        placeholder="oauth:xxxx..."
-                                    />
-                                </div>
-                            </div>
-                        )}
                     </div>
 
                 </div>

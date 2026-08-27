@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
@@ -8,6 +8,7 @@ import SyncNewsManager from './components/SyncNewsManager';
 import ScheduledMessagesManager from './components/ScheduledMessagesManager';
 import SpotifySongRequestManager from './components/SpotifySongRequestManager';
 import BirthdaysManager from './components/BirthdaysManager';
+import BotCredentialsManager from './components/BotCredentialsManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -539,6 +540,8 @@ function App() {
           return !!sessionPermissions.access_reports;
         case 'minigames':
           return !!sessionPermissions.access_minigames;
+        case 'bot_credentials':
+          return sessionPermissions.access_bot_credentials !== undefined ? !!sessionPermissions.access_bot_credentials : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
         case 'birthdays':
           return sessionPermissions.access_birthdays !== undefined ? !!sessionPermissions.access_birthdays : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
         case 'tierlists':
@@ -1896,7 +1899,8 @@ function App() {
               access_minigames: false,
               access_ruleta: false,
               access_twitch_giveaway: false,
-              access_birthdays: false
+              access_birthdays: false,
+              access_bot_credentials: false
             }
           ]);
           
@@ -3488,6 +3492,18 @@ function App() {
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
                 <p>Registra fechas de cumpleaños de viewers y envía felicitaciones automáticas al chat cada 20 min.</p>
+              </div>
+
+              <div 
+                className="dashboard-card" 
+                style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }} 
+                onClick={() => restrictedNavigate('view_bot_credentials', 'bot_credentials')}
+              >
+                <div className="icon-bg" style={{ background: 'rgba(145, 70, 255, 0.1)', color: '#9146FF' }}>
+                  <Key size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
+                <p>Configura de forma centralizada la cuenta de Twitch secundaria (Eviltokki_exe) y su token OAuth.</p>
               </div>
             </div>
           </div>
@@ -5177,6 +5193,24 @@ function App() {
             })()}
               </div>
             </div>
+          </div>
+        ) : view === 'view_bot_credentials' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+            </div>
+            <BotCredentialsManager 
+              supabase={supabase} 
+              triggerToast={triggerToast} 
+              isBotConnected={isBotConnected}
+              connectTwitchBot={connectTwitchBot}
+              disconnectTwitchBot={disconnectTwitchBot}
+              enviarMensajeTwitch={enviarMensajeTwitch}
+              botLogs={botLogs}
+              setBotLogs={setBotLogs}
+            />
           </div>
         ) : view === 'view_birthdays' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
