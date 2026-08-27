@@ -993,7 +993,7 @@ export default function ScheduledMessagesManager({
                                     className="form-control"
                                     rows="4"
                                     required
-                                    placeholder="Escribe el texto que el bot enviará al chat..."
+                                    placeholder="Escribe el texto. Puedes usar /announce al inicio para publicarlo como Anuncio oficial..."
                                     value={editingMsg.text}
                                     onChange={(e) => setEditingMsg({ ...editingMsg, text: e.target.value })}
                                 />

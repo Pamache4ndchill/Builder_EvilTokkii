@@ -1700,19 +1700,14 @@ function App() {
   const enviarMensajeTwitch = async (texto, silent = false) => {
     let formattedText = (texto || '').trim();
 
-    // Si es un Anuncio (/announce, /announcement, .announce)
-    if (
-      formattedText.startsWith('/announcement ') ||
-      formattedText.startsWith('/announce ') ||
-      formattedText.startsWith('.announcement ') ||
-      formattedText.startsWith('.announce ')
-    ) {
-      const content = formattedText.replace(/^[/\\.](announcement|announce)\s+/i, '');
+    // Detección 100% case-insensitive para Anuncios (/announce, /Announce, /ANNOUNCE, etc.)
+    const isAnnounce = /^[/\\.](announce|announcement)\s+/i.test(formattedText);
+    if (isAnnounce) {
+      const content = formattedText.replace(/^[/\\.](announce|announcement)\s+/i, '').trim();
       const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
       if (sentViaHelix) {
         return true;
       }
-      // Fallback si la API de Twitch fallara por algún motivo
       formattedText = content;
     }
 
@@ -1745,11 +1740,12 @@ function App() {
           
           const timer = setInterval(() => {
             const currentCount = userMessagesCountRef.current;
-            if (currentCount - lastSentCount >= threshold) {
+            const diff = currentCount - lastSentCount;
+            if (threshold <= 0 || diff >= threshold) {
               enviarMensajeTwitch(msg.text, true);
               lastSentCount = currentCount;
             } else {
-              addBotLog(`[Temporizador Global] Omitido "${msg.text.substring(0, 20)}..." por poco tráfico (${currentCount - lastSentCount}/${threshold} mensajes)`);
+              addBotLog(`[Temporizador Global] Esperando chat: "${msg.text.substring(0, 20)}..." (${diff}/${threshold} mensajes de chat recibidos)`);
             }
           }, intervalMs);
           

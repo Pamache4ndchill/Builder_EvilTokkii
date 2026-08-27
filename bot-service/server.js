@@ -164,7 +164,8 @@ function startScheduledTimers() {
 
         const timer = setInterval(() => {
             const currentCount = userMessagesCount;
-            if (currentCount - lastSentCount >= threshold) {
+            const diff = currentCount - lastSentCount;
+            if (threshold <= 0 || diff >= threshold) {
                 sendChatMessage(msg.text);
                 lastSentCount = currentCount;
             } else {
