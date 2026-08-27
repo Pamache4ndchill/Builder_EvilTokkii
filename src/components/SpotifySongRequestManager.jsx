@@ -36,7 +36,12 @@ function base64encode(input) {
         .replace(/\//g, '_');
 }
 
-export default function SpotifySongRequestManager({ supabase, triggerToast }) {
+export default function SpotifySongRequestManager({ 
+    supabase, 
+    triggerToast, 
+    songRequestCommand: propCmd, 
+    setSongRequestCommand: propSetCmd 
+}) {
     // Spotify Auth State
     const [spotifyToken, setSpotifyToken] = useState(() => localStorage.getItem('spotify_access_token') || '');
     const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem('spotify_refresh_token') || '');
@@ -55,6 +60,11 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [localCmd, setLocalCmd] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+    const songRequestCommand = propCmd !== undefined ? propCmd : localCmd;
+    const setSongRequestCommand = propSetCmd !== undefined ? propSetCmd : setLocalCmd;
+    const [customCommandInput, setCustomCommandInput] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+
     const [responseTemplate, setResponseTemplate] = useState(() => localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}');
 
     const pollIntervalRef = useRef(null);
@@ -732,6 +742,84 @@ export default function SpotifySongRequestManager({ supabase, triggerToast }) {
                 {/* Right Column: Message template, OBS Overlay Info & Queue */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     
+                    {/* Command Trigger Card */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(168, 85, 247, 0.4)', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(15, 23, 42, 0.6))' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Radio size={16} color="#A855F7" /> Comando de Chat para Pedir Canciones
+                            </h4>
+                            <span style={{ fontSize: '0.72rem', color: '#C084FC', fontWeight: 700, padding: '2px 8px', background: 'rgba(168, 85, 247, 0.2)', borderRadius: '12px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                                Actual: {songRequestCommand}
+                            </span>
+                        </div>
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
+                            Elige la palabra o comando con la que tus viewers pedirán canciones en el chat de Twitch:
+                        </p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input 
+                                type="text"
+                                className="form-control"
+                                placeholder="Ej: !sr, !cancion, !pedir, !musica..."
+                                value={customCommandInput}
+                                onChange={(e) => setCustomCommandInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        let clean = customCommandInput.trim().toLowerCase();
+                                        if (!clean.startsWith('!')) clean = '!' + clean;
+                                        if (clean.length > 1) {
+                                            setSongRequestCommand(clean);
+                                            setCustomCommandInput(clean);
+                                            localStorage.setItem('song_request_command', clean);
+                                            triggerToast(`✅ Comando cambiado a "${clean}"`);
+                                        }
+                                    }
+                                }}
+                                style={{ fontWeight: 700, color: '#A855F7', fontSize: '0.95rem' }}
+                            />
+                            <button
+                                type="button"
+                                className="btn-submit"
+                                style={{
+                                    width: 'auto',
+                                    padding: '0 18px',
+                                    background: 'linear-gradient(135deg, #9146FF, #772CE8)',
+                                    color: '#fff',
+                                    fontWeight: 700,
+                                    borderRadius: '8px'
+                                }}
+                                onClick={() => {
+                                    let clean = customCommandInput.trim().toLowerCase();
+                                    if (!clean.startsWith('!')) clean = '!' + clean;
+                                    if (clean.length > 1) {
+                                        setSongRequestCommand(clean);
+                                        setCustomCommandInput(clean);
+                                        localStorage.setItem('song_request_command', clean);
+                                        triggerToast(`✅ Comando cambiado a "${clean}"`);
+                                    } else {
+                                        triggerToast('⚠️ Escribe un comando válido');
+                                    }
+                                }}
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            <span>💡 Ejemplo en chat: <strong style={{ color: '#C084FC' }}>{songRequestCommand} Bohemian Rhapsody</strong></span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSongRequestCommand('!sr');
+                                    setCustomCommandInput('!sr');
+                                    localStorage.setItem('song_request_command', '!sr');
+                                    triggerToast('Comando restablecido a !sr');
+                                }}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >
+                                Restablecer (!sr)
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Message Template Card */}
                     <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(29, 185, 84, 0.3)' }}>
                         <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>

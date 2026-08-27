@@ -1549,11 +1549,22 @@ function App() {
             }
 
             // Song Request Command Parsers
-            const cmdPrefix = songRequestCommand.trim() + " ";
-            if (text.startsWith(cmdPrefix) || text.startsWith("!songrequest ")) {
-              const query = text.slice(text.startsWith(cmdPrefix) ? cmdPrefix.length : 13).trim();
-              handleSongRequest(query, user);
-            } else if (text === "!song" || text === "!currentsong") {
+            const activeCmd = (songRequestCommand || '!sr').toLowerCase().trim();
+            const textLower = text.toLowerCase();
+            const customPrefix = activeCmd + ' ';
+            const isCustomCmd = textLower.startsWith(customPrefix);
+            const isDefaultSr = textLower.startsWith('!sr ');
+            const isSongRequest = textLower.startsWith('!songrequest ');
+
+            if (isCustomCmd || isDefaultSr || isSongRequest) {
+              let prefixLen = customPrefix.length;
+              if (isDefaultSr) prefixLen = 4;
+              if (isSongRequest) prefixLen = 13;
+              const query = text.slice(prefixLen).trim();
+              if (query) {
+                handleSongRequest(query, user);
+              }
+            } else if (textLower === "!song" || textLower === "!currentsong" || textLower === "!cancion") {
               handleGetActiveSong();
             } else if (text === "!skip") {
               if (user.toLowerCase() === botChannel.toLowerCase() || user.toLowerCase() === botUsername.toLowerCase()) {
@@ -5383,7 +5394,12 @@ function App() {
                 <ChevronLeft size={18} /> Volver
               </button>
             </div>
-            <SpotifySongRequestManager supabase={supabase} triggerToast={triggerToast} />
+            <SpotifySongRequestManager 
+              supabase={supabase} 
+              triggerToast={triggerToast} 
+              songRequestCommand={songRequestCommand}
+              setSongRequestCommand={setSongRequestCommand}
+            />
           </div>
         ) : view === 'view_tierlists' ? (
           <div className="builder-view" style={{ maxWidth: '100%', margin: 0, padding: '1.5rem 2rem' }}>
