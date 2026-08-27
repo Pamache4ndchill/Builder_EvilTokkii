@@ -1646,8 +1646,18 @@ function App() {
 
   const enviarMensajeTwitch = (texto, silent = false) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${texto}`);
-      addBotLog(`Mensaje enviado: ${texto}`);
+      let formattedText = (texto || '').trim();
+      // Normalize /announcement, /announce, .announce for Twitch IRC
+      if (formattedText.startsWith('/announcement ') || formattedText.startsWith('/announce ')) {
+        const content = formattedText.replace(/^\/(announcement|announce)\s+/i, '');
+        formattedText = `/announce ${content}`;
+      } else if (formattedText.startsWith('.announcement ') || formattedText.startsWith('.announce ')) {
+        const content = formattedText.replace(/^\.(announcement|announce)\s+/i, '');
+        formattedText = `.announce ${content}`;
+      }
+
+      wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${formattedText}`);
+      addBotLog(`Mensaje enviado: ${formattedText}`);
     } else {
       addBotLog("Error: El WebSocket no está abierto. Conéctate primero.");
       if (!silent) {

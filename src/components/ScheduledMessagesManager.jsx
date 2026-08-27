@@ -178,8 +178,17 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
             addLog('error', 'No se pudo enviar el mensaje: Bot desconectado.');
             return false;
         }
-        wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${text}`);
-        addLog('sent', `[Enviado al chat] ${text}`);
+        let formattedText = (text || '').trim();
+        if (formattedText.startsWith('/announcement ') || formattedText.startsWith('/announce ')) {
+            const content = formattedText.replace(/^\/(announcement|announce)\s+/i, '');
+            formattedText = `/announce ${content}`;
+        } else if (formattedText.startsWith('.announcement ') || formattedText.startsWith('.announce ')) {
+            const content = formattedText.replace(/^\.(announcement|announce)\s+/i, '');
+            formattedText = `.announce ${content}`;
+        }
+
+        wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${formattedText}`);
+        addLog('sent', `[Enviado al chat] ${formattedText}`);
         if (isManual) {
             triggerToast('Mensaje enviado al chat');
         }
@@ -620,7 +629,10 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
 
                         <form onSubmit={handleSaveMessage} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div>
-                                <label className="form-label">Contenido del Mensaje</label>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <label className="form-label" style={{ margin: 0 }}>Contenido del Mensaje</label>
+            <span style={{ fontSize: '0.72rem', color: '#9146FF', fontWeight: 600 }}>💡 Tip: Usa /announce para resaltar</span>
+         </div>
                                 <textarea
                                     className="form-control"
                                     rows="4"
