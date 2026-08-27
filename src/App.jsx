@@ -1687,24 +1687,34 @@ function App() {
   };
 
   const enviarMensajeTwitch = async (texto, silent = false) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      let formattedText = (texto || '').trim();
-      // Normalize /announcement, /announce, .announce for Twitch IRC
-      if (formattedText.startsWith('/announcement ') || formattedText.startsWith('/announce ')) {
-        const content = formattedText.replace(/^\/(announcement|announce)\s+/i, '');
-        formattedText = `/announce ${content}`;
-      } else if (formattedText.startsWith('.announcement ') || formattedText.startsWith('.announce ')) {
-        const content = formattedText.replace(/^\.(announcement|announce)\s+/i, '');
-        formattedText = `.announce ${content}`;
-      }
+    let formattedText = (texto || '').trim();
 
+    // Si es un Anuncio (/announce, /announcement, .announce)
+    if (
+      formattedText.startsWith('/announcement ') ||
+      formattedText.startsWith('/announce ') ||
+      formattedText.startsWith('.announcement ') ||
+      formattedText.startsWith('.announce ')
+    ) {
+      const content = formattedText.replace(/^[/\\.](announcement|announce)\s+/i, '');
+      const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
+      if (sentViaHelix) {
+        return true;
+      }
+      // Fallback si la API de Twitch fallara por algún motivo
+      formattedText = content;
+    }
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${formattedText}`);
       addBotLog(`Mensaje enviado: ${formattedText}`);
+      return true;
     } else {
       addBotLog("Error: El WebSocket no está abierto. Conéctate primero.");
       if (!silent) {
         triggerToast("⚠️ Conéctate a Twitch primero.");
       }
+      return false;
     }
   };
 
