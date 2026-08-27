@@ -431,8 +431,13 @@ export default function ScheduledMessagesManager({
     };
 
     const handleSaveMessage = (e) => {
-        e.preventDefault();
-        if (!editingMsg.text.trim()) return;
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
+
+        if (!editingMsg || !editingMsg.text || !editingMsg.text.trim()) {
+            triggerToast('⚠️ Por favor escribe el contenido del mensaje');
+            return;
+        }
 
         const targetId = editingMsg.id === 'new' ? 'msg_' + Date.now() : String(editingMsg.id);
         const intervalMins = Math.max(1, Number(editingMsg.intervalMinutes) || 10);
@@ -448,7 +453,7 @@ export default function ScheduledMessagesManager({
                 active: true
             };
             setMessages(prev => [...prev, newRecord]);
-            triggerToast('Nuevo mensaje programado creado');
+            triggerToast('✅ Nuevo mensaje programado creado');
 
             if (supabase) {
                 supabase.from('twitch_scheduled_messages').upsert({
@@ -468,7 +473,7 @@ export default function ScheduledMessagesManager({
                 intervalMinutes: intervalMins,
                 minChatMessages: minChats
             } : m));
-            triggerToast('Mensaje programado actualizado');
+            triggerToast('✅ Mensaje programado actualizado');
 
             if (supabase) {
                 supabase.from('twitch_scheduled_messages').update({
@@ -480,6 +485,7 @@ export default function ScheduledMessagesManager({
             }
         }
 
+        // Cierre inmediato del modal
         setIsModalOpen(false);
         setEditingMsg(null);
         setShowModalEmoji(false);
@@ -962,10 +968,20 @@ export default function ScheduledMessagesManager({
                     zIndex: 9999,
                     padding: '20px'
                 }}>
-                    <div className="card animate-slide-down" style={{ width: '100%', maxWidth: '520px', padding: '24px' }}>
-                        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', color: 'var(--text-main)' }}>
-                            {editingMsg.id === 'new' ? 'Nuevo Mensaje Programado' : 'Editar Mensaje Programado'}
-                        </h3>
+                    <div className="card animate-slide-down" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '520px', padding: '24px', border: '1px solid rgba(145, 70, 255, 0.4)', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>
+                                {editingMsg.id === 'new' ? 'Nuevo Mensaje Programado' : 'Editar Mensaje Programado'}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => { setIsModalOpen(false); setEditingMsg(null); setShowModalEmoji(false); }}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.2rem', cursor: 'pointer', padding: '4px' }}
+                                title="Cerrar"
+                            >
+                                ✕
+                            </button>
+                        </div>
 
                         <form onSubmit={handleSaveMessage} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div>
