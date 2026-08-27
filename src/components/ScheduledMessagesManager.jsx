@@ -172,19 +172,52 @@ export default function ScheduledMessagesManager({ supabase, triggerToast }) {
         triggerToast('🔴 Bot desconectado');
     };
 
-    const sendChatMessage = (text, isManual = false) => {
+    const sendChatMessage = async (text, isManual = false) => {
+        let formattedText = (text || '').trim();
+
+        if (formattedText.startsWith('/announcement ') || formattedText.startsWith('/announce ') || formattedText.startsWith('.announcement ') || formattedText.startsWith('.announce ')) {
+            const content = formattedText.replace(/^[/\.](announcement|announce)\s+/i, '');
+            try {
+                const cleanToken = botOauth.replace(/^oauth:/i, '');
+                const valRes = await fetch('https://id.twitch.tv/oauth2/validate', {
+                    headers: { 'Authorization': `OAuth ${cleanToken}` }
+                });
+                if (valRes.ok) {
+                    const authInfo = await valRes.json();
+                    const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${botChannel.toLowerCase().replace(/^#/, '')}`, {
+                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Client-Id': authInfo.client_id }
+                    });
+                    if (userRes.ok) {
+                        const userData = await userRes.json();
+                        if (userData.data && userData.data.length > 0) {
+                            const bId = userData.data[0].id;
+                            const annRes = await fetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${bId}&moderator_id=${authInfo.user_id}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${cleanToken}`,
+                                    'Client-Id': authInfo.client_id,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ message: content.substring(0, 500), color: 'primary' })
+                            });
+                            if (annRes.status === 204 || annRes.ok) {
+                                addLog('sent', `📢 [Anuncio Oficial Enviado]: ${content}`);
+                                if (isManual) triggerToast('📢 Anuncio oficial enviado al chat');
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Helix announcement fallback in component:', err);
+            }
+            formattedText = content;
+        }
+
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
             triggerToast('⚠️ Conecta el bot a Twitch primero');
             addLog('error', 'No se pudo enviar el mensaje: Bot desconectado.');
             return false;
-        }
-        let formattedText = (text || '').trim();
-        if (formattedText.startsWith('/announcement ') || formattedText.startsWith('/announce ')) {
-            const content = formattedText.replace(/^\/(announcement|announce)\s+/i, '');
-            formattedText = `/announce ${content}`;
-        } else if (formattedText.startsWith('.announcement ') || formattedText.startsWith('.announce ')) {
-            const content = formattedText.replace(/^\.(announcement|announce)\s+/i, '');
-            formattedText = `.announce ${content}`;
         }
 
         wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${formattedText}`);

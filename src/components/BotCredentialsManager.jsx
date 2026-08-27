@@ -324,7 +324,8 @@ export default function BotCredentialsManager({
                         </h4>
                         <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                             <li>Al guardar tus credenciales aquí, el bot se conectará <strong>automáticamente</strong> al abrir el Builder.</li>
-                            <li>Tanto los <strong>Mensajes Programados</strong> como los <strong>Cumpleaños de Viewers</strong> utilizarán esta cuenta para enviar mensajes cada 20 min.</li>
+                            <li>Tanto los <strong>Mensajes Programados</strong> como los <strong>Cumpleaños de Viewers</strong> utilizarán esta cuenta para enviar mensajes.</li>
+<li>Para que los mensajes con <strong>/announce</strong> salgan con el banner destacado de Twitch, la cuenta del bot debe ser <strong>Moderador</strong> (<code>/mod Eviltokki_exe</code>) y su token debe tener el permiso <code>moderator:manage:announcements</code>.</li>
                             <li>Cuenta con <strong>auto-reconexión continua</strong> y <strong>Heartbeat Keep-Alive</strong> para que nunca se caiga durante tus transmisiones.</li>
                         </ul>
                     </div>

@@ -1644,7 +1644,95 @@ function App() {
     addBotLog("Bot desconectado manualmente.");
   };
 
-  const enviarMensajeTwitch = (texto, silent = false) => {
+  // Twitch Helix Announcements Helpers
+  const twitchIdsCacheRef = useRef({});
+
+  const validateAndGetTwitchClient = async (token) => {
+    try {
+      const cleanToken = token.replace(/^oauth:/i, '');
+      const res = await fetch('https://id.twitch.tv/oauth2/validate', {
+        headers: { 'Authorization': `OAuth ${cleanToken}` }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Error validating twitch token:", e);
+    }
+    return null;
+  };
+
+  const getTwitchUserIdByLogin = async (login, token, clientId) => {
+    const cleanLogin = login.toLowerCase().replace(/^#/, '').trim();
+    if (twitchIdsCacheRef.current[cleanLogin]) return twitchIdsCacheRef.current[cleanLogin];
+
+    try {
+      const cleanToken = token.replace(/^oauth:/i, '');
+      const res = await fetch(`https://api.twitch.tv/helix/users?login=${cleanLogin}`, {
+        headers: {
+          'Authorization': `Bearer ${cleanToken}`,
+          'Client-Id': clientId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data && data.data.length > 0) {
+          const userId = data.data[0].id;
+          twitchIdsCacheRef.current[cleanLogin] = userId;
+          return userId;
+        }
+      }
+    } catch (e) {
+      console.warn(`Error fetching Twitch user ID for ${cleanLogin}:`, e);
+    }
+    return null;
+  };
+
+  const sendTwitchAnnouncement = async (messageText, color = 'primary') => {
+    try {
+      const cleanToken = botOauth.replace(/^oauth:/i, '');
+      const authInfo = await validateAndGetTwitchClient(cleanToken);
+      if (!authInfo || !authInfo.client_id) {
+        addBotLog("Aviso: No se pudo validar Client-Id de Twitch para Anuncio. Enviando como texto.");
+        return false;
+      }
+
+      const moderatorId = authInfo.user_id;
+      const broadcasterId = await getTwitchUserIdByLogin(botChannel, cleanToken, authInfo.client_id);
+
+      if (!broadcasterId || !moderatorId) {
+        addBotLog("Aviso: No se pudo obtener IDs de canal o bot. Enviando como texto normal.");
+        return false;
+      }
+
+      const res = await fetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cleanToken}`,
+          'Client-Id': authInfo.client_id,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: messageText.substring(0, 500),
+          color: color // 'primary' (morado), 'blue', 'green', 'orange'
+        })
+      });
+
+      if (res.status === 204 || res.ok) {
+        addBotLog(`📢 [Anuncio Oficial Enviado]: "${messageText.substring(0, 35)}..."`);
+        return true;
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        addBotLog(`Aviso Helix Anuncio: ${errJson.message || res.statusText}. Intentando por chat.`);
+        return false;
+      }
+    } catch (err) {
+      console.warn("Error sending Helix Announcement:", err);
+      return false;
+    }
+  };
+
+  const enviarMensajeTwitch = async (texto, silent = false) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       let formattedText = (texto || '').trim();
       // Normalize /announcement, /announce, .announce for Twitch IRC
