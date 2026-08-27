@@ -2161,6 +2161,83 @@ function App() {
     ));
   };
 
+  const handleUploadMostStreamedImage = async (itemId, file) => {
+    if (!file) return;
+    try {
+      triggerToast("⏳ Subiendo imagen a Cloudflare R2...");
+      
+      // 1. Pedir presigned URL a la Edge Function
+      const { data, error } = await supabase.functions.invoke('clever-api', {
+        body: { fileName: file.name, fileType: file.type }
+      });
+      if (error || !data) throw new Error(error ? error.message : "Error contactando Edge Function");
+
+      // 2. Subir físicamente a Cloudflare R2
+      const uploadRes = await fetch(data.presignedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type }
+      });
+
+      if (!uploadRes.ok) throw new Error("AWS Server Error: " + uploadRes.status);
+
+      const localBlob = URL.createObjectURL(file);
+      window.__R2_MOCK_CACHE__[data.finalPublicUrl] = localBlob;
+
+      handleMostStreamedChange(itemId, 'image_url', data.finalPublicUrl);
+      triggerToast("✅ ¡Imagen subida a Cloudflare R2 con éxito!");
+    } catch (err) {
+      console.error("Error uploading game image:", err);
+      alert("No se pudo subir a Cloudflare R2: " + err.message);
+    }
+  };
+
+  const handleDeleteMostStreamedItem = async (id, title) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${title || 'este juego'}" de la lista?`)) return;
+    try {
+      const { error } = await supabase
+        .from('most_streamed')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setMostStreamed(prev => prev.filter(i => i.id !== id));
+      triggerToast("🗑️ Juego eliminado correctamente");
+    } catch (err) {
+      console.error("Error deleting game:", err);
+      alert("Error al eliminar juego: " + err.message);
+    }
+  };
+
+  const handleAddMostStreamedItem = async () => {
+    try {
+      const newOrder = mostStreamed.length + 1;
+      const { data, error } = await supabase
+        .from('most_streamed')
+        .insert([{
+          title: 'Nuevo Juego',
+          image_url: '',
+          description: '',
+          order_index: newOrder
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setMostStreamed(prev => [...prev, data]);
+      } else {
+        fetchMostStreamed();
+      }
+      triggerToast("✨ Nueva casilla de juego añadida");
+    } catch (err) {
+      console.error("Error adding game:", err);
+      alert("Error al añadir juego: " + err.message);
+    }
+  };
+
   const saveMostStreamedItem = async (item) => {
     setSubmittingId(item.id);
     try {
@@ -4035,25 +4112,34 @@ function App() {
             </div>
           </div>
         ) : view === 'view_most_streamed' ? (
-          <div className="builder-view">
-            <div className="builder-header animate-slide-down">
+          <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
+              <h1 className="header-title" style={{ fontSize: '1.8rem', margin: 0, textAlign: 'center', flex: 1 }}>
                 Lo más Streameable
               </h1>
+              <button 
+                className="btn-submit"
+                onClick={handleAddMostStreamedItem}
+                style={{ width: 'auto', padding: '10px 20px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px', background: 'linear-gradient(135deg, var(--primary), #ec4899)', fontWeight: 700 }}
+              >
+                <Plus size={18} /> Añadir Juego
+              </button>
             </div>
 
-            <div className="card animate-slide-down" style={{ minHeight: '60vh' }}>
-              <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>
-                <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                  <Gamepad2 size={24} />
-                  Top 6 Juegos más Jugados
-                </h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '5px' }}>
-                  Estos juegos se muestran en la sección principal de la web. Recomendado: Máximo 6 juegos.
-                </p>
+            <div className="card animate-slide-down" style={{ minHeight: '60vh', padding: '24px' }}>
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '15px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h2 style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.4rem' }}>
+                    <Gamepad2 size={24} />
+                    Catálogo de Juegos más Streameados ({mostStreamed.length})
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '4px', margin: 0 }}>
+                    Estos juegos se muestran en la sección principal de la web. Puedes subir portadas a R2, editarlos o eliminarlos.
+                  </p>
+                </div>
               </div>
 
               {isLoadingMostStreamed ? (
@@ -4062,125 +4148,217 @@ function App() {
                   <br />
                   Cargando juegos desde Supabase...
                 </div>
+              ) : mostStreamed.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
+                  <Gamepad2 size={48} opacity={0.3} style={{ marginBottom: '10px' }} />
+                  <p>No hay juegos registrados en el catálogo.</p>
+                  <button className="btn-submit" onClick={handleAddMostStreamedItem} style={{ width: 'auto', margin: '0 auto' }}>
+                    <Plus size={16} /> Crear Primer Juego
+                  </button>
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
                   {mostStreamed.map((item, index) => (
                     <div 
                       key={item.id} 
                       className="card animate-slide-down" 
                       style={{ 
-                        background: 'var(--bg-card-hover)', 
-                        border: '1px solid var(--border-color)', 
-                        borderRadius: '16px', 
-                        padding: '20px 24px',
+                        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(15, 23, 42, 0.6))', 
+                        border: '1px solid rgba(233, 176, 255, 0.2)', 
+                        borderRadius: '20px', 
+                        padding: 0,
                         display: 'flex',
                         flexDirection: 'row',
-                        alignItems: 'center',
+                        alignItems: 'stretch',
                         gap: '24px',
-                        flexWrap: 'wrap',
-                        position: 'relative'
+                        position: 'relative',
+                        overflow: 'hidden',
+                        minHeight: '230px',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
                       }}
                     >
-                      {/* Left: Thumbnail Preview & Number */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                        <div style={{
-                          width: '90px',
-                          height: '130px',
-                          borderRadius: '12px',
-                          overflow: 'hidden',
-                          background: '#0d0714',
-                          border: '1px solid rgba(255,255,255,0.12)',
+                      {/* Botón Eliminar Casilla Arriba a la Derecha */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMostStreamedItem(item.id, item.title)}
+                        style={{
+                          position: 'absolute',
+                          top: '16px',
+                          right: '16px',
+                          background: 'rgba(239, 68, 68, 0.12)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#ef4444',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          position: 'relative'
+                          gap: '6px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          zIndex: 10,
+                          transition: 'all 0.2s ease'
+                        }}
+                        title="Eliminar este juego"
+                      >
+                        <Trash2 size={15} /> Eliminar
+                      </button>
+
+                      {/* Left: Portada a Altura Completa (100% alto) */}
+                      <div style={{
+                        width: '145px',
+                        minWidth: '145px',
+                        maxWidth: '145px',
+                        alignSelf: 'stretch',
+                        background: '#0d0714',
+                        borderRight: '1px solid rgba(233, 176, 255, 0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        flexShrink: 0
+                      }}>
+                        {item.image_url ? (
+                          <img 
+                            src={item.image_url.startsWith('http') ? getDisplayUrl(item.image_url) : `${CLOUDFLARE_R2_BASE_URL}/${item.image_url}`} 
+                            alt={item.title} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
+                            onError={(e) => { e.target.style.display = 'none'; }} 
+                          />
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', padding: '10px', textAlign: 'center' }}>
+                            <Gamepad2 size={36} opacity={0.35} />
+                            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>Sin Portada</span>
+                          </div>
+                        )}
+                        <span style={{
+                          position: 'absolute',
+                          top: '10px',
+                          left: '10px',
+                          background: 'linear-gradient(135deg, var(--primary), #772ce8)',
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '0.8rem',
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+                          zIndex: 2
                         }}>
-                          {item.image_url ? (
-                            <img 
-                              src={item.image_url.startsWith('http') ? getDisplayUrl(item.image_url) : `${CLOUDFLARE_R2_BASE_URL}/${item.image_url}`} 
-                              alt={item.title} 
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              onError={(e) => { e.target.style.display = 'none'; }} 
-                            />
-                          ) : (
-                            <Gamepad2 size={28} color="var(--text-muted)" />
-                          )}
-                          <span style={{
-                            position: 'absolute',
-                            top: '6px',
-                            left: '6px',
-                            background: 'var(--primary)',
-                            color: '#fff',
-                            fontWeight: 800,
-                            fontSize: '0.75rem',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
-                          }}>
-                            #{index + 1}
-                          </span>
-                        </div>
+                          #{index + 1}
+                        </span>
                       </div>
 
-                      {/* Middle: Fields (Title + Image URL in row 1, Description in row 2) */}
-                      <div style={{ flex: 1, minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Título del Juego</label>
-                            <input 
-                              type="text" 
-                              className="form-control" 
-                              value={item.title} 
-                              onChange={(e) => handleMostStreamedChange(item.id, 'title', e.target.value)} 
-                              placeholder="Ej: Grand Theft Auto V"
-                            />
-                          </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>URL de la Imagen (R2)</label>
+                      {/* Right: Contenedor con Título Arriba, Casilla para Subir Imagen a R2 y Descripción Abajo */}
+                      <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '14px',
+                        padding: '18px 24px 18px 0',
+                        paddingRight: '125px'
+                      }}>
+                        {/* 1. Título del Juego Arriba */}
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px', fontWeight: 700, color: 'var(--text-main)' }}>
+                            Título del Juego
+                          </label>
+                          <input 
+                            type="text" 
+                            className="form-control" 
+                            value={item.title} 
+                            onChange={(e) => handleMostStreamedChange(item.id, 'title', e.target.value)} 
+                            placeholder="Ej: Overwatch"
+                            style={{ fontWeight: 600, fontSize: '0.95rem' }}
+                          />
+                        </div>
+
+                        {/* 2. Subir Imagen a Cloudflare R2 + Enlace */}
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700 }}>URL de la Imagen (Cloudflare R2)</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sube un archivo directo o escribe la ruta</span>
+                          </label>
+                          <div style={{ display: 'flex', gap: '8px' }}>
                             <input 
                               type="text" 
                               className="form-control" 
                               value={item.image_url} 
-                              placeholder="Imagenes/Nombre.png o https://..."
+                              placeholder="https://pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/public/... o Imagenes/Nombre.png"
                               onChange={(e) => handleMostStreamedChange(item.id, 'image_url', e.target.value)} 
+                              style={{ fontSize: '0.85rem' }}
                             />
+                            <label 
+                              style={{
+                                padding: '0 16px',
+                                background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                                color: '#fff',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                userSelect: 'none',
+                                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
+                              }}
+                              title="Seleccionar archivo desde tu PC y subirlo automáticamente a Cloudflare R2"
+                            >
+                              <ImageIcon size={16} /> Subir Imagen a R2
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    handleUploadMostStreamedImage(item.id, e.target.files[0]);
+                                  }
+                                }}
+                              />
+                            </label>
                           </div>
                         </div>
 
+                        {/* 3. Descripción del Juego / Contenido Abajo */}
                         <div>
-                          <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px' }}>Descripción del Juego / Contenido</label>
+                          <label className="form-label" style={{ fontSize: '0.82rem', marginBottom: '6px', fontWeight: 700, color: 'var(--text-main)' }}>
+                            Descripción del Juego / Contenido
+                          </label>
                           <textarea 
                             className="form-control" 
                             rows="2"
                             placeholder="Escribe una pequeña descripción del contenido en directo sin límite de caracteres..."
                             value={item.description || ''} 
                             onChange={(e) => handleMostStreamedChange(item.id, 'description', e.target.value)} 
-                            style={{ resize: 'vertical', minHeight: '60px' }}
+                            style={{ resize: 'vertical', minHeight: '65px', fontSize: '0.88rem' }}
                           />
                         </div>
-                      </div>
 
-                      {/* Right: Save Button */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <button 
-                          className="btn-submit" 
-                          style={{ 
-                            width: 'auto', 
-                            padding: '12px 20px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            gap: '8px',
-                            background: 'linear-gradient(135deg, var(--primary), #772ce8)',
-                            color: '#fff',
-                            borderRadius: '10px',
-                            fontWeight: 700
-                          }} 
-                          onClick={() => saveMostStreamedItem(item)}
-                          disabled={submittingId === item.id}
-                        >
-                          {submittingId === item.id ? 'Guardando...' : <><Save size={16} /> Guardar</>}
-                        </button>
+                        {/* 4. Botón Guardar Cambios */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                          <button 
+                            className="btn-submit" 
+                            style={{ 
+                              width: 'auto', 
+                              padding: '10px 24px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '8px',
+                              background: 'linear-gradient(135deg, var(--primary), #772ce8)',
+                              color: '#fff',
+                              borderRadius: '10px',
+                              fontWeight: 700,
+                              boxShadow: '0 4px 15px rgba(236, 72, 153, 0.3)'
+                            }} 
+                            onClick={() => saveMostStreamedItem(item)}
+                            disabled={submittingId === item.id}
+                          >
+                            {submittingId === item.id ? 'Guardando...' : <><Save size={16} /> Guardar Cambios</>}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
