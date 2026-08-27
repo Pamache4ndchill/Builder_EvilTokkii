@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
+import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
@@ -7,6 +7,7 @@ import TierlistsManager from './components/TierlistsManager';
 import SyncNewsManager from './components/SyncNewsManager';
 import ScheduledMessagesManager from './components/ScheduledMessagesManager';
 import SpotifySongRequestManager from './components/SpotifySongRequestManager';
+import BirthdaysManager from './components/BirthdaysManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -3427,6 +3428,18 @@ function App() {
                 <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
                 <p>Crea comandos personalizados y plantillas divertidas (ej: pelea) para tu chat de Twitch.</p>
               </div>
+
+              <div 
+                className="dashboard-card" 
+                style={{ border: '1px solid rgba(236, 72, 153, 0.4)' }} 
+                onClick={() => restrictedNavigate('view_birthdays', 'birthdays')}
+              >
+                <div className="icon-bg" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}>
+                  <Cake size={36} />
+                </div>
+                <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
+                <p>Registra fechas de cumpleaños de viewers y envía felicitaciones automáticas al chat cada 20 min.</p>
+              </div>
             </div>
           </div>
         ) : view === 'create_content_item' ? (
@@ -5115,6 +5128,20 @@ function App() {
             })()}
               </div>
             </div>
+          </div>
+        ) : view === 'view_birthdays' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down">
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+            </div>
+            <BirthdaysManager 
+              supabase={supabase} 
+              triggerToast={triggerToast} 
+              enviarMensajeTwitch={enviarMensajeTwitch}
+              isBotConnected={isBotConnected}
+            />
           </div>
         ) : view === 'view_song_request' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
