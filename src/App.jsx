@@ -1408,27 +1408,17 @@ function App() {
   const [botLogs, setBotLogs] = useState([]);
   const [scheduledMessages, setScheduledMessages] = useState(() => {
     try {
-      const saved = localStorage.getItem('twitch_scheduled_messages_v2');
-      if (saved) return JSON.parse(saved);
-      
-      const legacy = localStorage.getItem('twitch_scheduled_messages');
-      if (legacy) {
-        const parsed = JSON.parse(legacy);
-        return parsed.map((txt, idx) => ({
-          id: Date.now() + idx,
-          text: typeof txt === 'string' ? txt : (txt.text || ''),
-          intervalMs: typeof txt === 'object' && txt.intervalMs ? txt.intervalMs : 300000,
-          active: true
-        }));
-      }
-      return [
-        { id: 1, text: "¡Hola! Recuerda seguir el canal y activar las notificaciones. 🔔", intervalMs: 300000, active: true }
-      ];
+      const savedV3 = localStorage.getItem('twitch_scheduled_messages_v3');
+      if (savedV3) return JSON.parse(savedV3);
+      const savedV2 = localStorage.getItem('twitch_scheduled_messages_v2');
+      if (savedV2) return JSON.parse(savedV2);
     } catch (e) {
-      return [
-        { id: 1, text: "¡Hola! Recuerda seguir el canal y activar las notificaciones. 🔔", intervalMs: 300000, active: true }
-      ];
+      console.error("Error reading scheduled messages:", e);
     }
+    return [
+      { id: 1, text: "🌟 ¡Recuerda seguir el canal y activar las notificaciones para estar al día de todos los directos!", intervalMinutes: 10, minChatMessages: 10, active: true },
+      { id: 2, text: "/announce 🌐 ¡Visita nuestra web oficial con minijuegos y sorteos diarios: https://tokkii.online!", intervalMinutes: 15, minChatMessages: 15, active: true }
+    ];
   });
   const [newScheduledMessage, setNewScheduledMessage] = useState('');
   const [newScheduledInterval, setNewScheduledInterval] = useState(5); // default 5 minutes
@@ -1723,27 +1713,28 @@ function App() {
     userMessagesCountRef.current = 0;
     
     if (isBotConnected && scheduledMessages.length > 0) {
-      addBotLog("Iniciando programadores independientes con control de actividad...");
-      
-      scheduledMessages.forEach(msg => {
-        if (msg.active && msg.text && msg.intervalMs > 0) {
+      const activeMsgs = scheduledMessages.filter(m => m.active && m.text);
+      if (activeMsgs.length > 0) {
+        addBotLog(`[Temporizador Global] ⏱️ ${activeMsgs.length} mensaje(s) programado(s) corriendo en segundo plano continuo.`);
+        
+        activeMsgs.forEach(msg => {
           let lastSentCount = 0;
-          const threshold = msg.minChatMessages !== undefined ? msg.minChatMessages : 20;
-          
-          addBotLog(`Mensaje activo: "${msg.text.substring(0, 20)}..." cada ${msg.intervalMs / 60000} min (req. ${threshold} msgs de chat)`);
+          const intervalMs = (Number(msg.intervalMinutes) || 10) * 60000;
+          const threshold = msg.minChatMessages !== undefined ? Number(msg.minChatMessages) : 10;
           
           const timer = setInterval(() => {
             const currentCount = userMessagesCountRef.current;
             if (currentCount - lastSentCount >= threshold) {
-              enviarMensajeTwitch(msg.text);
+              enviarMensajeTwitch(msg.text, true);
               lastSentCount = currentCount;
             } else {
-              addBotLog(`[Espera] Omitido: "${msg.text.substring(0, 15)}..." por poco tráfico (${currentCount - lastSentCount}/${threshold} mensajes recibidos)`);
+              addBotLog(`[Temporizador Global] Omitido "${msg.text.substring(0, 20)}..." por poco tráfico (${currentCount - lastSentCount}/${threshold} mensajes)`);
             }
-          }, msg.intervalMs);
+          }, intervalMs);
+          
           intervalsRef.current.push(timer);
-        }
-      });
+        });
+      }
     }
     
     return () => {
@@ -1764,6 +1755,7 @@ function App() {
   }, [botChannel]);
 
   useEffect(() => {
+    localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(scheduledMessages));
     localStorage.setItem('twitch_scheduled_messages_v2', JSON.stringify(scheduledMessages));
   }, [scheduledMessages]);
 
@@ -4171,6 +4163,8 @@ function App() {
               enviarMensajeTwitch={enviarMensajeTwitch}
               botLogs={botLogs}
               setBotLogs={setBotLogs}
+              messages={scheduledMessages}
+              setMessages={setScheduledMessages}
             />
           </div>
         ) : view === 'view_commands' ? (

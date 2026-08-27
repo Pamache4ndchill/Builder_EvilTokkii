@@ -185,7 +185,9 @@ export default function ScheduledMessagesManager({
     disconnectTwitchBot, 
     enviarMensajeTwitch, 
     botLogs: propBotLogs, 
-    setBotLogs: propSetBotLogs 
+    setBotLogs: propSetBotLogs,
+    messages: propMessages,
+    setMessages: propSetMessages
 }) {
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
@@ -207,21 +209,15 @@ export default function ScheduledMessagesManager({
     const setBotLogs = propSetBotLogs !== undefined ? propSetBotLogs : setLocalLogs;
     const [chatActivityCount, setChatActivityCount] = useState(0);
 
-    // Mensajes Programados
-    const [messages, setMessages] = useState(() => {
+    const [localMessages, setLocalMessages] = useState(() => {
         try {
             const saved = localStorage.getItem('twitch_scheduled_messages_v3');
             if (saved) return JSON.parse(saved);
-            const legacy = localStorage.getItem('twitch_scheduled_messages_v2');
-            if (legacy) return JSON.parse(legacy);
-        } catch (e) {
-            console.error("Error reading saved messages:", e);
-        }
-        return [
-            { id: 1, text: "🌟 ¡Recuerda seguir el canal y activar las notificaciones para estar al día de todos los directos!", intervalMinutes: 10, minChatMessages: 10, active: true },
-            { id: 2, text: "🌐 Visita nuestra web oficial para ver noticias de videojuegos y anime: https://tokkii.online", intervalMinutes: 15, minChatMessages: 15, active: true }
-        ];
+        } catch (e) {}
+        return [];
     });
+    const messages = propMessages !== undefined ? propMessages : localMessages;
+    const setMessages = propSetMessages !== undefined ? propSetMessages : setLocalMessages;
 
     // Modales y formularios
     const [editingMsg, setEditingMsg] = useState(null);
@@ -364,42 +360,7 @@ export default function ScheduledMessagesManager({
         return false;
     };
 
-    // Planificador de mensajes
-    useEffect(() => {
-        intervalsRef.current.forEach(clearInterval);
-        intervalsRef.current = [];
-        chatCounterRef.current = 0;
-
-        if (isBotConnected && messages.length > 0) {
-            addLog('info', 'Activando temporizadores de mensajes programados...');
-
-            messages.forEach((msg) => {
-                if (msg.active && msg.text && msg.intervalMinutes > 0) {
-                    let lastSentChatCount = 0;
-                    const intervalMs = msg.intervalMinutes * 60000;
-                    const minChat = msg.minChatMessages || 0;
-
-                    const timer = setInterval(() => {
-                        const currentChats = chatCounterRef.current;
-                        const diff = currentChats - lastSentChatCount;
-
-                        if (diff >= minChat) {
-                            sendChatMessage(msg.text);
-                            lastSentChatCount = currentChats;
-                        } else {
-                            addLog('info', `[Espera] Mensaje "${msg.text.substring(0, 20)}..." pausado por poco tráfico (${diff}/${minChat} msgs de chat).`);
-                        }
-                    }, intervalMs);
-
-                    intervalsRef.current.push(timer);
-                }
-            });
-        }
-
-        return () => {
-            intervalsRef.current.forEach(clearInterval);
-        };
-    }, [isBotConnected, messages, botChannel, addLog]);
+    // Timers are managed globally in App.jsx to avoid restarts when navigating
 
     const handleToggleMessage = (id) => {
         setMessages(prev => prev.map(m => m.id === id ? { ...m, active: !m.active } : m));
@@ -587,19 +548,26 @@ export default function ScheduledMessagesManager({
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleToggleMessage(msg.id)}
+                                                    onClick={() => {
+                                                        handleToggleMessage(msg.id);
+                                                        triggerToast(msg.active ? '⏸️ Temporizador pausado' : '▶️ Temporizador global lanzado');
+                                                    }}
+                                                    title={msg.active ? "Pausar temporizador" : "Lanzar temporizador en stream"}
                                                     style={{
-                                                        padding: '4px 10px',
+                                                        padding: '5px 12px',
                                                         fontSize: '0.75rem',
                                                         fontWeight: 800,
                                                         borderRadius: '20px',
-                                                        border: 'none',
+                                                        border: msg.active ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)',
                                                         cursor: 'pointer',
-                                                        background: msg.active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                                                        color: msg.active ? '#22c55e' : 'var(--text-muted)'
+                                                        background: msg.active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                                                        color: msg.active ? '#22c55e' : 'var(--text-muted)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
                                                     }}
                                                 >
-                                                    {msg.active ? 'ACTIVO' : 'PAUSADO'}
+                                                    {msg.active ? '🟢 EN CURSO' : '▶️ LANZAR'}
                                                 </button>
 
                                                 <button
