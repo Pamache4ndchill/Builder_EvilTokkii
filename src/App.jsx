@@ -539,6 +539,8 @@ function App() {
           return !!sessionPermissions.access_reports;
         case 'minigames':
           return !!sessionPermissions.access_minigames;
+        case 'birthdays':
+          return sessionPermissions.access_birthdays !== undefined ? !!sessionPermissions.access_birthdays : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
         case 'tierlists':
           return sessionPermissions.access_tierlists !== undefined ? !!sessionPermissions.access_tierlists : true;
         case 'admin':
@@ -1847,7 +1849,8 @@ function App() {
               access_reports: false,
               access_minigames: false,
               access_ruleta: false,
-              access_twitch_giveaway: false
+              access_twitch_giveaway: false,
+              access_birthdays: false
             }
           ]);
           
