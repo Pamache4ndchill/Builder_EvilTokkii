@@ -372,6 +372,104 @@ export default function BotCredentialsManager({
                         </form>
                     </div>
 
+                    {/* Color Picker Card */}
+                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(236, 72, 153, 0.35)', background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)' }}>
+                        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Palette size={18} color="#EC4899" /> Color del Nombre en el Chat de Twitch
+                        </h4>
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 14px 0' }}>
+                            Elige el color con el que <strong>@{botUsername || 'EmiliaMaria_exe'}</strong> aparecerá en todos los chats:
+                        </p>
+
+                        {/* Live Color Preview Box */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '12px 16px',
+                            background: '#090d16',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            marginBottom: '14px'
+                        }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Vista Previa:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, fontSize: '0.95rem' }}>
+                                <span style={{ padding: '2px 5px', borderRadius: '4px', background: '#00AD03', color: '#fff', fontSize: '0.75rem' }}>⚔️</span>
+                                <span style={{ color: TWITCH_COLORS.find(c => c.name === selectedColor)?.hex || '#FF69B4', textShadow: '0 0 10px rgba(255,255,255,0.1)' }}>
+                                    {botUsername || 'EmiliaMaria_exe'}
+                                </span>
+                                <span style={{ color: '#fff', fontWeight: 400, fontSize: '0.9rem' }}>: ¡Hola a todos en el chat! 👋</span>
+                            </div>
+                        </div>
+
+                        {/* Color Selector Circle Palette */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' }}>
+                            {TWITCH_COLORS.map(c => {
+                                const isSelected = selectedColor === c.name;
+                                return (
+                                    <button
+                                        key={c.name}
+                                        type="button"
+                                        title={c.label}
+                                        onClick={() => {
+                                            setSelectedColor(c.name);
+                                            handleApplyColor(c.name);
+                                        }}
+                                        style={{
+                                            width: '30px',
+                                            height: '30px',
+                                            borderRadius: '50%',
+                                            background: c.hex,
+                                            border: isSelected ? '3px solid #fff' : '2px solid rgba(0,0,0,0.6)',
+                                            boxShadow: isSelected ? `0 0 14px ${c.hex}` : 'none',
+                                            cursor: 'pointer',
+                                            transform: isSelected ? 'scale(1.2)' : 'scale(1)',
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+
+                        {/* Select Dropdown & Apply Button */}
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <select
+                                className="form-control"
+                                value={selectedColor}
+                                onChange={(e) => {
+                                    setSelectedColor(e.target.value);
+                                    handleApplyColor(e.target.value);
+                                }}
+                                style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700 }}
+                            >
+                                {TWITCH_COLORS.map(c => (
+                                    <option key={c.name} value={c.name}>{c.label}</option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                className="btn-submit"
+                                style={{
+                                    width: 'auto',
+                                    padding: '0 20px',
+                                    background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
+                                    color: '#fff',
+                                    borderRadius: '8px',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 800,
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                                onClick={() => handleApplyColor(selectedColor)}
+                                disabled={!isBotConnected}
+                            >
+                                <Sparkles size={14} /> Aplicar Color
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Test Chat Message Card */}
                     <div className="card animate-slide-down" style={{ padding: '20px' }}>
                         <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
