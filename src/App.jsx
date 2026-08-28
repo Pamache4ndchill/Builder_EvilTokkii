@@ -1725,11 +1725,11 @@ function App() {
   const enviarMensajeTwitch = async (texto, silent = false) => {
     let formattedText = (texto || '').trim();
 
-    // Detección para Anuncios (/announce)
+    // Detección para Anuncios Nativos de Twitch (/announce)
     const isAnnounce = /^[/\\.](announce|announcement)\s+/i.test(formattedText);
     if (isAnnounce) {
       const content = formattedText.replace(/^[/\\.](announce|announcement)\s+/i, '').trim();
-      formattedText = '📢 [ANUNCIO]: ' + content;
+      formattedText = `/announce ${content}`;
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
