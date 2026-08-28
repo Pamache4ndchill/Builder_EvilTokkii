@@ -282,7 +282,7 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
     const todaysBirthdays = birthdays.filter(b => b.day === currentDay && b.month === currentMonth && b.active !== false);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
             
             {/* Header Card */}
             <div className="card animate-slide-down" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
@@ -314,8 +314,8 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                         fontWeight: 700,
                         fontSize: '0.85rem'
                     }}>
-                        <PartyPopper size={16} />
-                        {todaysBirthdays.length > 0 ? ('🎂 ¡' + todaysBirthdays.length + ' CUMPLEAÑERO(S) HOY!') : 'Sin cumpleaños hoy'}
+                        <span>🎉 🎂</span>
+                        <span>{todaysBirthdays.length > 0 ? `¡${todaysBirthdays.length} CUMPLEAÑERO(S) HOY!` : 'Sin Cumpleaños Hoy'}</span>
                     </div>
 
                     <div style={{
@@ -336,21 +336,20 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                 </div>
             </div>
 
-                        {/* Automation Settings Banner */}
+            {/* Automation Settings Banner (Estrictamente una sola línea horizontal) */}
             <div className="card animate-slide-down" style={{ 
-                padding: '20px 24px', 
+                padding: '16px 24px', 
                 background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)', 
                 border: '1px solid rgba(236, 72, 153, 0.3)',
                 borderRadius: '16px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '20px'
+                gap: '16px'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
                             ⏰ Temporizador Automático:
                         </span>
                         <button
@@ -360,27 +359,28 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                padding: '6px 14px',
+                                padding: '5px 12px',
                                 borderRadius: '20px',
                                 border: isAutoEnabled ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
                                 background: isAutoEnabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
                                 color: isAutoEnabled ? '#22c55e' : '#ef4444',
                                 fontWeight: 800,
-                                fontSize: '0.8rem',
-                                cursor: 'pointer'
+                                fontSize: '0.78rem',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap'
                             }}
                         >
                             {isAutoEnabled ? '🟢 ACTIVADO' : '🔴 PAUSADO'}
                         </button>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Enviar cada:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Enviar cada:</span>
                         <select
                             className="form-control"
                             value={autoInterval}
                             onChange={(e) => handleIntervalChange(e.target.value)}
-                            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem', fontWeight: 700, margin: 0 }}
+                            style={{ width: 'auto', padding: '5px 10px', fontSize: '0.82rem', fontWeight: 700, margin: 0 }}
                         >
                             <option value={5}>5 minutos</option>
                             <option value={10}>10 minutos</option>
@@ -392,13 +392,13 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                         </select>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mín. mensajes chat:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Mín. mensajes chat:</span>
                         <select
                             className="form-control"
                             value={autoMinChat}
                             onChange={(e) => handleMinChatChange(e.target.value)}
-                            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem', fontWeight: 700, margin: 0 }}
+                            style={{ width: 'auto', padding: '5px 10px', fontSize: '0.82rem', fontWeight: 700, margin: 0 }}
                         >
                             <option value={0}>Sin límite (Solo tiempo)</option>
                             <option value={5}>5 mensajes</option>
@@ -408,458 +408,600 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                     </div>
                 </div>
 
+                {/* Botón Felicitar en Vivo Ahora ubicado a la derecha en la misma línea */}
                 <button
                     type="button"
                     onClick={handleSendAllTodayNow}
                     disabled={todaysBirthdays.length === 0}
                     style={{
-                        padding: '10px 20px',
+                        padding: '9px 18px',
                         borderRadius: '10px',
                         background: todaysBirthdays.length > 0 ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255,255,255,0.05)',
                         color: todaysBirthdays.length > 0 ? '#fff' : 'var(--text-muted)',
                         border: 'none',
                         fontWeight: 800,
-                        fontSize: '0.88rem',
+                        fontSize: '0.84rem',
                         cursor: todaysBirthdays.length > 0 ? 'pointer' : 'not-allowed',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
-                        boxShadow: todaysBirthdays.length > 0 ? '0 4px 15px rgba(236, 72, 153, 0.35)' : 'none'
+                        gap: '6px',
+                        boxShadow: todaysBirthdays.length > 0 ? '0 4px 15px rgba(236, 72, 153, 0.35)' : 'none',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
                     }}
                 >
-                    <Send size={16} /> Felicitar en Vivo Ahora
+                    <Send size={15} /> Felicitar en Vivo Ahora
                 </button>
             </div>
 
-            {/* Main Grid: Left Form, Right List */}
-            <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: '24px', alignItems: 'start' }}>
+            {/* Controls Bar: Search, Filter Tabs & Add Birthday Button */}
+            <div className="card animate-slide-down" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
                 
-                {/* LEFT: Add / Edit Form */}
-                <div className="card animate-slide-down" style={{ padding: '24px', position: 'sticky', top: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {editingId ? <Edit2 size={18} color="#EC4899" /> : <Plus size={18} color="#EC4899" />}
-                            {editingId ? 'Editar Cumpleaños' : 'Registrar Cumpleaños'}
-                        </h3>
-                        {editingId && (
+                {/* Tabs */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button
+                        type="button"
+                        onClick={() => setFilterTab('all')}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: filterTab === 'all' ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
+                            color: filterTab === 'all' ? '#fff' : 'var(--text-muted)',
+                            border: filterTab === 'all' ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)'
+                        }}
+                    >
+                        Todos ({birthdays.length})
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setFilterTab('today')}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: filterTab === 'today' ? '#EC4899' : 'rgba(236, 72, 153, 0.1)',
+                            color: filterTab === 'today' ? '#fff' : '#EC4899',
+                            border: filterTab === 'today' ? '1px solid #EC4899' : '1px solid rgba(236, 72, 153, 0.3)'
+                        }}
+                    >
+                        🎂 De Hoy ({todaysBirthdays.length})
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setFilterTab('month')}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: filterTab === 'month' ? 'rgba(168, 85, 247, 0.8)' : 'rgba(255,255,255,0.04)',
+                            color: filterTab === 'month' ? '#fff' : 'var(--text-muted)',
+                            border: filterTab === 'month' ? '1px solid #A855F7' : '1px solid rgba(255,255,255,0.08)'
+                        }}
+                    >
+                        Este Mes ({MONTHS.find(m => m.value === currentMonth)?.label})
+                    </button>
+                </div>
+
+                {/* Search Input & Add Button at Right */}
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', width: '220px' }}>
+                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Buscar viewer..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ paddingLeft: '32px', fontSize: '0.8rem', padding: '6px 10px 6px 30px', margin: 0 }}
+                        />
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={handleOpenCreateModal}
+                        style={{
+                            padding: '8px 18px',
+                            borderRadius: '10px',
+                            background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
+                            color: '#fff',
+                            border: 'none',
+                            fontWeight: 800,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 14px rgba(236, 72, 153, 0.35)',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        <Plus size={16} /> Registrar Cumpleaños
+                    </button>
+                </div>
+            </div>
+
+            {/* Today Banner (if any) */}
+            {todaysBirthdays.length > 0 && (
+                <div className="card animate-slide-down" style={{
+                    padding: '16px 20px',
+                    background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(244, 63, 94, 0.1))',
+                    border: '1px solid rgba(236, 72, 153, 0.4)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '1.8rem' }}>🎉</span>
+                        <div>
+                            <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>
+                                ¡Hoy es el cumpleaños de {todaysBirthdays.map(b => '@' + b.username).join(', ')}!
+                            </h4>
+                            <span style={{ fontSize: '0.78rem', color: '#fbcfe8' }}>
+                                El bot enviará su mensaje de felicitación al chat de Twitch en lapsus de tiempo que tengas asignado de forma automática.
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Birthday Cards List Centered */}
+            {filteredBirthdays.length === 0 ? (
+                <div className="card text-center" style={{ padding: '40px 20px', color: 'var(--text-muted)' }}>
+                    <Cake size={48} opacity={0.3} style={{ marginBottom: '12px' }} />
+                    <p style={{ margin: 0, fontSize: '0.95rem' }}>No se encontraron cumpleaños registrados.</p>
+                    <small>Utiliza el botón <strong>+ Registrar Cumpleaños</strong> de arriba para agregar a tus viewers.</small>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {filteredBirthdays.map((item) => {
+                        const isToday = item.day === currentDay && item.month === currentMonth;
+                        const monthLabel = MONTHS.find(m => m.value === item.month)?.label || item.month;
+                        const isCardActive = item.active !== false;
+
+                        return (
+                            <div 
+                                key={item.id}
+                                className="card animate-slide-down"
+                                style={{
+                                    padding: '16px 20px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '16px',
+                                    border: isToday 
+                                        ? '1px solid rgba(236, 72, 153, 0.5)' 
+                                        : !isCardActive 
+                                            ? '1px solid rgba(255,255,255,0.04)' 
+                                            : '1px solid rgba(255,255,255,0.08)',
+                                    background: isToday 
+                                        ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)' 
+                                        : !isCardActive
+                                            ? 'rgba(0,0,0,0.2)'
+                                            : 'var(--bg-card)',
+                                    opacity: isCardActive ? 1 : 0.6
+                                }}
+                            >
+                                {/* Left side: Date Badge & Viewer info */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '220px' }}>
+                                    {/* Date Circle Badge */}
+                                    <div style={{
+                                        width: '52px',
+                                        height: '52px',
+                                        borderRadius: '12px',
+                                        background: isToday ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255, 255, 255, 0.06)',
+                                        border: isToday ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#fff',
+                                        boxShadow: isToday ? '0 4px 14px rgba(236, 72, 153, 0.4)' : 'none',
+                                        flexShrink: 0
+                                    }}>
+                                        <span style={{ fontSize: '1.15rem', fontWeight: 800, lineHeight: 1 }}>{item.day}</span>
+                                        <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700 }}>
+                                            {monthLabel.substring(0, 3)}
+                                        </span>
+                                    </div>
+
+                                    {/* Username & Status */}
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                                                @{item.username}
+                                            </h4>
+                                            {isToday && (
+                                                <span style={{
+                                                    fontSize: '0.68rem',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '20px',
+                                                    background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
+                                                    color: '#fff',
+                                                    fontWeight: 800,
+                                                    boxShadow: '0 2px 8px rgba(236, 72, 153, 0.4)'
+                                                }}>
+                                                    ¡ES HOY! 🎂
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                            Fecha: {item.day} de {monthLabel}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Center: Message Preview Box */}
+                                <div style={{
+                                    flex: '1 1 320px',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    borderRadius: '10px',
+                                    padding: '10px 14px',
+                                    border: '1px solid rgba(255, 255, 255, 0.05)'
+                                }}>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px', fontWeight: 600 }}>
+                                        MENSAJE PARA EL CHAT:
+                                    </span>
+                                    <p style={{
+                                        margin: 0,
+                                        fontSize: '0.84rem',
+                                        color: 'var(--text-main)',
+                                        lineHeight: 1.4,
+                                        fontStyle: 'italic'
+                                    }}>
+                                        "{item.message || DEFAULT_MESSAGE_TEMPLATE}"
+                                    </p>
+                                </div>
+
+                                {/* Right: Actions */}
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {/* Test Chat Button */}
+                                    <button
+                                        type="button"
+                                        title="Probar envío en chat"
+                                        onClick={() => handleTestSendMessage(item)}
+                                        style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '8px',
+                                            background: 'rgba(145, 70, 255, 0.15)',
+                                            border: '1px solid rgba(145, 70, 255, 0.35)',
+                                            color: '#A855F7',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <Send size={12} /> Probar en Chat
+                                    </button>
+
+                                    {/* Edit Button */}
+                                    <button
+                                        type="button"
+                                        title="Editar"
+                                        onClick={() => handleEdit(item)}
+                                        style={{
+                                            padding: '6px 10px',
+                                            borderRadius: '8px',
+                                            background: 'rgba(255, 255, 255, 0.04)',
+                                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                                            color: 'var(--text-muted)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <Edit2 size={14} />
+                                    </button>
+
+                                    {/* Active/Inactive Toggle */}
+                                    <button
+                                        type="button"
+                                        title={isCardActive ? 'Desactivar' : 'Activar'}
+                                        onClick={() => handleToggleActive(item.id)}
+                                        style={{
+                                            padding: '6px 10px',
+                                            borderRadius: '8px',
+                                            background: isCardActive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+                                            border: isCardActive ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
+                                            color: isCardActive ? '#10B981' : 'var(--text-muted)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {isCardActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                                    </button>
+
+                                    {/* Delete Button */}
+                                    <button
+                                        type="button"
+                                        title="Eliminar"
+                                        onClick={() => handleDelete(item.id, item.username)}
+                                        style={{
+                                            padding: '6px 10px',
+                                            borderRadius: '8px',
+                                            background: 'rgba(239, 68, 68, 0.1)',
+                                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                                            color: '#EF4444',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Modal Emergente para Registrar / Editar Cumpleaños */}
+            {isModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: '20px'
+                }}>
+                    <div className="card animate-slide-down" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '520px', padding: '24px', border: '1px solid rgba(236, 72, 153, 0.4)', boxShadow: '0 15px 50px rgba(0,0,0,0.85)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {editingId ? <Edit2 size={20} color="#EC4899" /> : <Plus size={20} color="#EC4899" />}
+                                {editingId ? 'Editar Cumpleaños' : 'Registrar Nuevo Cumpleaños'}
+                            </h3>
                             <button
                                 type="button"
                                 onClick={resetForm}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer' }}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.2rem', cursor: 'pointer', padding: '4px' }}
+                                title="Cerrar"
                             >
-                                Cancelar
+                                ✕
                             </button>
-                        )}
-                    </div>
+                        </div>
 
-                    <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        {/* Viewer Username */}
-                        <div className="form-group" style={{ margin: 0 }}>
-                            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-                                <User size={14} color="var(--primary)" /> Nombre / Usuario de Twitch:
-                            </label>
-                            <div style={{ position: 'relative' }}>
-                                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 700 }}>
-                                    @
+                        <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {/* Viewer Username */}
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700 }}>
+                                    <User size={14} color="#EC4899" /> Nombre / Usuario de Twitch:
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                                        @
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Ej: JuanitoGamer, TokkiiFan..."
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        style={{ paddingLeft: '30px' }}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Date: Day & Month */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '12px' }}>
+                                <div className="form-group" style={{ margin: 0 }}>
+                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700 }}>Día:</label>
+                                    <select 
+                                        className="form-control" 
+                                        value={day} 
+                                        onChange={(e) => setDay(Number(e.target.value))}
+                                    >
+                                        {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                                            <option key={d} value={d}>{d}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group" style={{ margin: 0 }}>
+                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700 }}>Mes:</label>
+                                    <select 
+                                        className="form-control" 
+                                        value={month} 
+                                        onChange={(e) => setMonth(Number(e.target.value))}
+                                    >
+                                        {MONTHS.map(m => (
+                                            <option key={m.value} value={m.value}>{m.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Custom Message */}
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', margin: 0, fontWeight: 700 }}>
+                                        <MessageSquare size={14} color="#EC4899" /> Mensaje de Felicitaciones:
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCustomMessage(DEFAULT_MESSAGE_TEMPLATE)}
+                                        style={{ background: 'none', border: 'none', color: '#EC4899', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                                    >
+                                        Restablecer
+                                    </button>
+                                </div>
+                                <span style={{ fontSize: '0.82rem', color: '#EC4899', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                                    💡 Tip: Usa /announce al inicio para enviar como anuncio oficial
                                 </span>
-                                <input
-                                    type="text"
+                                <textarea
                                     className="form-control"
-                                    placeholder="Ej: JuanitoGamer, TokkiiFan..."
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    style={{ paddingLeft: '30px' }}
-                                    required
+                                    rows="3"
+                                    placeholder={DEFAULT_MESSAGE_TEMPLATE}
+                                    value={customMessage}
+                                    onChange={(e) => setCustomMessage(e.target.value)}
+                                    style={{ fontSize: '0.85rem', resize: 'vertical' }}
                                 />
-                            </div>
-                        </div>
-
-                        {/* Date: Day & Month */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '12px' }}>
-                            <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label" style={{ fontSize: '0.85rem' }}>Día:</label>
-                                <select 
-                                    className="form-control" 
-                                    value={day} 
-                                    onChange={(e) => setDay(Number(e.target.value))}
-                                >
-                                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                                        <option key={d} value={d}>{d}</option>
-                                    ))}
-                                </select>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                    Usa <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 4px', borderRadius: '3px' }}>{'{user}'}</code> para insertar automáticamente la mención al cumpleañero.
+                                </div>
                             </div>
 
-                            <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label" style={{ fontSize: '0.85rem' }}>Mes:</label>
-                                <select 
-                                    className="form-control" 
-                                    value={month} 
-                                    onChange={(e) => setMonth(Number(e.target.value))}
-                                >
-                                    {MONTHS.map(m => (
-                                        <option key={m.value} value={m.value}>{m.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Custom Message */}
-                        <div className="form-group" style={{ margin: 0 }}>
-                            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <MessageSquare size={14} color="#EC4899" /> Mensaje de Felicitaciones:
+                            {/* Active Toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                                    Felicitación automática activa
                                 </span>
                                 <button
                                     type="button"
-                                    onClick={() => setCustomMessage(DEFAULT_MESSAGE_TEMPLATE)}
-                                    style={{ background: 'none', border: 'none', color: '#EC4899', fontSize: '0.72rem', cursor: 'pointer' }}
+                                    onClick={() => setIsActive(!isActive)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: isActive ? '#10B981' : 'var(--text-muted)' }}
                                 >
-                                    Predeterminado
+                                    {isActive ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                                 </button>
-                            </label>
-                            <textarea
-                                className="form-control"
-                                rows="3"
-                                placeholder={DEFAULT_MESSAGE_TEMPLATE}
-                                value={customMessage}
-                                onChange={(e) => setCustomMessage(e.target.value)}
-                                style={{ fontSize: '0.85rem', resize: 'vertical' }}
-                            />
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                Usa <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 4px', borderRadius: '3px' }}>{'{user}'}</code> para insertar automáticamente la mención al cumpleañero.
                             </div>
-                        </div>
 
-                        {/* Active Toggle */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
-                                Felicitación automática activa
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setIsActive(!isActive)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: isActive ? '#10B981' : 'var(--text-muted)' }}
-                            >
-                                {isActive ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
-                            </button>
-                        </div>
-
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            className="btn-submit"
-                            style={{
-                                marginTop: '6px',
-                                background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
-                                color: '#fff',
-                                fontWeight: 800,
-                                borderRadius: '10px',
-                                padding: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                boxShadow: '0 4px 15px rgba(236, 72, 153, 0.3)'
-                            }}
-                        >
-                            <Sparkles size={18} />
-                            {editingId ? 'Guardar Cambios' : 'Registrar Cumpleaños'}
-                        </button>
-
-                    </form>
+                            {/* Actions Buttons */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                                <button
+                                    type="button"
+                                    onClick={resetForm}
+                                    style={{
+                                        padding: '10px 18px',
+                                        background: 'transparent',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        color: 'var(--text-muted)',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-submit"
+                                    style={{
+                                        width: 'auto',
+                                        background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
+                                        color: '#fff',
+                                        fontWeight: 800,
+                                        borderRadius: '8px',
+                                        padding: '10px 22px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        boxShadow: '0 4px 15px rgba(236, 72, 153, 0.3)'
+                                    }}
+                                >
+                                    <Sparkles size={16} />
+                                    {editingId ? 'Guardar Cambios' : 'Registrar Cumpleaños'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
+            )}
 
-                {/* RIGHT: List & Filter */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                    
-                    {/* Controls Bar: Search, Filter Tabs & Add Birthday Button */}
-                    <div className="card animate-slide-down" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-                        
-                        {/* Tabs */}
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <button
-                                type="button"
-                                onClick={() => setFilterTab('all')}
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.82rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    background: filterTab === 'all' ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
-                                    color: filterTab === 'all' ? '#fff' : 'var(--text-muted)',
-                                    border: filterTab === 'all' ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)'
-                                }}
-                            >
-                                Todos ({birthdays.length})
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setFilterTab('today')}
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.82rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    background: filterTab === 'today' ? '#EC4899' : 'rgba(236, 72, 153, 0.1)',
-                                    color: filterTab === 'today' ? '#fff' : '#EC4899',
-                                    border: filterTab === 'today' ? '1px solid #EC4899' : '1px solid rgba(236, 72, 153, 0.3)'
-                                }}
-                            >
-                                🎂 De Hoy ({todaysBirthdays.length})
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setFilterTab('month')}
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.82rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    background: filterTab === 'month' ? 'rgba(168, 85, 247, 0.8)' : 'rgba(255,255,255,0.04)',
-                                    color: filterTab === 'month' ? '#fff' : 'var(--text-muted)',
-                                    border: filterTab === 'month' ? '1px solid #A855F7' : '1px solid rgba(255,255,255,0.08)'
-                                }}
-                            >
-                                Este Mes ({MONTHS.find(m => m.value === currentMonth)?.label})
-                            </button>
+            {/* Modal Personalizado para Confirmar Eliminación */}
+            {deleteConfirmItem && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10000,
+                    padding: '20px'
+                }}>
+                    <div className="card animate-slide-down" style={{
+                        maxWidth: '440px',
+                        width: '100%',
+                        padding: '28px',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        background: 'linear-gradient(145deg, #111827 0%, #0b0f19 100%)',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(239, 68, 68, 0.15)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '54px',
+                            height: '54px',
+                            borderRadius: '50%',
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px auto',
+                            color: '#EF4444'
+                        }}>
+                            <Trash2 size={26} />
                         </div>
 
-                        {/* Search Input & Add Button at Right */}
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <div style={{ position: 'relative', width: '220px' }}>
-                                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    placeholder="Buscar viewer..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    style={{ paddingLeft: '32px', fontSize: '0.8rem', padding: '6px 10px 6px 30px' }}
-                                />
-                            </div>
+                        <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                            ¿Eliminar cumpleaños?
+                        </h3>
 
+                        <p style={{ margin: '0 0 24px 0', fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                            ¿Seguro que deseas eliminar el cumpleaños de <strong>@{deleteConfirmItem.name}</strong>? Esta acción no se puede deshacer.
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                             <button
                                 type="button"
-                                onClick={handleOpenCreateModal}
+                                onClick={() => setDeleteConfirmItem(null)}
                                 style={{
-                                    padding: '8px 18px',
+                                    flex: 1,
+                                    padding: '10px 18px',
                                     borderRadius: '10px',
-                                    background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
-                                    color: '#fff',
-                                    border: 'none',
-                                    fontWeight: 800,
-                                    fontSize: '0.85rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    boxShadow: '0 4px 14px rgba(236, 72, 153, 0.35)',
-                                    whiteSpace: 'nowrap'
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                                    color: 'var(--text-muted)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
                                 }}
                             >
-                                <Plus size={16} /> Registrar Cumpleaños
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px 18px',
+                                    borderRadius: '10px',
+                                    background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+                                    border: 'none',
+                                    color: '#fff',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+                                }}
+                            >
+                                Sí, Eliminar
                             </button>
                         </div>
                     </div>
-
-                    {/* Today Banner (if any) */}
-                    {todaysBirthdays.length > 0 && (
-                        <div className="card animate-slide-down" style={{
-                            padding: '16px 20px',
-                            background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(244, 63, 94, 0.1))',
-                            border: '1px solid rgba(236, 72, 153, 0.4)',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: '12px'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '1.8rem' }}>🎉</span>
-                                <div>
-                                    <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>
-                                        ¡Hoy es el cumpleaños de {todaysBirthdays.map(b => '@' + b.username).join(', ')}!
-                                    </h4>
-                                    <span style={{ fontSize: '0.78rem', color: '#fbcfe8' }}>
-                                        El bot enviará su mensaje de felicitación al chat de Twitch en lapsus de tiempo que tengas asignado de forma automática.
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Birthday Cards List */}
-                    {filteredBirthdays.length === 0 ? (
-                        <div className="card text-center" style={{ padding: '40px 20px', color: 'var(--text-muted)' }}>
-                            <Cake size={48} opacity={0.3} style={{ marginBottom: '12px' }} />
-                            <p style={{ margin: 0, fontSize: '0.95rem' }}>No se encontraron cumpleaños registrados.</p>
-                            <small>Utiliza el formulario de la izquierda para agregar a tus viewers favoritos.</small>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {filteredBirthdays.map(b => {
-                                const isToday = b.day === currentDay && b.month === currentMonth;
-                                const monthName = MONTHS.find(m => m.value === b.month)?.label || '';
-
-                                return (
-                                    <div
-                                        key={b.id}
-                                        className="card animate-slide-down"
-                                        style={{
-                                            padding: '18px 20px',
-                                            margin: 0,
-                                            borderRadius: '12px',
-                                            background: isToday 
-                                                ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.12), rgba(15, 23, 42, 0.9))' 
-                                                : 'var(--bg-card)',
-                                            border: isToday 
-                                                ? '1.5px solid rgba(236, 72, 153, 0.5)' 
-                                                : '1px solid rgba(255, 255, 255, 0.05)',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            gap: '16px',
-                                            flexWrap: 'wrap',
-                                            boxShadow: isToday ? '0 8px 25px rgba(236, 72, 153, 0.2)' : 'none'
-                                        }}
-                                    >
-                                        {/* Viewer Info & Date */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '220px' }}>
-                                            <div style={{
-                                                width: '50px',
-                                                height: '50px',
-                                                borderRadius: '12px',
-                                                background: isToday ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255,255,255,0.04)',
-                                                border: isToday ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0
-                                            }}>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: isToday ? '#fff' : 'var(--text-main)', lineHeight: '1' }}>
-                                                    {b.day}
-                                                </span>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: isToday ? '#fff' : 'var(--text-muted)', textTransform: 'uppercase' }}>
-                                                    {monthName.substring(0, 3)}
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#fff' }}>
-                                                        @{b.username}
-                                                    </h4>
-                                                    {isToday && (
-                                                        <span style={{ padding: '2px 8px', background: '#EC4899', color: '#fff', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 800 }}>
-                                                            ¡ES HOY! 🎂
-                                                        </span>
-                                                    )}
-                                                    {b.active === false && (
-                                                        <span style={{ padding: '2px 6px', background: 'rgba(239,68,68,0.15)', color: '#EF4444', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700 }}>
-                                                            Pausado
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                                    Fecha: {b.day} de {monthName}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Custom Message preview */}
-                                        <div style={{ flex: 1, minWidth: '240px', background: 'rgba(0,0,0,0.25)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', fontWeight: 700 }}>
-                                                Mensaje para el chat:
-                                            </div>
-                                            <div style={{ fontSize: '0.82rem', color: '#e2e8f0', fontStyle: 'italic', wordBreak: 'break-word' }}>
-                                                "{(b.message || DEFAULT_MESSAGE_TEMPLATE).replace(/@{user}/gi, '@' + b.username).replace(/{user}/gi, '@' + b.username).replace(/@{usuario}/gi, '@' + b.username).replace(/{usuario}/gi, '@' + b.username)}"
-                                            </div>
-                                        </div>
-
-                                        {/* Action buttons */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            
-                                            {/* Send test to chat */}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleTestSendMessage(b)}
-                                                className="btn-add"
-                                                style={{
-                                                    padding: '6px 12px',
-                                                    fontSize: '0.75rem',
-                                                    background: 'rgba(168, 85, 247, 0.12)',
-                                                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                                                    color: '#A855F7',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px'
-                                                }}
-                                                title="Enviar felicitación al chat ahora mismo"
-                                            >
-                                                <Send size={13} /> Probar en Chat
-                                            </button>
-
-                                            {/* Edit */}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleEdit(b)}
-                                                className="btn-add"
-                                                style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                                                title="Editar"
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
-
-                                            {/* Toggle Active */}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleToggleActive(b.id)}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    color: b.active !== false ? '#10B981' : 'var(--text-muted)'
-                                                }}
-                                                title={b.active !== false ? 'Desactivar felicitación' : 'Activar felicitación'}
-                                            >
-                                                {b.active !== false ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
-                                            </button>
-
-                                            {/* Delete */}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDelete(b.id, b.username)}
-                                                style={{
-                                                    background: 'rgba(239, 68, 68, 0.1)',
-                                                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                                                    color: '#EF4444',
-                                                    padding: '6px 8px',
-                                                    borderRadius: '6px',
-                                                    cursor: 'pointer'
-                                                }}
-                                                title="Eliminar"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
                 </div>
-
-            </div>
-
+            )}
         </div>
     );
 }
