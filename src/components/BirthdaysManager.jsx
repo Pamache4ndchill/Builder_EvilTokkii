@@ -59,8 +59,9 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
         const num = Number(val);
         setAutoInterval(num);
         localStorage.setItem('twitch_birthdays_interval', num);
+        localStorage.removeItem('twitch_last_bday_sent');
         window.dispatchEvent(new Event('storage'));
-        triggerToast('⏱️ Intervalo de cumpleaños cambiado a cada ' + num + ' minutos');
+        triggerToast('⏱️ Intervalo de cumpleaños cambiado a cada ' + num + ' minutos (Temporizador Reiniciado)');
     };
 
     const handleMinChatChange = (val) => {

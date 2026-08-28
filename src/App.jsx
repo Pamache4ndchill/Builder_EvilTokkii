@@ -1840,30 +1840,28 @@ function App() {
           }
         }
       });
-      // 🎂 AUTOMATIZACIÓN DE CUMPLEAÑOS EN STREAM
+      // 🎂 AUTOMATIZACIÓN DE CUMPLEAÑOS EN STREAM (100% Garantizada y Precisa)
       const isBdayAuto = localStorage.getItem('twitch_birthdays_auto_enabled') !== 'false';
       if (isBdayAuto) {
-        const bdayIntervalMins = Math.max(1, Number(localStorage.getItem('twitch_birthdays_interval')) || 20);
+        const rawMins = localStorage.getItem('twitch_birthdays_interval');
+        const bdayIntervalMins = Math.max(1, Number(rawMins) || 20);
         const bdayIntervalMs = bdayIntervalMins * 60 * 1000;
         const bdayMinChat = Number(localStorage.getItem('twitch_birthdays_min_chat')) || 0;
         
-        const savedLastBday = Number(localStorage.getItem('twitch_last_bday_sent')) || lastBdaySentTimestampRef.current || now;
-        if (!lastBdaySentTimestampRef.current) {
-          lastBdaySentTimestampRef.current = savedLastBday;
-        }
-        const bdayElapsed = now - savedLastBday;
+        const savedBdaysStr = localStorage.getItem('twitch_viewers_birthdays');
+        if (savedBdaysStr) {
+          try {
+            const allBdays = JSON.parse(savedBdaysStr);
+            const today = new Date();
+            const cDay = today.getDate();
+            const cMonth = today.getMonth() + 1;
+            const activeTodays = allBdays.filter(b => Number(b.day) === cDay && Number(b.month) === cMonth && b.active !== false);
 
-        if (bdayElapsed >= bdayIntervalMs) {
-          const savedBdaysStr = localStorage.getItem('twitch_viewers_birthdays');
-          if (savedBdaysStr) {
-            try {
-              const allBdays = JSON.parse(savedBdaysStr);
-              const today = new Date();
-              const cDay = today.getDate();
-              const cMonth = today.getMonth() + 1;
-              const activeTodays = allBdays.filter(b => Number(b.day) === cDay && Number(b.month) === cMonth && b.active !== false);
+            if (activeTodays.length > 0) {
+              const lastBdaySent = lastBdaySentTimestampRef.current || Number(localStorage.getItem('twitch_last_bday_sent')) || 0;
+              const bdayElapsed = now - lastBdaySent;
 
-              if (activeTodays.length > 0) {
+              if (bdayElapsed >= bdayIntervalMs) {
                 const curChats = userMessagesCountRef.current;
                 const lastChats = lastBdayChatCountRef.current || 0;
                 const diffChats = curChats - lastChats;
@@ -1886,11 +1884,13 @@ function App() {
                   lastBdaySentTimestampRef.current = now;
                   lastBdayChatCountRef.current = curChats;
                   localStorage.setItem('twitch_last_bday_sent', String(now));
+                } else {
+                  addBotLog(`⏳ [Cumpleaños en Espera de Chat] (${diffChats}/${bdayMinChat} msgs requeridos)`);
                 }
               }
-            } catch (e) {
-              console.warn("Error running auto birthday timer:", e);
             }
+          } catch (e) {
+            console.warn("Error running auto birthday timer:", e);
           }
         }
       }
