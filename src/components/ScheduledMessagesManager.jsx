@@ -237,6 +237,7 @@ export default function ScheduledMessagesManager({
     // Modales y formularios
     const [editingMsg, setEditingMsg] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [deleteConfirmId, setDeleteConfirmId] = useState(null);
     const [instantMsgText, setInstantMsgText] = useState('');
     const [instantAnnounceText, setInstantAnnounceText] = useState('');
     const [showInstantEmoji, setShowInstantEmoji] = useState(false);
@@ -435,17 +436,31 @@ export default function ScheduledMessagesManager({
         }
     };
 
-    const handleDeleteMessage = async (id) => {
-        if (!window.confirm('¿Eliminar este mensaje programado?')) return;
-        setMessages(prev => prev.filter(m => m.id !== id));
-        triggerToast('Mensaje programado eliminado');
+    const handleDeleteMessage = (id) => {
+        setDeleteConfirmId(id);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteConfirmId) return;
+        const idToDelete = deleteConfirmId;
+        setDeleteConfirmId(null);
+
+        const updated = messages.filter(m => m.id !== idToDelete);
+        setMessages(updated);
+        try {
+            localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(updated));
+            localStorage.setItem('twitch_scheduled_messages_v2', JSON.stringify(updated));
+            localStorage.removeItem('twitch_last_scheduled_sent_' + idToDelete);
+        } catch (e) {}
+
+        triggerToast('🗑️ Mensaje programado eliminado');
 
         if (supabase) {
             try {
                 await supabase
                     .from('twitch_scheduled_messages')
                     .delete()
-                    .eq('id', String(id));
+                    .eq('id', String(idToDelete));
             } catch (err) {
                 console.warn("Supabase delete note:", err.message);
             }
@@ -939,6 +954,98 @@ export default function ScheduledMessagesManager({
                 </div>
 
             </div>
+
+            {/* Modal Personalizado para Confirmar Eliminación */}
+            {deleteConfirmId && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10000,
+                    padding: '20px'
+                }}>
+                    <div className="card animate-slide-down" style={{
+                        maxWidth: '440px',
+                        width: '100%',
+                        padding: '28px',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        background: 'linear-gradient(145deg, #111827 0%, #0b0f19 100%)',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(239, 68, 68, 0.15)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '54px',
+                            height: '54px',
+                            borderRadius: '50%',
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px auto',
+                            color: '#EF4444'
+                        }}>
+                            <Trash2 size={26} />
+                        </div>
+
+                        <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                            ¿Eliminar mensaje programado?
+                        </h3>
+
+                        <p style={{ margin: '0 0 24px 0', fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                            Esta acción eliminará el mensaje periódicamente del bot y no se volverá a enviar al chat de Twitch.
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirmId(null)}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px 18px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                                    color: 'var(--text-muted)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px 18px',
+                                    borderRadius: '10px',
+                                    background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+                                    border: 'none',
+                                    color: '#fff',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Sí, Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal para Crear/Editar Mensaje Programado */}
             {isModalOpen && editingMsg && (
