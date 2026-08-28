@@ -1483,6 +1483,15 @@ function App() {
     addBotLog("Conectando a Twitch IRC (Modo Permanente)...");
     
     try {
+      // Registrar timestamps actuales para que los temporizadores esperen su ciclo completo
+      const connectNow = Date.now();
+      scheduledMessages.forEach(msg => {
+        scheduledTimestampsRef.current[msg.id] = connectNow;
+        scheduledChatCountsRef.current[msg.id] = userMessagesCountRef.current;
+      });
+      lastBdaySentTimestampRef.current = connectNow;
+      lastBdayChatCountRef.current = userMessagesCountRef.current;
+
       const ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
       wsRef.current = ws;
 
@@ -2016,19 +2025,30 @@ function App() {
     setTwitchGiveawayWinner(null);
   };
 
-  // Auto-conectar el bot de Twitch de forma permanente al abrir el Builder
+  // Control Estricto de Conexión del Bot: Solo se conecta si el interruptor está ACTIVADO
   useEffect(() => {
-    // Save defaults to localStorage if not set
-    localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
-    if (!localStorage.getItem('twitch_bot_oauth')) localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
     if (!localStorage.getItem('twitch_bot_username')) localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
     if (!localStorage.getItem('twitch_bot_channel')) localStorage.setItem('twitch_bot_channel', 'eviltokkii');
 
-    const timer = setTimeout(() => {
-      connectTwitchBot();
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [botOauth, botUsername, botChannel]);
+    const isBotActive = localStorage.getItem('twitch_bot_enabled') === 'true';
+    if (isBotActive) {
+      const timer = setTimeout(() => {
+        // Inicializar timestamps al momento actual para evitar que dispare mensajes viejos de golpe
+        const now = Date.now();
+        scheduledMessages.forEach(msg => {
+          scheduledTimestampsRef.current[msg.id] = now;
+          scheduledChatCountsRef.current[msg.id] = userMessagesCountRef.current;
+        });
+        lastBdaySentTimestampRef.current = now;
+        lastBdayChatCountRef.current = userMessagesCountRef.current;
+
+        connectTwitchBot();
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      addBotLog("Bot en estado DESACTIVADO. Pulsa 'Activar Bot' en la casilla de Credenciales para conectarlo.");
+    }
+  }, []);
 
   // Validar sesión y username al cargar
   useEffect(() => {

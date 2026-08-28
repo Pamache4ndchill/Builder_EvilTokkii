@@ -97,7 +97,8 @@ export default function BotCredentialsManager({
         setIsSaving(false);
         triggerToast('✅ ¡Credenciales del Bot guardadas con éxito!');
 
-        // Reconnect with new credentials
+        // Guardar estado activo si guardan credenciales y reconectar
+        localStorage.setItem('twitch_bot_enabled', 'true');
         if (connectTwitchBot) {
             setTimeout(() => {
                 connectTwitchBot();
@@ -158,19 +159,53 @@ export default function BotCredentialsManager({
                         <button
                             type="button"
                             className="btn-submit"
-                            style={{ width: 'auto', padding: '8px 16px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#EF4444', fontSize: '0.8rem' }}
-                            onClick={disconnectTwitchBot}
+                            style={{ 
+                                width: 'auto', 
+                                padding: '8px 20px', 
+                                background: 'rgba(239, 68, 68, 0.15)', 
+                                border: '1px solid rgba(239, 68, 68, 0.4)', 
+                                color: '#EF4444', 
+                                fontSize: '0.85rem',
+                                fontWeight: 800,
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                            onClick={() => {
+                                localStorage.setItem('twitch_bot_enabled', 'false');
+                                disconnectTwitchBot();
+                                triggerToast('🔴 Bot DESACTIVADO. No se conectará al refrescar.');
+                            }}
                         >
-                            Desconectar
+                            <WifiOff size={15} /> Desactivar Bot
                         </button>
                     ) : (
                         <button
                             type="button"
                             className="btn-submit"
-                            style={{ width: 'auto', padding: '8px 18px', background: '#9146FF', color: '#fff', fontSize: '0.8rem', fontWeight: 700 }}
-                            onClick={connectTwitchBot}
+                            style={{ 
+                                width: 'auto', 
+                                padding: '8px 22px', 
+                                background: 'linear-gradient(135deg, #10B981, #059669)', 
+                                color: '#fff', 
+                                fontSize: '0.85rem', 
+                                fontWeight: 800,
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)'
+                            }}
+                            onClick={() => {
+                                localStorage.setItem('twitch_bot_enabled', 'true');
+                                connectTwitchBot();
+                                triggerToast('🟢 Bot ACTIVADO y Conectado.');
+                            }}
                         >
-                            Conectar Ahora
+                            <Wifi size={15} /> Activar y Conectar Bot
                         </button>
                     )}
                 </div>
