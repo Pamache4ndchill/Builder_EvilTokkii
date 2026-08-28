@@ -760,52 +760,7 @@ export default function ScheduledMessagesManager({
                 {/* Columna Derecha: Consola + Mensaje Instantáneo + Anuncio Destacado + Info */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     
-                    {/* Consola de Eventos */}
-                    <div className="card animate-slide-down" style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '420px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                            <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Terminal size={16} color="#38bdf8" /> Consola de Chat en Vivo
-                            </h4>
-                            <button
-                                type="button"
-                                onClick={() => setBotLogs([])}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer' }}
-                            >
-                                Limpiar consola
-                            </button>
-                        </div>
 
-                        <div style={{
-                            flex: 1,
-                            background: '#090d16',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            borderRadius: '10px',
-                            padding: '12px',
-                            fontFamily: 'Consolas, monospace',
-                            fontSize: '0.82rem',
-                            overflowY: 'auto',
-                            display: 'flex',
-                            flexDirection: 'column-reverse',
-                            gap: '6px'
-                        }}>
-                            {botLogs.map(log => (
-                                <div key={log.id} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>
-                                    <span style={{ color: '#64748b' }}>[{log.time}] </span>
-                                    {log.type === 'chat' && <span style={{ color: '#38bdf8' }}>{log.message}</span>}
-                                    {log.type === 'sent' && <span style={{ color: '#a855f7', fontWeight: 600 }}>{log.message}</span>}
-                                    {log.type === 'success' && <span style={{ color: '#22c55e' }}>{log.message}</span>}
-                                    {log.type === 'error' && <span style={{ color: '#ef4444' }}>{log.message}</span>}
-                                    {log.type === 'info' && <span style={{ color: '#94a3b8' }}>{log.message}</span>}
-                                    {log.type === 'warn' && <span style={{ color: '#f59e0b' }}>{log.message}</span>}
-                                </div>
-                            ))}
-                            {botLogs.length === 0 && (
-                                <div style={{ color: '#475569', fontStyle: 'italic', textAlign: 'center', marginTop: '3rem' }}>
-                                    Esperando eventos del chat de Twitch...
-                                </div>
-                            )}
-                        </div>
-                    </div>
 
                     {/* Enviar Mensaje Rápido con Emojis */}
                     <div className="card animate-slide-down" style={{ padding: '20px', position: 'relative' }}>
