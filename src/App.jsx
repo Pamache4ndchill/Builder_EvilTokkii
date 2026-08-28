@@ -1442,6 +1442,8 @@ function App() {
   const detectedBirthdayUsersRef = useRef(new Set());
   const scheduledTimestampsRef = useRef({});
   const scheduledChatCountsRef = useRef({});
+  const lastBdaySentTimestampRef = useRef(0);
+  const lastBdayChatCountRef = useRef(0);
 
   const addBotLog = (text) => {
     const time = new Date().toLocaleTimeString();
@@ -1774,6 +1776,56 @@ function App() {
           }
         }
       });
+      // 🎂 AUTOMATIZACIÓN DE CUMPLEAÑOS EN STREAM
+      const isBdayAuto = localStorage.getItem('twitch_birthdays_auto_enabled') !== 'false';
+      if (isBdayAuto) {
+        const bdayIntervalMins = Math.max(1, Number(localStorage.getItem('twitch_birthdays_interval')) || 20);
+        const bdayIntervalMs = bdayIntervalMins * 60 * 1000;
+        const bdayMinChat = Number(localStorage.getItem('twitch_birthdays_min_chat')) || 0;
+        
+        const lastBdaySent = lastBdaySentTimestampRef.current || 0;
+        const bdayElapsed = now - lastBdaySent;
+
+        if (bdayElapsed >= bdayIntervalMs) {
+          const savedBdaysStr = localStorage.getItem('twitch_viewers_birthdays');
+          if (savedBdaysStr) {
+            try {
+              const allBdays = JSON.parse(savedBdaysStr);
+              const today = new Date();
+              const cDay = today.getDate();
+              const cMonth = today.getMonth() + 1;
+              const activeTodays = allBdays.filter(b => Number(b.day) === cDay && Number(b.month) === cMonth && b.active !== false);
+
+              if (activeTodays.length > 0) {
+                const curChats = userMessagesCountRef.current;
+                const lastChats = lastBdayChatCountRef.current || 0;
+                const diffChats = curChats - lastChats;
+
+                if (bdayMinChat <= 0 || diffChats >= bdayMinChat) {
+                  activeTodays.forEach((item, idx) => {
+                    setTimeout(() => {
+                      const defMsg = '¡Feliz cumpleaños @{user}! 🎉🎂 Toda la comunidad de EvilTokkii te desea un día increíble y lleno de bendiciones 🥳💜';
+                      const template = item.message || defMsg;
+                      const formatted = template
+                        .replace(/@{user}/gi, '@' + item.username)
+                        .replace(/{user}/gi, '@' + item.username)
+                        .replace(/@{usuario}/gi, '@' + item.username)
+                        .replace(/{usuario}/gi, '@' + item.username);
+                      addBotLog(`🎂 [Cumpleaños Automático - cada ${bdayIntervalMins}m]: Felicitando a @${item.username}`);
+                      enviarMensajeTwitch(formatted, true);
+                    }, idx * 2500);
+                  });
+
+                  lastBdaySentTimestampRef.current = now;
+                  lastBdayChatCountRef.current = curChats;
+                }
+              }
+            } catch (e) {
+              console.warn("Error running auto birthday timer:", e);
+            }
+          }
+        }
+      }
     }, 5000); // Revisa cada 5 segundos con precisión absoluta
 
     intervalsRef.current.push(masterTimer);

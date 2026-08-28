@@ -43,6 +43,52 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
     const [filterTab, setFilterTab] = useState('all'); // 'all', 'today', 'month', 'inactive'
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Automation Settings
+    const [isAutoEnabled, setIsAutoEnabled] = useState(() => localStorage.getItem('twitch_birthdays_auto_enabled') !== 'false');
+    const [autoInterval, setAutoInterval] = useState(() => Number(localStorage.getItem('twitch_birthdays_interval')) || 20);
+    const [autoMinChat, setAutoMinChat] = useState(() => Number(localStorage.getItem('twitch_birthdays_min_chat')) || 0);
+
+    const handleAutoToggle = (enabled) => {
+        setIsAutoEnabled(enabled);
+        localStorage.setItem('twitch_birthdays_auto_enabled', enabled ? 'true' : 'false');
+        window.dispatchEvent(new Event('storage'));
+        triggerToast(enabled ? '🟢 Felicitaciones automáticas ACTIVADAS' : '🔴 Felicitaciones automáticas PAUSADAS');
+    };
+
+    const handleIntervalChange = (val) => {
+        const num = Number(val);
+        setAutoInterval(num);
+        localStorage.setItem('twitch_birthdays_interval', num);
+        window.dispatchEvent(new Event('storage'));
+        triggerToast('⏱️ Intervalo de cumpleaños cambiado a cada ' + num + ' minutos');
+    };
+
+    const handleMinChatChange = (val) => {
+        const num = Number(val);
+        setAutoMinChat(num);
+        localStorage.setItem('twitch_birthdays_min_chat', num);
+        window.dispatchEvent(new Event('storage'));
+        triggerToast('💬 Mensajes mínimos requeridos: ' + num);
+    };
+
+    const handleSendAllTodayNow = () => {
+        if (todaysBirthdays.length === 0) {
+            triggerToast('⚠️ No hay cumpleañeros registrados para hoy');
+            return;
+        }
+        todaysBirthdays.forEach((item, idx) => {
+            setTimeout(() => {
+                const text = (item.message || DEFAULT_MESSAGE_TEMPLATE)
+                    .replace(/@{user}/gi, '@' + item.username)
+                    .replace(/{user}/gi, '@' + item.username)
+                    .replace(/@{usuario}/gi, '@' + item.username)
+                    .replace(/{usuario}/gi, '@' + item.username);
+                enviarMensajeTwitch(text);
+            }, idx * 2500);
+        });
+        triggerToast('🎉 ¡Felicitaciones enviadas al chat para los cumpleañeros de hoy!');
+    };
+
     const todayDate = new Date();
     const currentDay = todayDate.getDate();
     const currentMonth = todayDate.getMonth() + 1;
@@ -272,6 +318,101 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                         {isBotConnected ? 'Bot de Twitch Activo' : 'Bot Desconectado'}
                     </div>
                 </div>
+            </div>
+
+                        {/* Automation Settings Banner */}
+            <div className="card animate-slide-down" style={{ 
+                padding: '20px 24px', 
+                background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)', 
+                border: '1px solid rgba(236, 72, 153, 0.3)',
+                borderRadius: '16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '20px'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                            ⏰ Temporizador Automático:
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => handleAutoToggle(!isAutoEnabled)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '6px 14px',
+                                borderRadius: '20px',
+                                border: isAutoEnabled ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+                                background: isAutoEnabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                color: isAutoEnabled ? '#22c55e' : '#ef4444',
+                                fontWeight: 800,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {isAutoEnabled ? '🟢 ACTIVADO' : '🔴 PAUSADO'}
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Enviar cada:</span>
+                        <select
+                            className="form-control"
+                            value={autoInterval}
+                            onChange={(e) => handleIntervalChange(e.target.value)}
+                            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem', fontWeight: 700, margin: 0 }}
+                        >
+                            <option value={5}>5 minutos</option>
+                            <option value={10}>10 minutos</option>
+                            <option value={15}>15 minutos</option>
+                            <option value={20}>20 minutos (Recomendado)</option>
+                            <option value={30}>30 minutos</option>
+                            <option value={45}>45 minutos</option>
+                            <option value={60}>60 minutos</option>
+                        </select>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mín. mensajes chat:</span>
+                        <select
+                            className="form-control"
+                            value={autoMinChat}
+                            onChange={(e) => handleMinChatChange(e.target.value)}
+                            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem', fontWeight: 700, margin: 0 }}
+                        >
+                            <option value={0}>Sin límite (Solo tiempo)</option>
+                            <option value={5}>5 mensajes</option>
+                            <option value={10}>10 mensajes</option>
+                            <option value={20}>20 mensajes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={handleSendAllTodayNow}
+                    disabled={todaysBirthdays.length === 0}
+                    style={{
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        background: todaysBirthdays.length > 0 ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255,255,255,0.05)',
+                        color: todaysBirthdays.length > 0 ? '#fff' : 'var(--text-muted)',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.88rem',
+                        cursor: todaysBirthdays.length > 0 ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: todaysBirthdays.length > 0 ? '0 4px 15px rgba(236, 72, 153, 0.35)' : 'none'
+                    }}
+                >
+                    <Send size={16} /> Felicitar en Vivo Ahora
+                </button>
             </div>
 
             {/* Main Grid: Left Form, Right List */}
