@@ -65,8 +65,11 @@ export default function BotCredentialsManager({
     const handleSave = async (e) => {
         if (e) e.preventDefault();
         const cleanChannel = botChannel.trim().toLowerCase().replace(/^#/, '');
-        const cleanUser = botUsername.trim();
-        const cleanOauth = botOauth.trim();
+        const cleanUser = botUsername.trim().replace(/^@/, '');
+        let cleanOauth = botOauth.trim();
+        if (cleanOauth && !cleanOauth.startsWith('oauth:')) {
+          cleanOauth = 'oauth:' + cleanOauth;
+        }
 
         if (!cleanChannel || !cleanUser || !cleanOauth) {
             triggerToast('⚠️ Por favor completa todos los campos (Canal, Usuario y Token)');

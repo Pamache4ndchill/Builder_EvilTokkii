@@ -1636,8 +1636,11 @@ function App() {
           }
         } else if (rawMessage.includes("366")) {
           addBotLog(`¡Unido con éxito al chat del canal #${botChannel}!`);
-        } else if (rawMessage.includes("NOTICE") || rawMessage.includes("421") || rawMessage.includes("login failed")) {
-          addBotLog(`Twitch: ${rawMessage.trim()}`);
+        } else if (rawMessage.includes("NOTICE") || rawMessage.includes("421") || rawMessage.includes("login failed") || rawMessage.includes("Login unsuccessful")) {
+          addBotLog(`⚠️ Twitch Aviso: ${rawMessage.trim()}`);
+          if (rawMessage.includes("Login authentication failed") || rawMessage.includes("Login unsuccessful")) {
+            addBotLog("❌ Error de Autenticación en Twitch: El Token OAuth no es válido o ha expirado. Por favor genera uno nuevo en https://twitchapps.com/tmi/");
+          }
         }
       };
 
@@ -1722,23 +1725,20 @@ function App() {
   const enviarMensajeTwitch = async (texto, silent = false) => {
     let formattedText = (texto || '').trim();
 
-    // Detección 100% case-insensitive para Anuncios (/announce, /Announce, /ANNOUNCE, etc.)
+    // Detección para Anuncios (/announce)
     const isAnnounce = /^[/\\.](announce|announcement)\s+/i.test(formattedText);
     if (isAnnounce) {
       const content = formattedText.replace(/^[/\\.](announce|announcement)\s+/i, '').trim();
-      const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
-      if (sentViaHelix) {
-        return true;
-      }
-      formattedText = content;
+      formattedText = '📢 [ANUNCIO]: ' + content;
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(`PRIVMSG #${botChannel.toLowerCase()} :${formattedText}`);
-      addBotLog(`Mensaje enviado: ${formattedText}`);
+      const channelTarget = botChannel.toLowerCase().replace(/^#/, '').trim();
+      wsRef.current.send(`PRIVMSG #${channelTarget} :${formattedText}`);
+      addBotLog(`✅ Mensaje enviado a #${channelTarget}: ${formattedText}`);
       return true;
     } else {
-      addBotLog("Error: El WebSocket no está abierto. Conéctate primero.");
+      addBotLog("❌ Error: El WebSocket no está abierto. Pulsa 'Activar y Conectar Bot'.");
       if (!silent) {
         triggerToast("⚠️ Conéctate a Twitch primero.");
       }
