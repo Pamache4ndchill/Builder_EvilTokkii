@@ -968,140 +968,93 @@ function App() {
     localStorage.setItem('dashboard_player_enabled', isPlayerEnabledInDashboard ? 'true' : 'false');
   }, [isPlayerEnabledInDashboard]);
 
-  const searchYouTube = async (query) => {
-    const urlRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-    const match = query.match(urlRegex);
-    if (match) {
-      const videoId = match[1];
-      try {
-        const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
-        const data = await res.json();
-        return { videoId, title: data.title || 'Video de YouTube' };
-      } catch {
-        return { videoId, title: 'Video de YouTube' };
-      }
+  const handleSongRequest = async (query, requester) => {
+    // Si las peticiones están pausadas, no procesar ni responder nada
+    if (!isSongRequestEnabledRef.current) {
+      addBotLog(`[Song Request] Petición de @${requester} ignorada porque las peticiones están pausadas.`);
+      return;
     }
-    
-    // Invidious API Fallback Instances for searching without API Keys
-    const instances = [
-      'https://invidious.projectsegfau.lt',
-      'https://yewtu.be',
-      'https://vid.puffyan.us',
-      'https://invidious.flokinet.to'
-    ];
-    
-    for (const instance of instances) {
-      try {
-        const res = await fetch(`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
+
+    try {
+      addBotLog(`[Spotify SR] Petición recibida de @${requester}: "${query}"`);
+      
+      let spotifyToken = localStorage.getItem('spotify_access_token');
+      if (!spotifyToken) {
+        addBotLog(`[Spotify SR] ⚠️ No hay cuenta de Spotify conectada en el Builder.`);
+        enviarMensajeTwitch(`@${requester} ⚠️ El reproductor de Spotify no está conectado actualmente en el stream.`, true);
+        return;
+      }
+
+      let querySearch = query.trim();
+      let track = null;
+
+      // Buscar por ID si es enlace directo de Spotify
+      if (querySearch.includes('spotify.com/track/')) {
+        const trackId = querySearch.split('track/')[1]?.split('?')[0];
+        const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+          headers: { Authorization: `Bearer ${spotifyToken}` }
+        });
+        if (res.ok) track = await res.json();
+      } else {
+        // Buscar por texto en la API de Spotify
+        const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(querySearch)}&type=track&limit=1`, {
+          headers: { Authorization: `Bearer ${spotifyToken}` }
+        });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.length > 0) {
-            const firstResult = data.find(item => item.type === 'video');
-            if (firstResult) {
-              return { videoId: firstResult.videoId, title: firstResult.title };
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`Failed searching with instance ${instance}:`, e);
-      }
-    }
-    
-    throw new Error("No se pudo buscar la canción en YouTube. Intenta usar un enlace directo.");
-  };
-
-  const handleSongRequest = async (query, requester) => {
-    try {
-      addBotLog(`[Twitch Chat] Song Request por @${requester}: "${query}"`);
-      
-      // Check if Spotify is active
-      const spotifyToken = localStorage.getItem('spotify_access_token');
-      if (spotifyToken) {
-        try {
-          let querySearch = query.trim();
-          let track = null;
-          if (querySearch.includes('spotify.com/track/')) {
-            const trackId = querySearch.split('track/')[1]?.split('?')[0];
-            const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-              headers: { Authorization: `Bearer ${spotifyToken}` }
-            });
-            if (res.ok) track = await res.json();
-          } else {
-            const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(querySearch)}&type=track&limit=1`, {
-              headers: { Authorization: `Bearer ${spotifyToken}` }
-            });
-            if (res.ok) {
-              const data = await res.json();
-              track = data.tracks?.items?.[0];
-            }
-          }
-
-          if (track) {
-            await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${spotifyToken}` }
-            });
-
-            await supabase.from('song_requests').insert([{
-              title: `${track.name} - ${track.artists.map(a => a.name).join(', ')}`,
-              video_id: track.id,
-              requested_by: requester,
-              status: 'pending'
-            }]);
-
-            addBotLog(`[Spotify] Añadida a la cola: "${track.name}" por @${requester}`);
-            
-            const template = localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}';
-            const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
-            const finalMsg = template
-              .replace(/{user}/gi, requester)
-              .replace(/{requester}/gi, requester)
-              .replace(/{song}/gi, track.name)
-              .replace(/{title}/gi, track.name)
-              .replace(/{artist}/gi, artistsStr);
-              
-            enviarMensajeTwitch(finalMsg, true);
-            fetchSongs();
-            return;
-          }
-        } catch (spErr) {
-          console.warn("Spotify queue error, using fallback:", spErr);
+          track = data.tracks?.items?.[0];
         }
       }
 
-      const song = await searchYouTube(query);
-      
-      // Check database to see if we need to auto-play (nothing playing or pending)
-      const { data: activeSongs } = await supabase
-        .from('song_requests')
-        .select('id')
-        .eq('status', 'playing');
-        
-      const { data: pendingSongs } = await supabase
-        .from('song_requests')
-        .select('id')
-        .eq('status', 'pending');
+      if (!track) {
+        addBotLog(`[Spotify SR] No se encontró ninguna pista para: "${query}"`);
+        enviarMensajeTwitch(`@${requester} ⚠️ No se encontró esa canción en Spotify. Intenta con el nombre exacto o el enlace.`, true);
+        return;
+      }
 
-      const isQueueEmpty = (!activeSongs || activeSongs.length === 0) && (!pendingSongs || pendingSongs.length === 0);
+      // Añadir a la cola de reproducción de Spotify
+      const queueRes = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${spotifyToken}` }
+      });
+
+      // Si no hay reproductor activo, intentar iniciar reproducción directa
+      if (queueRes.status === 404 || queueRes.status === 403) {
+        await fetch(`https://api.spotify.com/v1/me/player/play`, {
+          method: 'PUT',
+          headers: { 
+            Authorization: `Bearer ${spotifyToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uris: [track.uri] })
+        });
+      }
+
+      // Guardar en Supabase para el historial y cola visual
+      const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
+      await supabase.from('song_requests').insert([{
+        title: `${track.name} - ${artistsStr}`,
+        video_id: track.id,
+        requested_by: requester,
+        status: 'pending'
+      }]);
+
+      addBotLog(`[Spotify SR] ✅ Añadida a la cola de Spotify: "${track.name}" por @${requester}`);
       
-      const { error } = await supabase
-        .from('song_requests')
-        .insert([{ 
-          title: song.title, 
-          video_id: song.videoId, 
-          requested_by: requester, 
-          status: isQueueEmpty ? 'playing' : 'pending',
-          played_at: isQueueEmpty ? new Date().toISOString() : null
-        }]);
+      const template = localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}';
+      const finalMsg = template
+        .replace(/{user}/gi, requester)
+        .replace(/{requester}/gi, requester)
+        .replace(/{song}/gi, track.name)
+        .replace(/{title}/gi, track.name)
+        .replace(/{artist}/gi, artistsStr);
         
-      if (error) throw error;
-      
-      enviarMensajeTwitch(`@${requester} ¡Canción añadida a la cola! 🎵 "${song.title}"`, true);
-      // Update local state instantly
+      enviarMensajeTwitch(finalMsg, true);
       fetchSongs();
+
     } catch (err) {
-      addBotLog(`Error al procesar Song Request: ${err.message}`);
-      enviarMensajeTwitch(`@${requester} ⚠️ Error: ${err.message}`, true);
+      addBotLog(`[Spotify SR Error] ${err.message}`);
+      enviarMensajeTwitch(`@${requester} ⚠️ Error al conectar con Spotify. Intenta de nuevo.`, true);
     }
   };
 
@@ -1398,25 +1351,49 @@ function App() {
     e.preventDefault();
     if (!manualQuery.trim()) return;
     try {
-      const song = await searchYouTube(manualQuery);
-      
-      // Determine if we need to auto-play (if queue and current are empty)
-      const isQueueEmpty = !currentSong && songRequests.length === 0;
+      const spotifyToken = localStorage.getItem('spotify_access_token');
+      if (!spotifyToken) {
+        triggerToast("⚠️ Conecta tu cuenta de Spotify en la pestaña de Song Request primero");
+        return;
+      }
+      let querySearch = manualQuery.trim();
+      let track = null;
+      if (querySearch.includes('spotify.com/track/')) {
+        const trackId = querySearch.split('track/')[1]?.split('?')[0];
+        const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+          headers: { Authorization: `Bearer ${spotifyToken}` }
+        });
+        if (res.ok) track = await res.json();
+      } else {
+        const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(querySearch)}&type=track&limit=1`, {
+          headers: { Authorization: `Bearer ${spotifyToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          track = data.tracks?.items?.[0];
+        }
+      }
 
-      const { error } = await supabase
-        .from('song_requests')
-        .insert([{ 
-          title: song.title, 
-          video_id: song.videoId, 
-          requested_by: sessionUsername || 'Streamer', 
-          status: isQueueEmpty ? 'playing' : 'pending',
-          played_at: isQueueEmpty ? new Date().toISOString() : null
-        }]);
+      if (!track) {
+        triggerToast("⚠️ No se encontró esa canción en Spotify.");
+        return;
+      }
+
+      await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${spotifyToken}` }
+      });
+
+      const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
+      await supabase.from('song_requests').insert([{ 
+        title: `${track.name} - ${artistsStr}`, 
+        video_id: track.id, 
+        requested_by: sessionUsername || 'Streamer', 
+        status: 'pending'
+      }]);
         
-      if (error) throw error;
       setManualQuery('');
-      triggerToast("🎵 Canción añadida manualmente!");
-      // Update local state instantly
+      triggerToast(`🎵 "${track.name}" añadida a la cola de Spotify!`);
       fetchSongs();
     } catch (err) {
       triggerToast(`⚠️ Error: ${err.message}`);
