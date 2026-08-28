@@ -336,9 +336,9 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                 </div>
             </div>
 
-            {/* Automation Settings Banner (100% Una sola línea horizontal estricta) */}
+            {/* Automation Settings Banner (100% Ajuste perfecto sin scrollbar) */}
             <div className="card animate-slide-down" style={{ 
-                padding: '14px 22px', 
+                padding: '12px 18px', 
                 background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)', 
                 border: '1px solid rgba(236, 72, 153, 0.3)',
                 borderRadius: '16px',
@@ -346,13 +346,13 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 flexWrap: 'nowrap',
-                gap: '14px',
-                overflowX: 'auto'
+                gap: '12px',
+                overflow: 'hidden'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'nowrap', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                            ⏰ Temporizador Automático:
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap', flexShrink: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                            ⏰ Temporizador:
                         </span>
                         <button
                             type="button"
@@ -360,69 +360,69 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '5px 12px',
+                                gap: '5px',
+                                padding: '4px 10px',
                                 borderRadius: '20px',
                                 border: isAutoEnabled ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
                                 background: isAutoEnabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
                                 color: isAutoEnabled ? '#22c55e' : '#ef4444',
                                 fontWeight: 800,
-                                fontSize: '0.78rem',
+                                fontSize: '0.74rem',
                                 cursor: 'pointer',
                                 whiteSpace: 'nowrap'
                             }}
                         >
-                            {isAutoEnabled ? '🟢 ACTIVADO' : '🔴 PAUSADO'}
+                            {isAutoEnabled ? '🟢 ACTIVO' : '🔴 PAUSA'}
                         </button>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>Enviar cada:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Cada:</span>
                         <select
                             className="form-control"
                             value={autoInterval}
                             onChange={(e) => handleIntervalChange(e.target.value)}
-                            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.82rem', fontWeight: 700, margin: 0 }}
+                            style={{ width: 'auto', padding: '3px 8px', fontSize: '0.8rem', fontWeight: 700, margin: 0 }}
                         >
-                            <option value={5}>5 minutos</option>
-                            <option value={10}>10 minutos</option>
-                            <option value={15}>15 minutos</option>
+                            <option value={5}>5 min</option>
+                            <option value={10}>10 min</option>
+                            <option value={15}>15 min</option>
                             <option value={20}>20 min (Recomendado)</option>
-                            <option value={30}>30 minutos</option>
-                            <option value={45}>45 minutos</option>
-                            <option value={60}>60 minutos</option>
+                            <option value={30}>30 min</option>
+                            <option value={45}>45 min</option>
+                            <option value={60}>60 min</option>
                         </select>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>Mín. mensajes chat:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Mín. chat:</span>
                         <select
                             className="form-control"
                             value={autoMinChat}
                             onChange={(e) => handleMinChatChange(e.target.value)}
-                            style={{ width: 'auto', padding: '4px 10px', fontSize: '0.82rem', fontWeight: 700, margin: 0 }}
+                            style={{ width: 'auto', padding: '3px 8px', fontSize: '0.8rem', fontWeight: 700, margin: 0 }}
                         >
                             <option value={0}>Sin límite (Solo tiempo)</option>
-                            <option value={5}>5 mensajes</option>
-                            <option value={10}>10 mensajes</option>
-                            <option value={20}>20 mensajes</option>
+                            <option value={5}>5 msgs</option>
+                            <option value={10}>10 msgs</option>
+                            <option value={20}>20 msgs</option>
                         </select>
                     </div>
                 </div>
 
-                {/* Botón Felicitar en Vivo Ahora en la misma línea estricta */}
+                {/* Botón Felicitar en Vivo Ahora */}
                 <button
                     type="button"
                     onClick={handleSendAllTodayNow}
                     disabled={todaysBirthdays.length === 0}
                     style={{
-                        padding: '8px 18px',
+                        padding: '7px 15px',
                         borderRadius: '10px',
                         background: todaysBirthdays.length > 0 ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255,255,255,0.05)',
                         color: todaysBirthdays.length > 0 ? '#fff' : 'var(--text-muted)',
                         border: 'none',
                         fontWeight: 800,
-                        fontSize: '0.82rem',
+                        fontSize: '0.8rem',
                         cursor: todaysBirthdays.length > 0 ? 'pointer' : 'not-allowed',
                         display: 'flex',
                         alignItems: 'center',
@@ -432,7 +432,7 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                         flexShrink: 0
                     }}
                 >
-                    <Send size={14} /> Felicitar en Vivo Ahora
+                    <Send size={13} /> Felicitar en Vivo Ahora
                 </button>
             </div>
 
