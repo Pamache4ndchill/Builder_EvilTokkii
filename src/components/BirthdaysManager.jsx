@@ -280,7 +280,9 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                             Gestor de Cumpleaños de Viewers
                         </h2>
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            El bot felicitará automáticamente a los cumpleañeros del día cada 20 minutos en el chat de Twitch
+                            {isAutoEnabled 
+                                ? `El bot felicitará automáticamente a los cumpleañeros del día cada ${autoInterval} minutos en el chat de Twitch`
+                                : 'Felicitaciones automáticas en pausa. Activa el interruptor para enviarlas periódicamente.'}
                         </span>
                     </div>
                 </div>
@@ -648,7 +650,9 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                         ¡Hoy es el cumpleaños de {todaysBirthdays.map(b => '@' + b.username).join(', ')}!
                                     </h4>
                                     <span style={{ fontSize: '0.78rem', color: '#fbcfe8' }}>
-                                        El bot enviará su mensaje de felicitación al chat de Twitch cada 20 minutos de forma automática.
+                                        {isAutoEnabled 
+                                            ? `El bot enviará su mensaje de felicitación al chat de Twitch cada ${autoInterval} minutos de forma automática.`
+                                            : 'El temporizador automático de cumpleaños está pausado actualmente.'}
                                     </span>
                                 </div>
                             </div>
