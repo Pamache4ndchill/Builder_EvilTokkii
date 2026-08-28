@@ -768,16 +768,40 @@ function App() {
   const [manualQuery, setManualQuery] = useState('');
   const [playerVolume, setPlayerVolume] = useState(() => Number(localStorage.getItem('song_player_volume')) || 50);
   const [isPlayerEnabledInDashboard, setIsPlayerEnabledInDashboard] = useState(() => localStorage.getItem('dashboard_player_enabled') === 'true');
-  const [songRequestCommand, setSongRequestCommand] = useState(() => localStorage.getItem('song_request_command') || '!sr');
-  const [isSongRequestEnabled, setIsSongRequestEnabled] = useState(() => localStorage.getItem('song_request_enabled') !== 'false');
+  const [songRequestCommand, setSongRequestCommand] = useState(() => localStorage.getItem('song_request_command') || '!spotifybloqued');
+  const [isSongRequestEnabled, setIsSongRequestEnabled] = useState(() => localStorage.getItem('song_request_enabled') === 'true');
+
+  const songRequestCommandRef = useRef(songRequestCommand);
+  const isSongRequestEnabledRef = useRef(isSongRequestEnabled);
 
   useEffect(() => {
+    songRequestCommandRef.current = songRequestCommand;
     localStorage.setItem('song_request_command', songRequestCommand);
   }, [songRequestCommand]);
 
   useEffect(() => {
+    isSongRequestEnabledRef.current = isSongRequestEnabled;
     localStorage.setItem('song_request_enabled', isSongRequestEnabled ? 'true' : 'false');
   }, [isSongRequestEnabled]);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const savedCmd = localStorage.getItem('song_request_command') || '!spotifybloqued';
+      const savedEnabled = localStorage.getItem('song_request_enabled') === 'true';
+      setSongRequestCommand(savedCmd);
+      setIsSongRequestEnabled(savedEnabled);
+      songRequestCommandRef.current = savedCmd;
+      isSongRequestEnabledRef.current = savedEnabled;
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('sr-state-changed', handleStorageChange);
+    window.addEventListener('sr-cmd-changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('sr-state-changed', handleStorageChange);
+      window.removeEventListener('sr-cmd-changed', handleStorageChange);
+    };
+  }, []);
 
   const [allSongs, setAllSongs] = useState([]);
   const [chatCommands, setChatCommands] = useState([]);
@@ -1555,19 +1579,21 @@ function App() {
               console.warn("Error detecting birthday chatter:", bdayErr);
             }
 
-            // Song Request Command Parsers (Control Estricto)
-            const activeCmd = (songRequestCommand || '!sr').toLowerCase().trim();
+            // Song Request Command Parsers (Control Estricto y Reactivo)
+            const currentSRState = isSongRequestEnabledRef.current;
+            const currentSRCmd = (songRequestCommandRef.current || localStorage.getItem('song_request_command') || '!spotifybloqued').toLowerCase().trim();
             const textLower = text.toLowerCase().trim();
-            const customPrefix = activeCmd + ' ';
+            const customPrefix = currentSRCmd + ' ';
 
-            if (isSongRequestEnabled && textLower.startsWith(customPrefix)) {
+            // Si las peticiones están activas Y el mensaje empieza EXACTAMENTE con el comando configurado:
+            if (currentSRState && textLower.startsWith(customPrefix)) {
               const query = text.trim().slice(customPrefix.length).trim();
               if (query) {
                 handleSongRequest(query, user);
               }
-            } else if (isSongRequestEnabled && (textLower === "!song" || textLower === "!currentsong")) {
+            } else if (currentSRState && (textLower === "!song" || textLower === "!currentsong")) {
               handleGetActiveSong();
-            } else if (text === "!skip") {
+            } else if (currentSRState && textLower === "!skip") {
               if (user.toLowerCase() === botChannel.toLowerCase() || user.toLowerCase() === botUsername.toLowerCase()) {
                 handleSkipSong();
               }

@@ -62,12 +62,12 @@ export default function SpotifySongRequestManager({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [localCmd, setLocalCmd] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+    const [localCmd, setLocalCmd] = useState(() => localStorage.getItem('song_request_command') || '!spotifybloqued');
     const songRequestCommand = propCmd !== undefined ? propCmd : localCmd;
     const setSongRequestCommand = propSetCmd !== undefined ? propSetCmd : setLocalCmd;
-    const [customCommandInput, setCustomCommandInput] = useState(() => localStorage.getItem('song_request_command') || '!sr');
+    const [customCommandInput, setCustomCommandInput] = useState(() => localStorage.getItem('song_request_command') || '!spotifybloqued');
 
-    const [localEnabled, setLocalEnabled] = useState(() => localStorage.getItem('song_request_enabled') !== 'false');
+    const [localEnabled, setLocalEnabled] = useState(() => localStorage.getItem('song_request_enabled') === 'true');
     const isSongRequestEnabled = propEnabled !== undefined ? propEnabled : localEnabled;
     const setIsSongRequestEnabled = propSetEnabled !== undefined ? propSetEnabled : setLocalEnabled;
 
@@ -517,6 +517,7 @@ export default function SpotifySongRequestManager({
                             setIsSongRequestEnabled(nextState);
                             localStorage.setItem('song_request_enabled', nextState ? 'true' : 'false');
                             window.dispatchEvent(new Event('storage'));
+                            window.dispatchEvent(new CustomEvent('sr-state-changed', { detail: { enabled: nextState } }));
                             triggerToast(nextState ? '🟢 Peticiones de chat ACTIVADAS' : '🔴 Peticiones de chat PAUSADAS');
                         }}
                         style={{
@@ -831,6 +832,7 @@ export default function SpotifySongRequestManager({
                                         setSongRequestCommand(clean);
                                         setCustomCommandInput(clean);
                                         localStorage.setItem('song_request_command', clean);
+                                        window.dispatchEvent(new CustomEvent('sr-cmd-changed', { detail: { command: clean } }));
                                         triggerToast(`✅ Comando cambiado a "${clean}"`);
                                     } else {
                                         triggerToast('⚠️ Escribe un comando válido');
@@ -845,14 +847,15 @@ export default function SpotifySongRequestManager({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setSongRequestCommand('!sr');
-                                    setCustomCommandInput('!sr');
-                                    localStorage.setItem('song_request_command', '!sr');
-                                    triggerToast('Comando restablecido a !sr');
+                                    setSongRequestCommand('!spotifybloqued');
+                                    setCustomCommandInput('!spotifybloqued');
+                                    localStorage.setItem('song_request_command', '!spotifybloqued');
+                                    window.dispatchEvent(new CustomEvent('sr-cmd-changed', { detail: { command: '!spotifybloqued' } }));
+                                    triggerToast('Comando restablecido a !spotifybloqued');
                                 }}
                                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.72rem' }}
                             >
-                                Restablecer (!sr)
+                                Restablecer (!spotifybloqued)
                             </button>
                         </div>
                     </div>
