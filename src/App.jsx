@@ -1799,44 +1799,35 @@ function App() {
 
     if (!isBotConnected) return;
 
-    // Inicializar timestamps para mensajes nuevos que no tengan uno asignado
-    scheduledMessages.forEach(msg => {
-      if (msg.active && !scheduledTimestampsRef.current[msg.id]) {
-        scheduledTimestampsRef.current[msg.id] = Date.now();
-        scheduledChatCountsRef.current[msg.id] = userMessagesCountRef.current;
-      }
-    });
-
     const masterTimer = setInterval(() => {
       if (!isBotConnected) return;
       const now = Date.now();
 
+      // ⏱️ MENSAJES PROGRAMADOS PERIÓDICOS (Misma lógica exacta y garantizada que Cumpleaños)
       scheduledMessages.forEach(msg => {
         if (!msg.active || !msg.text) return;
 
         const rawMins = msg.intervalMinutes || msg.interval_minutes || (msg.intervalMs ? msg.intervalMs / 60000 : 10);
         const intervalMinutes = Math.max(1, parseInt(rawMins, 10) || 10);
         const intervalMs = intervalMinutes * 60 * 1000;
-        const savedLastSent = Number(localStorage.getItem('twitch_last_scheduled_sent_' + msg.id)) || scheduledTimestampsRef.current[msg.id] || now;
-        if (!scheduledTimestampsRef.current[msg.id]) {
-          scheduledTimestampsRef.current[msg.id] = savedLastSent;
-        }
-        const timeElapsed = now - savedLastSent;
+        const minChat = Number(msg.minChatMessages) || 0;
+
+        const lastSent = scheduledTimestampsRef.current[msg.id] || Number(localStorage.getItem('twitch_last_scheduled_sent_' + msg.id)) || 0;
+        const timeElapsed = now - lastSent;
 
         if (timeElapsed >= intervalMs) {
-          const currentChats = userMessagesCountRef.current;
+          const curChats = userMessagesCountRef.current;
           const lastChats = scheduledChatCountsRef.current[msg.id] || 0;
-          const diffChats = currentChats - lastChats;
-          const threshold = msg.minChatMessages !== undefined ? Number(msg.minChatMessages) : 0;
+          const diffChats = curChats - lastChats;
 
-          if (threshold <= 0 || diffChats >= threshold) {
-            addBotLog(`⏱️ [Disparo Programado - cada ${intervalMinutes}m]: "${msg.text.substring(0, 25)}..."`);
+          if (minChat <= 0 || diffChats >= minChat) {
+            addBotLog(`⏱️ [Mensaje Programado - cada ${intervalMinutes}m]: "${msg.text.substring(0, 30)}..."`);
             enviarMensajeTwitch(msg.text, true);
             scheduledTimestampsRef.current[msg.id] = now;
-            scheduledChatCountsRef.current[msg.id] = currentChats;
+            scheduledChatCountsRef.current[msg.id] = curChats;
             localStorage.setItem('twitch_last_scheduled_sent_' + msg.id, String(now));
           } else {
-            addBotLog(`⏳ [En Espera de Chat] "${msg.text.substring(0, 20)}..." (${diffChats}/${threshold} msgs de chat)`);
+            addBotLog(`⏳ [Mensaje Programado en Espera de Chat] "${msg.text.substring(0, 20)}..." (${diffChats}/${minChat} msgs requeridos)`);
           }
         }
       });
