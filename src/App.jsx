@@ -1687,53 +1687,93 @@ function App() {
     addBotLog("Bot desconectado manualmente.");
   };
 
-  // Twitch Helix Official Announcement Direct Sender
-  const sendTwitchAnnouncement = async (messageText, color = 'primary') => {
-    const rawToken = (botOauth || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
-    const tokenToUse = rawToken;
-    
-    try {
-      addBotLog(`Enviando Anuncio Oficial a Twitch: "${messageText.substring(0, 30)}..."`);
-      const res = await fetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=1131620140&moderator_id=1481655280`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tokenToUse}`,
-          'Client-Id': 'gp762nuuoqcoxypju8c569th9wz7q5',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: messageText.substring(0, 500),
-          color: color // 'primary'
-        })
-      });
+  // Cache para IDs numéricos de Twitch
+  const twitchUserIdsCacheRef = useRef({});
 
-      if (res.status === 204 || res.ok) {
-        addBotLog(`📢 [Anuncio Oficial Enviado]: "${messageText}"`);
-        triggerToast("📢 ¡Anuncio oficial enviado al chat!");
-        return true;
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        addBotLog(`Aviso Anuncio Twitch: ${errData.message || res.statusText} (Status: ${res.status})`);
-        return false;
+  const getTwitchUserId = async (username, token) => {
+    const cleanUser = (username || '').toLowerCase().replace(/^#/, '').trim();
+    if (!cleanUser) return null;
+    if (twitchUserIdsCacheRef.current[cleanUser]) return twitchUserIdsCacheRef.current[cleanUser];
+
+    try {
+      const res = await fetch(`https://api.twitch.tv/helix/users?login=${cleanUser}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Client-Id': 'gp762nuuoqcoxypju8c569th9wz7q5'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const id = data.data?.[0]?.id;
+        if (id) {
+          twitchUserIdsCacheRef.current[cleanUser] = id;
+          return id;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch user ID for", cleanUser, e);
+    }
+    return null;
+  };
+
+  // Twitch Helix Official Announcement Sender Dinámico
+  const sendTwitchAnnouncement = async (messageText, color = 'primary') => {
+    const rawToken = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+    if (!rawToken) return false;
+
+    const currentChannel = (botChannelRef.current || localStorage.getItem('twitch_bot_channel') || 'eviltokkii').toLowerCase().replace(/^#/, '').trim();
+    const currentBot = (botUsernameRef.current || localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe').toLowerCase().trim();
+
+    try {
+      const broadcasterId = await getTwitchUserId(currentChannel, rawToken);
+      const moderatorId = await getTwitchUserId(currentBot, rawToken);
+
+      if (broadcasterId && moderatorId) {
+        const res = await fetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${rawToken}`,
+            'Client-Id': 'gp762nuuoqcoxypju8c569th9wz7q5',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: messageText.substring(0, 500),
+            color: color
+          })
+        });
+
+        if (res.status === 204 || res.ok) {
+          addBotLog(`📢 [Anuncio Oficial Destacado en #${currentChannel}]: "${messageText}"`);
+          return true;
+        }
       }
     } catch (err) {
-      addBotLog(`Error al conectar con API de Anuncios: ${err.message}`);
-      return false;
+      console.warn("Helix Announcement error, using IRC fallback:", err);
     }
+    return false;
   };
 
   const enviarMensajeTwitch = async (texto, silent = false) => {
     let formattedText = (texto || '').trim();
+    const channelTarget = (botChannelRef.current || localStorage.getItem('twitch_bot_channel') || 'eviltokkii').toLowerCase().replace(/^#/, '').trim();
 
-    // Detección para Anuncios Nativos de Twitch (/announce)
+    // Detección de Anuncios (/announce)
     const isAnnounce = /^[/\\.](announce|announcement)\s+/i.test(formattedText);
     if (isAnnounce) {
       const content = formattedText.replace(/^[/\\.](announce|announcement)\s+/i, '').trim();
-      formattedText = `/announce ${content}`;
+      
+      // 1. Intentar enviar Anuncio Oficial con Banner de Twitch por API Helix
+      const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
+      if (sentViaHelix) {
+        if (!silent) triggerToast("📢 ¡Anuncio destacado enviado al chat!");
+        return true;
+      }
+
+      // 2. Si la API Helix no está disponible, enviar como anuncio visible formateado por IRC
+      formattedText = `📢 [ANUNCIO]: ${content}`;
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const channelTarget = botChannel.toLowerCase().replace(/^#/, '').trim();
       wsRef.current.send(`PRIVMSG #${channelTarget} :${formattedText}`);
       addBotLog(`✅ Mensaje enviado a #${channelTarget}: ${formattedText}`);
       return true;
@@ -1870,9 +1910,24 @@ function App() {
     localStorage.setItem('twitch_bot_username', botUsername);
   }, [botUsername]);
 
+  const botChannelRef = useRef(botChannel);
+  const botUsernameRef = useRef(botUsername);
+  const botOauthRef = useRef(botOauth);
+
   useEffect(() => {
+    botChannelRef.current = botChannel;
     localStorage.setItem('twitch_bot_channel', botChannel);
   }, [botChannel]);
+
+  useEffect(() => {
+    botUsernameRef.current = botUsername;
+    localStorage.setItem('twitch_bot_username', botUsername);
+  }, [botUsername]);
+
+  useEffect(() => {
+    botOauthRef.current = botOauth;
+    localStorage.setItem('twitch_bot_oauth', botOauth);
+  }, [botOauth]);
 
   useEffect(() => {
     localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(scheduledMessages));
