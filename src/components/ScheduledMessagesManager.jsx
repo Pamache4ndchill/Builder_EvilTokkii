@@ -962,93 +962,97 @@ export default function ScheduledMessagesManager({
 
                         <form onSubmit={handleSaveMessage} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', position: 'relative' }}>
-            <label className="form-label" style={{ margin: 0 }}>Contenido del Mensaje</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.72rem', color: '#9146FF', fontWeight: 600 }}>💡 Tip: Usa /announce para resaltar</span>
-                <button
-                    type="button"
-                    onClick={() => setShowModalEmoji(!showModalEmoji)}
-                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', padding: '2px 6px', fontSize: '0.9rem', cursor: 'pointer' }}
-                    title="Insertar emojis"
-                >
-                    😊 Emojis
-                </button>
-                {showModalEmoji && (
-                    <EmojiPickerPopover 
-                        onSelectEmoji={(emoji) => {
-                            setEditingMsg(prev => ({ ...prev, text: (prev.text || '') + emoji }));
-                        }}
-                        onClose={() => setShowModalEmoji(false)}
-                    />
-                )}
-            </div>
-         </div>
-                                <textarea
-                                    className="form-control"
-                                    rows="4"
-                                    required
-                                    placeholder="Escribe el texto. Puedes usar /announce al inicio para publicarlo como Anuncio oficial..."
-                                    value={editingMsg.text}
-                                    onChange={(e) => setEditingMsg({ ...editingMsg, text: e.target.value })}
-                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                                    <label className="form-label" style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
+                                        Contenido del Mensaje
+                                    </label>
+                                    <span style={{ fontSize: '0.86rem', color: '#EC4899', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        💡 Tip: Usa /announce para resaltar
+                                    </span>
+                                </div>
+
+                                <div style={{ position: 'relative' }}>
+                                    <textarea
+                                        className="form-control"
+                                        rows="4"
+                                        required
+                                        placeholder="Escribe el texto. Puedes usar /announce al inicio para publicarlo como Anuncio oficial..."
+                                        value={editingMsg.text}
+                                        onChange={(e) => setEditingMsg({ ...editingMsg, text: e.target.value })}
+                                        style={{ paddingRight: '45px', paddingBottom: '35px' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowModalEmoji(!showModalEmoji)}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            bottom: '10px',
+                                            background: 'rgba(255, 255, 255, 0.08)',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            borderRadius: '8px',
+                                            width: '32px',
+                                            height: '32px',
+                                            fontSize: '1.15rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                        title="Insertar emojis"
+                                    >
+                                        😊
+                                    </button>
+                                    {showModalEmoji && (
+                                        <div style={{ position: 'absolute', right: 0, bottom: '45px', zIndex: 1000 }}>
+                                            <EmojiPickerPopover 
+                                                onSelectEmoji={(emoji) => {
+                                                    setEditingMsg(prev => ({ ...prev, text: (prev.text || '') + emoji }));
+                                                }}
+                                                onClose={() => setShowModalEmoji(false)}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                                 <div>
-                                    <label className="form-label">Intervalo (Minutos)</label>
+                                    <label className="form-label" style={{ fontWeight: 600 }}>Intervalo (Minutos)</label>
                                     <input 
-                                        type="number"
-                                        min="1"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
                                         className="form-control"
                                         required
+                                        placeholder="Ej: 10"
                                         value={editingMsg.intervalMinutes}
-                                        onChange={(e) => setEditingMsg({ ...editingMsg, intervalMinutes: e.target.value })}
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/[^0-9]/g, '');
+                                            setEditingMsg({ ...editingMsg, intervalMinutes: val });
+                                        }}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="form-label">Mínimo de msgs en chat</label>
-                                    <input 
-                                        type="number"
-                                        min="0"
+                                    <label className="form-label" style={{ fontWeight: 600 }}>Mínimo de msgs en chat</label>
+                                    <select
                                         className="form-control"
-                                        value={editingMsg.minChatMessages}
-                                        onChange={(e) => setEditingMsg({ ...editingMsg, minChatMessages: e.target.value })}
-                                    />
+                                        value={editingMsg.minChatMessages !== undefined ? String(editingMsg.minChatMessages) : "0"}
+                                        onChange={(e) => setEditingMsg({ ...editingMsg, minChatMessages: Number(e.target.value) })}
+                                        style={{ fontSize: '0.85rem' }}
+                                    >
+                                        <option value="0">Sin límite (Solo tiempo)</option>
+                                        <option value="5">Mínimo 5 msgs en chat</option>
+                                        <option value="10">Mínimo 10 msgs en chat</option>
+                                        <option value="15">Mínimo 15 msgs en chat</option>
+                                        <option value="20">Mínimo 20 msgs en chat</option>
+                                        <option value="30">Mínimo 30 msgs en chat</option>
+                                        <option value="50">Mínimo 50 msgs en chat</option>
+                                    </select>
                                 </div>
                             </div>
-
-                            {editingMsg.id === 'new' && (
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Plantillas Rápidas</label>
-                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                        {DEFAULT_TEMPLATES.map((tmpl, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onClick={() => setEditingMsg({
-                                                    ...editingMsg,
-                                                    text: tmpl.text,
-                                                    intervalMinutes: tmpl.interval,
-                                                    minChatMessages: tmpl.minChat
-                                                })}
-                                                style={{
-                                                    fontSize: '0.75rem',
-                                                    padding: '4px 10px',
-                                                    borderRadius: '6px',
-                                                    background: 'rgba(255, 255, 255, 0.05)',
-                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                    color: 'var(--text-muted)',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Plantilla {idx + 1}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                                 <button
