@@ -23,7 +23,7 @@ const BOT_OAUTH = (process.env.BOT_OAUTH || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7
 
 const TWITCH_CLIENT_ID = 'gp762nuuoqcoxypju8c569th9wz7q5';
 const BROADCASTER_ID = '1131620140'; // eviltokkii
-const MODERATOR_ID = '1481655280';   // eviltokki_exe
+const MODERATOR_ID = '1481655280';   // EmiliaMaria_exe
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 

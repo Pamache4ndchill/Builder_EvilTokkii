@@ -1,6 +1,6 @@
 # EvilTokkii Twitch Bot 24/7
 
-Servicio en la nube 24/7 para el canal de Twitch **#eviltokkii** utilizando la cuenta bot **@Eviltokki_exe**.
+Servicio en la nube 24/7 para el canal de Twitch **#eviltokkii** utilizando la cuenta bot **@EmiliaMaria_exe**.
 
 ## Funcionalidades 24/7
 - **Mensajes Programados Continuos**: Envía mensajes periódicos con soporte de Anuncios Oficiales (`/announce`) y control de tráfico.

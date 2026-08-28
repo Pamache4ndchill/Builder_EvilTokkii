@@ -1408,7 +1408,14 @@ function App() {
     }
     return saved;
   });
-  const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe');
+  const [botUsername, setBotUsername] = useState(() => {
+    const saved = localStorage.getItem('twitch_bot_username');
+    if (!saved || /eviltokki/i.test(saved)) {
+      localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
+      return 'EmiliaMaria_exe';
+    }
+    return saved;
+  });
   const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || 'eviltokkii');
   const [isBotConnected, setIsBotConnected] = useState(false);
   const [botLogs, setBotLogs] = useState([]);

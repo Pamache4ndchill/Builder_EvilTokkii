@@ -19,7 +19,14 @@ export default function BotCredentialsManager({
     setBotLogs
 }) {
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
-    const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || DEFAULT_USERNAME);
+    const [botUsername, setBotUsername] = useState(() => {
+    const saved = localStorage.getItem('twitch_bot_username');
+    if (!saved || /eviltokki/i.test(saved)) {
+      localStorage.setItem('twitch_bot_username', DEFAULT_USERNAME);
+      return DEFAULT_USERNAME;
+    }
+    return saved;
+  });
     const [botOauth, setBotOauth] = useState(() => {
     const saved = localStorage.getItem('twitch_bot_oauth');
     if (!saved || saved.includes('ol3ji2g7')) {
