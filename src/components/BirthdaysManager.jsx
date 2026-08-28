@@ -576,11 +576,10 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                 key={item.id}
                                 className="card animate-slide-down"
                                 style={{
-                                    padding: '16px 20px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
+                                    padding: '14px 20px',
+                                    display: 'grid',
+                                    gridTemplateColumns: 'minmax(210px, 230px) 1fr auto',
                                     alignItems: 'center',
-                                    flexWrap: 'wrap',
                                     gap: '16px',
                                     border: isToday 
                                         ? '1px solid rgba(236, 72, 153, 0.5)' 
@@ -595,12 +594,12 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                     opacity: isCardActive ? 1 : 0.6
                                 }}
                             >
-                                {/* Left side: Date Badge & Viewer info */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '220px' }}>
+                                {/* 1. Izquierda: Fecha y Nombre de usuario */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
                                     {/* Date Circle Badge */}
                                     <div style={{
-                                        width: '52px',
-                                        height: '52px',
+                                        width: '48px',
+                                        height: '48px',
                                         borderRadius: '12px',
                                         background: isToday ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255, 255, 255, 0.06)',
                                         border: isToday ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
@@ -612,45 +611,48 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                         boxShadow: isToday ? '0 4px 14px rgba(236, 72, 153, 0.4)' : 'none',
                                         flexShrink: 0
                                     }}>
-                                        <span style={{ fontSize: '1.15rem', fontWeight: 800, lineHeight: 1 }}>{item.day}</span>
+                                        <span style={{ fontSize: '1.1rem', fontWeight: 800, lineHeight: 1 }}>{item.day}</span>
                                         <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700 }}>
                                             {monthLabel.substring(0, 3)}
                                         </span>
                                     </div>
 
                                     {/* Username & Status */}
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 @{item.username}
                                             </h4>
                                             {isToday && (
                                                 <span style={{
-                                                    fontSize: '0.68rem',
-                                                    padding: '2px 8px',
+                                                    fontSize: '0.65rem',
+                                                    padding: '2px 6px',
                                                     borderRadius: '20px',
                                                     background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
                                                     color: '#fff',
                                                     fontWeight: 800,
-                                                    boxShadow: '0 2px 8px rgba(236, 72, 153, 0.4)'
+                                                    boxShadow: '0 2px 8px rgba(236, 72, 153, 0.4)',
+                                                    whiteSpace: 'nowrap'
                                                 }}>
                                                     ¡ES HOY! 🎂
                                                 </span>
                                             )}
                                         </div>
-                                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
                                             Fecha: {item.day} de {monthLabel}
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* Center: Message Preview Box */}
+                                {/* 2. Centro: Cuadro del mensaje autoajustable y uniforme */}
                                 <div style={{
-                                    flex: '1 1 320px',
                                     background: 'rgba(0, 0, 0, 0.3)',
                                     borderRadius: '10px',
                                     padding: '10px 14px',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)'
+                                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                                    minWidth: 0,
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere'
                                 }}>
                                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px', fontWeight: 600 }}>
                                         MENSAJE PARA EL CHAT:
@@ -659,15 +661,17 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                                         margin: 0,
                                         fontSize: '0.84rem',
                                         color: 'var(--text-main)',
-                                        lineHeight: 1.4,
-                                        fontStyle: 'italic'
+                                        lineHeight: 1.45,
+                                        fontStyle: 'italic',
+                                        wordBreak: 'break-word',
+                                        overflowWrap: 'anywhere'
                                     }}>
                                         "{item.message || DEFAULT_MESSAGE_TEMPLATE}"
                                     </p>
                                 </div>
 
-                                {/* Right: Actions */}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                {/* 3. Derecha: Botones de acciones fijos y alineados */}
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     {/* Test Chat Button */}
                                     <button
                                         type="button"
