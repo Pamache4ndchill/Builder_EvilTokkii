@@ -461,64 +461,66 @@ export default function ScheduledMessagesManager({
             return;
         }
 
-        const targetId = editingMsg.id === 'new' ? 'msg_' + Date.now() : String(editingMsg.id);
-        const intervalMins = Math.max(1, Number(editingMsg.intervalMinutes) || 10);
-        const minChats = Math.max(0, Number(editingMsg.minChatMessages) || 0);
-        const cleanText = editingMsg.text.trim();
+        try {
+            const targetId = editingMsg.id === 'new' ? 'msg_' + Date.now() : String(editingMsg.id);
+            const intervalMins = Math.max(1, Number(editingMsg.intervalMinutes) || 10);
+            const minChats = Math.max(0, Number(editingMsg.minChatMessages) || 0);
+            const cleanText = editingMsg.text.trim();
 
-        let updatedList = [];
-        if (editingMsg.id === 'new') {
-            const newRecord = {
-                id: targetId,
-                text: cleanText,
-                intervalMinutes: intervalMins,
-                minChatMessages: minChats,
-                active: true
-            };
-            updatedList = [...messages, newRecord];
-            setMessages(updatedList);
-            triggerToast('✅ Nuevo mensaje programado creado');
-
-            if (supabase) {
-                supabase.from('twitch_scheduled_messages').upsert({
+            let updatedList = [];
+            if (editingMsg.id === 'new') {
+                const newRecord = {
                     id: targetId,
                     text: cleanText,
-                    interval_minutes: intervalMins,
-                    min_chat_messages: minChats,
-                    active: true,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                }).catch(e => console.warn("Supabase insert note:", e));
-            }
-        } else {
-            updatedList = messages.map(m => m.id === editingMsg.id ? {
-                ...m,
-                text: cleanText,
-                intervalMinutes: intervalMins,
-                minChatMessages: minChats
-            } : m);
-            setMessages(updatedList);
-            triggerToast('✅ Mensaje programado actualizado');
+                    intervalMinutes: intervalMins,
+                    minChatMessages: minChats,
+                    active: true
+                };
+                updatedList = [...messages, newRecord];
+                setMessages(updatedList);
+                triggerToast('✅ Nuevo mensaje programado creado');
 
-            if (supabase) {
-                supabase.from('twitch_scheduled_messages').update({
+                if (supabase) {
+                    supabase.from('twitch_scheduled_messages').upsert({
+                        id: targetId,
+                        text: cleanText,
+                        interval_minutes: intervalMins,
+                        min_chat_messages: minChats,
+                        active: true,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }).catch(e => console.warn("Supabase insert note:", e));
+                }
+            } else {
+                updatedList = messages.map(m => m.id === editingMsg.id ? {
+                    ...m,
                     text: cleanText,
-                    interval_minutes: intervalMins,
-                    min_chat_messages: minChats,
-                    updated_at: new Date().toISOString()
-                }).eq('id', targetId).catch(e => console.warn("Supabase update note:", e));
+                    intervalMinutes: intervalMins,
+                    minChatMessages: minChats
+                } : m);
+                setMessages(updatedList);
+                triggerToast('✅ Mensaje programado actualizado');
+
+                if (supabase) {
+                    supabase.from('twitch_scheduled_messages').update({
+                        text: cleanText,
+                        interval_minutes: intervalMins,
+                        min_chat_messages: minChats,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', targetId).catch(e => console.warn("Supabase update note:", e));
+                }
             }
+
+            try {
+                localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(updatedList));
+                localStorage.setItem('twitch_scheduled_messages_v2', JSON.stringify(updatedList));
+            } catch (err) {}
+        } finally {
+            // Cierre 100% blindado e incondicional
+            setIsModalOpen(false);
+            setEditingMsg(null);
+            setShowModalEmoji(false);
         }
-
-        try {
-            localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(updatedList));
-            localStorage.setItem('twitch_scheduled_messages_v2', JSON.stringify(updatedList));
-        } catch (err) {}
-
-        // Cierre garantizado e inmediato del modal
-        setIsModalOpen(false);
-        setEditingMsg(null);
-        setShowModalEmoji(false);
     };
 
     return (
@@ -968,7 +970,7 @@ export default function ScheduledMessagesManager({
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveMessage} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
                                     <label className="form-label" style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
@@ -1094,7 +1096,7 @@ export default function ScheduledMessagesManager({
                                     Guardar Mensaje
                                 </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             )}
