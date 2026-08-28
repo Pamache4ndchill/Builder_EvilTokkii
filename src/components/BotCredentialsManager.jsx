@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 const DEFAULT_CHANNEL = 'eviltokkii';
-const DEFAULT_USERNAME = 'Eviltokki_exe';
+const DEFAULT_USERNAME = 'EmiliaMaria_exe';
 const DEFAULT_OAUTH = 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z';
 
 export default function BotCredentialsManager({ 
@@ -29,7 +29,7 @@ export default function BotCredentialsManager({
     return saved;
   });
     const [showPassword, setShowPassword] = useState(false);
-    const [testMessage, setTestMessage] = useState('¡Hola chat! Soy Eviltokki_exe y estoy listo para acompañar el stream 🤖💜');
+    const [testMessage, setTestMessage] = useState('¡Hola chat! Soy EmiliaMaria_exe y estoy listo para acompañar el stream 🤖💜');
     const [isSaving, setIsSaving] = useState(false);
 
     // Load from Supabase app_settings if available
@@ -124,7 +124,7 @@ export default function BotCredentialsManager({
                             Credenciales de la Cuenta del Bot (Twitch)
                         </h2>
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            Configuración centralizada para que Eviltokki_exe se conecte permanentemente a tu chat
+                            Configuración centralizada para que EmiliaMaria_exe se conecte permanentemente a tu chat
                         </span>
                     </div>
                 </div>
@@ -219,7 +219,7 @@ export default function BotCredentialsManager({
                                         className="form-control"
                                         value={botUsername}
                                         onChange={(e) => setBotUsername(e.target.value.trim())}
-                                        placeholder="Eviltokki_exe"
+                                        placeholder="EmiliaMaria_exe"
                                         style={{ paddingLeft: '30px' }}
                                         required
                                     />
@@ -264,7 +264,7 @@ export default function BotCredentialsManager({
                                     </button>
                                 </div>
                                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
-                                    Inicia sesión en twitchtokengenerator.com con la cuenta de <strong>{botUsername || 'Eviltokki_exe'}</strong> para obtener este código.
+                                    Inicia sesión en twitchtokengenerator.com con la cuenta de <strong>{botUsername || 'EmiliaMaria_exe'}</strong> para obtener este código.
                                 </span>
                             </div>
 
@@ -332,7 +332,7 @@ export default function BotCredentialsManager({
                         <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                             <li>Al guardar tus credenciales aquí, el bot se conectará <strong>automáticamente</strong> al abrir el Builder.</li>
                             <li>Tanto los <strong>Mensajes Programados</strong> como los <strong>Cumpleaños de Viewers</strong> utilizarán esta cuenta para enviar mensajes.</li>
-<li>Para que los mensajes con <strong>/announce</strong> salgan con el banner destacado de Twitch, la cuenta del bot debe ser <strong>Moderador</strong> (<code>/mod Eviltokki_exe</code>) y su token debe tener el permiso <code>moderator:manage:announcements</code>.</li>
+<li>Para que los mensajes con <strong>/announce</strong> salgan con el banner destacado de Twitch, la cuenta del bot debe ser <strong>Moderador</strong> (<code>/mod EmiliaMaria_exe</code>) y su token debe tener el permiso <code>moderator:manage:announcements</code>.</li>
                             <li>Cuenta con <strong>auto-reconexión continua</strong> y <strong>Heartbeat Keep-Alive</strong> para que nunca se caiga durante tus transmisiones.</li>
                         </ul>
                     </div>

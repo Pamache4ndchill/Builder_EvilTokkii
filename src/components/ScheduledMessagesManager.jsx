@@ -7,7 +7,7 @@ import {
 
 const TWITCH_CLIENT_ID = 'crp2lmk3jqaqxwymxixn38nf3xxn2b';
 const DEFAULT_CHANNEL = 'eviltokkii';
-const DEFAULT_USERNAME = 'Eviltokki_exe';
+const DEFAULT_USERNAME = 'EmiliaMaria_exe';
 
 
 const EMOJI_CATEGORIES = {
@@ -192,7 +192,7 @@ export default function ScheduledMessagesManager({
 }) {
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
-    const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'Eviltokki_exe');
+    const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe');
     const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 
@@ -1116,7 +1116,7 @@ export default function ScheduledMessagesManager({
             )}
 
 
-            {/* Modal para Vincular Token de Eviltokki_exe */}
+            {/* Modal para Vincular Token de EmiliaMaria_exe */}
             {showTokenModal && (
                 <div style={{
                     position: 'fixed',

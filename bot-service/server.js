@@ -18,7 +18,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hddzijixsigsqsmabtej.s
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp';
 
 const BOT_CHANNEL = (process.env.BOT_CHANNEL || 'eviltokkii').toLowerCase().trim();
-const BOT_USERNAME = (process.env.BOT_USERNAME || 'Eviltokki_exe').trim();
+const BOT_USERNAME = (process.env.BOT_USERNAME || 'EmiliaMaria_exe').trim();
 const BOT_OAUTH = (process.env.BOT_OAUTH || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z').trim();
 
 const TWITCH_CLIENT_ID = 'gp762nuuoqcoxypju8c569th9wz7q5';

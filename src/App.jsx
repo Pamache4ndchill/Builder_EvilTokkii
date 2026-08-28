@@ -1408,7 +1408,7 @@ function App() {
     }
     return saved;
   });
-  const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'Eviltokki_exe');
+  const [botUsername, setBotUsername] = useState(() => localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe');
   const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || 'eviltokkii');
   const [isBotConnected, setIsBotConnected] = useState(false);
   const [botLogs, setBotLogs] = useState([]);
@@ -2014,7 +2014,7 @@ function App() {
     // Save defaults to localStorage if not set
     localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
     if (!localStorage.getItem('twitch_bot_oauth')) localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
-    if (!localStorage.getItem('twitch_bot_username')) localStorage.setItem('twitch_bot_username', 'Eviltokki_exe');
+    if (!localStorage.getItem('twitch_bot_username')) localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
     if (!localStorage.getItem('twitch_bot_channel')) localStorage.setItem('twitch_bot_channel', 'eviltokkii');
 
     const timer = setTimeout(() => {
@@ -3792,7 +3792,7 @@ function App() {
                   <Key size={36} />
                 </div>
                 <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
-                <p>Configura de forma centralizada la cuenta de Twitch secundaria (Eviltokki_exe) y su token OAuth.</p>
+                <p>Configura de forma centralizada la cuenta de Twitch secundaria (EmiliaMaria_exe) y su token OAuth.</p>
               </div>
             </div>
           </div>
