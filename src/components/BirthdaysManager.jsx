@@ -33,6 +33,8 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
 
     // Form State
     const [editingId, setEditingId] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
     const [username, setUsername] = useState('');
     const [day, setDay] = useState(() => new Date().getDate());
     const [month, setMonth] = useState(() => new Date().getMonth() + 1);
@@ -184,6 +186,12 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
         setMonth(new Date().getMonth() + 1);
         setCustomMessage(DEFAULT_MESSAGE_TEMPLATE);
         setIsActive(true);
+        setIsModalOpen(false);
+    };
+
+    const handleOpenCreateModal = () => {
+        resetForm();
+        setIsModalOpen(true);
     };
 
     const handleEdit = (item) => {
@@ -193,11 +201,18 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
         setMonth(item.month);
         setCustomMessage(item.message || DEFAULT_MESSAGE_TEMPLATE);
         setIsActive(item.active !== false);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setIsModalOpen(true);
     };
 
-    const handleDelete = async (id, name) => {
-        if (!window.confirm('¿Seguro que deseas eliminar el cumpleaños de @' + name + '?')) return;
+    const handleDelete = (id, name) => {
+        setDeleteConfirmItem({ id, name });
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteConfirmItem) return;
+        const { id, name } = deleteConfirmItem;
+        setDeleteConfirmItem(null);
+
         const updated = birthdays.filter(b => b.id !== id);
         await saveBirthdaysState(updated);
 
@@ -208,7 +223,7 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                 console.warn(err);
             }
         }
-        triggerToast('Cumpleaños de @' + name + ' eliminado');
+        triggerToast('🗑️ Cumpleaños de @' + name + ' eliminado');
         if (editingId === id) resetForm();
     };
 
@@ -558,11 +573,11 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                 {/* RIGHT: List & Filter */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                     
-                    {/* Controls Bar: Search & Filter Tabs */}
-                    <div className="card animate-slide-down" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+                    {/* Controls Bar: Search, Filter Tabs & Add Birthday Button */}
+                    <div className="card animate-slide-down" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
                         
                         {/* Tabs */}
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                             <button
                                 type="button"
                                 onClick={() => setFilterTab('all')}
@@ -615,17 +630,41 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                             </button>
                         </div>
 
-                        {/* Search Input */}
-                        <div style={{ position: 'relative', width: '220px' }}>
-                            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                            <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Buscar viewer..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                style={{ paddingLeft: '32px', fontSize: '0.8rem', padding: '6px 10px 6px 30px' }}
-                            />
+                        {/* Search Input & Add Button at Right */}
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ position: 'relative', width: '220px' }}>
+                                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    placeholder="Buscar viewer..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    style={{ paddingLeft: '32px', fontSize: '0.8rem', padding: '6px 10px 6px 30px' }}
+                                />
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleOpenCreateModal}
+                                style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '10px',
+                                    background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
+                                    color: '#fff',
+                                    border: 'none',
+                                    fontWeight: 800,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 4px 14px rgba(236, 72, 153, 0.35)',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                <Plus size={16} /> Registrar Cumpleaños
+                            </button>
                         </div>
                     </div>
 
