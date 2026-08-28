@@ -200,7 +200,14 @@ export default function ScheduledMessagesManager({
     }
     return saved;
   });
-    const [botOauth, setBotOauth] = useState(() => localStorage.getItem('twitch_bot_oauth') || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
+    const [botOauth, setBotOauth] = useState(() => {
+    const saved = localStorage.getItem('twitch_bot_oauth') || '';
+    if (saved.includes('dahm5c9z') || saved.includes('ol3ji2g7')) {
+      localStorage.removeItem('twitch_bot_oauth');
+      return '';
+    }
+    return saved;
+  });
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 
     // Estado del bot y WebSocket

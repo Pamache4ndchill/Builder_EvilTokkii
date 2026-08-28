@@ -19,7 +19,7 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_bJGAVsHsVrSu2KA
 
 const BOT_CHANNEL = (process.env.BOT_CHANNEL || 'eviltokkii').toLowerCase().trim();
 const BOT_USERNAME = (process.env.BOT_USERNAME || 'EmiliaMaria_exe').trim();
-const BOT_OAUTH = (process.env.BOT_OAUTH || 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z').trim();
+const BOT_OAUTH = (process.env.BOT_OAUTH || '').trim();
 
 const TWITCH_CLIENT_ID = 'gp762nuuoqcoxypju8c569th9wz7q5';
 const BROADCASTER_ID = '1131620140'; // eviltokkii

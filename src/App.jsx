@@ -1401,10 +1401,10 @@ function App() {
   };
   
   const [botOauth, setBotOauth] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_oauth');
-    if (!saved || saved.includes('ol3ji2g7')) {
-      localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
-      return 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z';
+    const saved = localStorage.getItem('twitch_bot_oauth') || '';
+    if (saved.includes('dahm5c9z') || saved.includes('ol3ji2g7')) {
+      localStorage.removeItem('twitch_bot_oauth');
+      return '';
     }
     return saved;
   });
@@ -1686,8 +1686,8 @@ function App() {
 
   // Twitch Helix Official Announcement Direct Sender
   const sendTwitchAnnouncement = async (messageText, color = 'primary') => {
-    const rawToken = (botOauth || 'dahm5c9zhnrg9xw1qnxnvnnoqvjz7z').replace(/^oauth:/i, '').trim();
-    const tokenToUse = rawToken.length > 25 ? rawToken : 'dahm5c9zhnrg9xw1qnxnvnnoqvjz7z';
+    const rawToken = (botOauth || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+    const tokenToUse = rawToken;
     
     try {
       addBotLog(`Enviando Anuncio Oficial a Twitch: "${messageText.substring(0, 30)}..."`);
@@ -1773,8 +1773,11 @@ function App() {
         const rawMins = msg.intervalMinutes || msg.interval_minutes || (msg.intervalMs ? msg.intervalMs / 60000 : 10);
         const intervalMinutes = Math.max(1, parseInt(rawMins, 10) || 10);
         const intervalMs = intervalMinutes * 60 * 1000;
-        const lastSent = scheduledTimestampsRef.current[msg.id] || 0;
-        const timeElapsed = now - lastSent;
+        const savedLastSent = Number(localStorage.getItem('twitch_last_scheduled_sent_' + msg.id)) || scheduledTimestampsRef.current[msg.id] || now;
+        if (!scheduledTimestampsRef.current[msg.id]) {
+          scheduledTimestampsRef.current[msg.id] = savedLastSent;
+        }
+        const timeElapsed = now - savedLastSent;
 
         if (timeElapsed >= intervalMs) {
           const currentChats = userMessagesCountRef.current;
@@ -1787,6 +1790,7 @@ function App() {
             enviarMensajeTwitch(msg.text, true);
             scheduledTimestampsRef.current[msg.id] = now;
             scheduledChatCountsRef.current[msg.id] = currentChats;
+            localStorage.setItem('twitch_last_scheduled_sent_' + msg.id, String(now));
           } else {
             addBotLog(`⏳ [En Espera de Chat] "${msg.text.substring(0, 20)}..." (${diffChats}/${threshold} msgs de chat)`);
           }
@@ -1799,8 +1803,11 @@ function App() {
         const bdayIntervalMs = bdayIntervalMins * 60 * 1000;
         const bdayMinChat = Number(localStorage.getItem('twitch_birthdays_min_chat')) || 0;
         
-        const lastBdaySent = lastBdaySentTimestampRef.current || 0;
-        const bdayElapsed = now - lastBdaySent;
+        const savedLastBday = Number(localStorage.getItem('twitch_last_bday_sent')) || lastBdaySentTimestampRef.current || now;
+        if (!lastBdaySentTimestampRef.current) {
+          lastBdaySentTimestampRef.current = savedLastBday;
+        }
+        const bdayElapsed = now - savedLastBday;
 
         if (bdayElapsed >= bdayIntervalMs) {
           const savedBdaysStr = localStorage.getItem('twitch_viewers_birthdays');
@@ -1834,6 +1841,7 @@ function App() {
 
                   lastBdaySentTimestampRef.current = now;
                   lastBdayChatCountRef.current = curChats;
+                  localStorage.setItem('twitch_last_bday_sent', String(now));
                 }
               }
             } catch (e) {

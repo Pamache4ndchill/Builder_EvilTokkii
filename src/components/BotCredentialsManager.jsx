@@ -6,7 +6,7 @@ import {
 
 const DEFAULT_CHANNEL = 'eviltokkii';
 const DEFAULT_USERNAME = 'EmiliaMaria_exe';
-const DEFAULT_OAUTH = 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z';
+const DEFAULT_OAUTH = '';
 
 export default function BotCredentialsManager({ 
     supabase, 
@@ -28,10 +28,10 @@ export default function BotCredentialsManager({
     return saved;
   });
     const [botOauth, setBotOauth] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_oauth');
-    if (!saved || saved.includes('ol3ji2g7')) {
-      localStorage.setItem('twitch_bot_oauth', 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z');
-      return 'oauth:dahm5c9zhnrg9xw1qnxnvnnoqvjz7z';
+    const saved = localStorage.getItem('twitch_bot_oauth') || '';
+    if (saved.includes('dahm5c9z') || saved.includes('ol3ji2g7')) {
+      localStorage.removeItem('twitch_bot_oauth');
+      return '';
     }
     return saved;
   });
