@@ -85,7 +85,7 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                     .replace(/@{usuario}/gi, '@' + item.username)
                     .replace(/{usuario}/gi, '@' + item.username);
                 enviarMensajeTwitch(text);
-            }, idx * 2500);
+            }, idx * 7000);
         });
         triggerToast('🎉 ¡Felicitaciones enviadas al chat para los cumpleañeros de hoy!');
     };

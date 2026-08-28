@@ -1773,8 +1773,8 @@ function App() {
         return true;
       }
 
-      // 2. Si la API Helix no está disponible, enviar como anuncio visible formateado por IRC
-      formattedText = `📢 [ANUNCIO]: ${content}`;
+      // 2. Si la API Helix no estuviera disponible, enviar el contenido limpio
+      formattedText = content;
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1878,7 +1878,7 @@ function App() {
                         .replace(/{usuario}/gi, '@' + item.username);
                       addBotLog(`🎂 [Cumpleaños Automático - cada ${bdayIntervalMins}m]: Felicitando a @${item.username}`);
                       enviarMensajeTwitch(formatted, true);
-                    }, idx * 2500);
+                    }, idx * 7000);
                   });
 
                   lastBdaySentTimestampRef.current = now;
