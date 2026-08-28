@@ -1,8 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Key, ShieldCheck, CheckCircle2, AlertCircle, ExternalLink, 
-    Save, RefreshCw, Send, Terminal, Eye, EyeOff, Bot, Radio, Wifi, WifiOff
+    Save, RefreshCw, Send, Terminal, Eye, EyeOff, Bot, Radio, Wifi, WifiOff, Palette, Sparkles
 } from 'lucide-react';
+
+const TWITCH_COLORS = [
+    { name: 'HotPink', label: '🌸 Rosa Intenso (HotPink)', hex: '#FF69B4' },
+    { name: 'BlueViolet', label: '💜 Azul Violeta (BlueViolet)', hex: '#8A2BE2' },
+    { name: 'SpringGreen', label: '🌿 Verde Primavera (SpringGreen)', hex: '#00FF7F' },
+    { name: 'DodgerBlue', label: '🌊 Azul Celeste (DodgerBlue)', hex: '#1E90FF' },
+    { name: 'OrangeRed', label: '🍊 Rojo Naranja (OrangeRed)', hex: '#FF4500' },
+    { name: 'Coral', label: '🪸 Coral (Coral)', hex: '#FF7F50' },
+    { name: 'SeaGreen', label: '🌲 Verde Mar (SeaGreen)', hex: '#2E8B57' },
+    { name: 'Goldenrod', label: '🔱 Dorado (Goldenrod)', hex: '#DAA520' },
+    { name: 'Firebrick', label: '🧱 Rojo Ladrillo (Firebrick)', hex: '#B22222' },
+    { name: 'CadetBlue', label: '🪖 Azul Cadete (CadetBlue)', hex: '#5F9EA0' },
+    { name: 'Red', label: '🔴 Rojo (Red)', hex: '#FF0000' },
+    { name: 'Blue', label: '🔵 Azul (Blue)', hex: '#0000FF' },
+    { name: 'Green', label: '🟢 Verde (Green)', hex: '#008000' },
+    { name: 'YellowGreen', label: '🍋 Verde Amarillo (YellowGreen)', hex: '#9ACD32' },
+    { name: 'Chocolate', label: '🍫 Chocolate (Chocolate)', hex: '#D2691E' }
+];
 
 const DEFAULT_CHANNEL = 'eviltokkii';
 const DEFAULT_USERNAME = 'EmiliaMaria_exe';
@@ -36,8 +54,22 @@ export default function BotCredentialsManager({
     return saved;
   });
     const [showPassword, setShowPassword] = useState(false);
-    const [testMessage, setTestMessage] = useState('¡Hola chat! Soy EmiliaMaria_exe y estoy listo para acompañar el stream 🤖💜');
+    const [testMessage, setTestMessage] = useState('¡Hola chat! Soy EmiliaMaria_exe y estoy lista para acompañar el stream 🤖💜');
     const [isSaving, setIsSaving] = useState(false);
+    const [selectedColor, setSelectedColor] = useState(() => localStorage.getItem('twitch_bot_color') || 'HotPink');
+
+    const handleApplyColor = (colorName) => {
+        const col = colorName || selectedColor;
+        if (!isBotConnected) {
+            triggerToast('⚠️ Conecta el bot primero para cambiar el color');
+            return;
+        }
+        if (enviarMensajeTwitch) {
+            enviarMensajeTwitch(`/color ${col}`);
+            localStorage.setItem('twitch_bot_color', col);
+            triggerToast(`🎨 ¡Comando enviado! Color de nick cambiado a "${col}"`);
+        }
+    };
 
     // Load from Supabase app_settings if available
     useEffect(() => {
