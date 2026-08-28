@@ -466,6 +466,7 @@ export default function ScheduledMessagesManager({
         const minChats = Math.max(0, Number(editingMsg.minChatMessages) || 0);
         const cleanText = editingMsg.text.trim();
 
+        let updatedList = [];
         if (editingMsg.id === 'new') {
             const newRecord = {
                 id: targetId,
@@ -474,7 +475,8 @@ export default function ScheduledMessagesManager({
                 minChatMessages: minChats,
                 active: true
             };
-            setMessages(prev => [...prev, newRecord]);
+            updatedList = [...messages, newRecord];
+            setMessages(updatedList);
             triggerToast('✅ Nuevo mensaje programado creado');
 
             if (supabase) {
@@ -489,12 +491,13 @@ export default function ScheduledMessagesManager({
                 }).catch(e => console.warn("Supabase insert note:", e));
             }
         } else {
-            setMessages(prev => prev.map(m => m.id === editingMsg.id ? {
+            updatedList = messages.map(m => m.id === editingMsg.id ? {
                 ...m,
                 text: cleanText,
                 intervalMinutes: intervalMins,
                 minChatMessages: minChats
-            } : m));
+            } : m);
+            setMessages(updatedList);
             triggerToast('✅ Mensaje programado actualizado');
 
             if (supabase) {
@@ -507,7 +510,12 @@ export default function ScheduledMessagesManager({
             }
         }
 
-        // Cierre inmediato del modal
+        try {
+            localStorage.setItem('twitch_scheduled_messages_v3', JSON.stringify(updatedList));
+            localStorage.setItem('twitch_scheduled_messages_v2', JSON.stringify(updatedList));
+        } catch (err) {}
+
+        // Cierre garantizado e inmediato del modal
         setIsModalOpen(false);
         setEditingMsg(null);
         setShowModalEmoji(false);
@@ -1070,15 +1078,18 @@ export default function ScheduledMessagesManager({
                                     Cancelar
                                 </button>
                                 <button
-                                    type="submit"
+                                    type="button"
                                     className="btn-submit"
                                     style={{
                                         width: 'auto',
-                                        padding: '10px 22px',
-                                        background: 'var(--primary)',
+                                        padding: '10px 24px',
+                                        background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
                                         color: '#fff',
-                                        borderRadius: '8px'
+                                        borderRadius: '8px',
+                                        fontWeight: 800,
+                                        cursor: 'pointer'
                                     }}
+                                    onClick={handleSaveMessage}
                                 >
                                     Guardar Mensaje
                                 </button>
