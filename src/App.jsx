@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
+import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
@@ -9,6 +9,8 @@ import ScheduledMessagesManager from './components/ScheduledMessagesManager';
 import SpotifySongRequestManager from './components/SpotifySongRequestManager';
 import BirthdaysManager from './components/BirthdaysManager';
 import BotCredentialsManager from './components/BotCredentialsManager';
+import ChatCommandsManager from './components/ChatCommandsManager';
+import PointsWheelManager, { PointsWheelOBSOverlay } from './components/PointsWheelManager';
 import UserPermissionsManager from './components/UserPermissionsManager';
 
 import md5 from 'blueimp-md5';
@@ -472,6 +474,10 @@ const AdvancedImagePreview = ({ imageUrl }) => {
 };
 
 function App() {
+  const isPointsWheelOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overlay') === 'points_wheel';
+  if (isPointsWheelOverlay) {
+    return <PointsWheelOBSOverlay supabase={supabase} />;
+  }
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
   const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
   const [sessionUsername, setSessionUsername] = useState(localStorage.getItem('builder_username') || '');
@@ -551,6 +557,8 @@ function App() {
           return sessionPermissions.access_bot_credentials !== undefined ? !!sessionPermissions.access_bot_credentials : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
         case 'birthdays':
           return sessionPermissions.access_birthdays !== undefined ? !!sessionPermissions.access_birthdays : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
+        case 'points_wheel':
+          return sessionPermissions.access_points_wheel !== undefined ? !!sessionPermissions.access_points_wheel : (sessionPermissions.access_twitch || sessionPermissions.access_ruleta || true);
         case 'tierlists':
           return sessionPermissions.access_tierlists !== undefined ? !!sessionPermissions.access_tierlists : true;
         case 'admin':
@@ -1402,36 +1410,39 @@ function App() {
   
   const [botOauth, setBotOauth] = useState(() => {
     const saved = localStorage.getItem('twitch_bot_oauth') || '';
-    if (saved.includes('dahm5c9z') || saved.includes('ol3ji2g7')) {
-      localStorage.removeItem('twitch_bot_oauth');
-      return '';
+    if (!saved || saved !== 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+      localStorage.setItem('twitch_bot_oauth', 'eqwqvqkwf6onasha2qzupnzxlardxd');
+      return 'eqwqvqkwf6onasha2qzupnzxlardxd';
     }
     return saved;
   });
   const [botUsername, setBotUsername] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_username');
-    if (!saved || /eviltokki/i.test(saved)) {
-      localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
-      return 'EmiliaMaria_exe';
-    }
-    return saved;
+    localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
+    return 'EmiliaMaria_exe';
   });
   const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || 'eviltokkii');
   const [isBotConnected, setIsBotConnected] = useState(false);
   const [botLogs, setBotLogs] = useState([]);
   const [scheduledMessages, setScheduledMessages] = useState(() => {
+    const defaultMsgs = [
+      { id: '1', text: "🌟 ¡Recuerda seguir el canal y activar las notificaciones para estar al día de todos los directos!", intervalMinutes: 10, minChatMessages: 10, active: true },
+      { id: '2', text: "/announce 🌐 ¡Visita nuestra web oficial con minijuegos y sorteos diarios: https://tokkii.online!", intervalMinutes: 15, minChatMessages: 15, active: true }
+    ];
     try {
       const savedV3 = localStorage.getItem('twitch_scheduled_messages_v3');
-      if (savedV3) return JSON.parse(savedV3);
+      if (savedV3) {
+        const parsed = JSON.parse(savedV3);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
       const savedV2 = localStorage.getItem('twitch_scheduled_messages_v2');
-      if (savedV2) return JSON.parse(savedV2);
+      if (savedV2) {
+        const parsed = JSON.parse(savedV2);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {
       console.error("Error reading scheduled messages:", e);
     }
-    return [
-      { id: 1, text: "🌟 ¡Recuerda seguir el canal y activar las notificaciones para estar al día de todos los directos!", intervalMinutes: 10, minChatMessages: 10, active: true },
-      { id: 2, text: "/announce 🌐 ¡Visita nuestra web oficial con minijuegos y sorteos diarios: https://tokkii.online!", intervalMinutes: 15, minChatMessages: 15, active: true }
-    ];
+    return defaultMsgs;
   });
   const [newScheduledMessage, setNewScheduledMessage] = useState('');
   const [newScheduledInterval, setNewScheduledInterval] = useState(5); // default 5 minutes
@@ -1500,7 +1511,7 @@ function App() {
         
         const formattedOauth = botOauth.startsWith('oauth:') ? botOauth : 'oauth:' + botOauth;
         ws.send(`PASS ${formattedOauth}`);
-        ws.send(`NICK ${botUsername.toLowerCase().trim()}`);
+        ws.send(`NICK ${(botUsername || 'EmiliaMaria_exe').toLowerCase().trim()}`);
         ws.send(`JOIN #${botChannel.toLowerCase().trim()}`);
         setIsBotConnected(true);
         addBotLog(`Autenticación enviada para @${botUsername} en el canal #${botChannel}`);
@@ -1601,7 +1612,15 @@ function App() {
               const tokens = text.trim().split(/\s+/);
               const cmdWord = tokens[0].toLowerCase();
               const matchedCmd = chatCommands.find(c => c.command_name.toLowerCase() === cmdWord);
-              if (matchedCmd && matchedCmd.responses && matchedCmd.responses.length > 0) {
+              let isCmdDisabled = false;
+              try {
+                const disabledList = JSON.parse(localStorage.getItem('twitch_commands_disabled') || '[]');
+                if (disabledList.includes(cmdWord) || (matchedCmd && disabledList.includes(matchedCmd.command_name.toLowerCase()))) {
+                  isCmdDisabled = true;
+                }
+              } catch (e) {}
+
+              if (matchedCmd && !isCmdDisabled && matchedCmd.active !== false && matchedCmd.responses && matchedCmd.responses.length > 0) {
                 let target = tokens[1] || '';
                 if (target.startsWith('@')) {
                   target = target.slice(1);
@@ -1691,8 +1710,30 @@ function App() {
     addBotLog("Bot desconectado manualmente.");
   };
 
-  // Cache para IDs numéricos de Twitch
+// Cache para IDs numéricos de Twitch
   const twitchUserIdsCacheRef = useRef({});
+
+  // Client ID dinámico cacheado
+  const twitchClientIdCacheRef = useRef(null);
+
+  const getTwitchClientId = async (token) => {
+    if (twitchClientIdCacheRef.current) return twitchClientIdCacheRef.current;
+    try {
+      const res = await fetch('https://id.twitch.tv/oauth2/validate', {
+        headers: { 'Authorization': `OAuth ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.client_id) {
+          twitchClientIdCacheRef.current = data.client_id;
+          return data.client_id;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not validate token client ID:", e);
+    }
+    return 'q6batx0epp6085zfzqqb5sf3htzkbt'; // Fallback a TMI client ID oficial
+  };
 
   const getTwitchUserId = async (username, token) => {
     const cleanUser = (username || '').toLowerCase().replace(/^#/, '').trim();
@@ -1700,10 +1741,11 @@ function App() {
     if (twitchUserIdsCacheRef.current[cleanUser]) return twitchUserIdsCacheRef.current[cleanUser];
 
     try {
+      const clientId = await getTwitchClientId(token);
       const res = await fetch(`https://api.twitch.tv/helix/users?login=${cleanUser}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Client-Id': 'gp762nuuoqcoxypju8c569th9wz7q5'
+          'Client-Id': clientId
         }
       });
       if (res.ok) {
@@ -1729,6 +1771,7 @@ function App() {
     const currentBot = (botUsernameRef.current || localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe').toLowerCase().trim();
 
     try {
+      const clientId = await getTwitchClientId(rawToken);
       const broadcasterId = await getTwitchUserId(currentChannel, rawToken);
       const moderatorId = await getTwitchUserId(currentBot, rawToken);
 
@@ -1737,7 +1780,7 @@ function App() {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${rawToken}`,
-            'Client-Id': 'gp762nuuoqcoxypju8c569th9wz7q5',
+            'Client-Id': clientId,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -1747,12 +1790,12 @@ function App() {
         });
 
         if (res.status === 204 || res.ok) {
-          addBotLog(`📢 [Anuncio Oficial Destacado en #${currentChannel}]: "${messageText}"`);
+          addBotLog(`📢 [Anuncio Destacado en #${currentChannel}]: "${messageText}"`);
           return true;
         }
       }
     } catch (err) {
-      console.warn("Helix Announcement error, using IRC fallback:", err);
+      console.warn("Helix Announcement error, using IRC command fallback:", err);
     }
     return false;
   };
@@ -1766,20 +1809,27 @@ function App() {
     if (isAnnounce) {
       const content = formattedText.replace(/^[/\\.](announce|announcement)\s+/i, '').trim();
       
-      // 1. Intentar enviar Anuncio Oficial con Banner de Twitch por API Helix
-      const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
-      if (sentViaHelix) {
-        if (!silent) triggerToast("📢 ¡Anuncio destacado enviado al chat!");
-        return true;
+      // 1. Intentar enviar Anuncio Oficial con Banner por API Helix
+      try {
+        const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
+        if (sentViaHelix) {
+          if (!silent) triggerToast("📢 ¡Anuncio destacado enviado al chat!");
+          return true;
+        }
+      } catch (e) {
+        console.warn("Helix announce skipped:", e);
       }
 
-      // 2. Si la API Helix no estuviera disponible, enviar el contenido limpio
+      // 2. Si el token no tiene scope de anuncios de Helix, enviar el mensaje al chat como mensaje del bot para que NUNCA se pierda
       formattedText = content;
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(`PRIVMSG #${channelTarget} :${formattedText}`);
       addBotLog(`✅ Mensaje enviado a #${channelTarget}: ${formattedText}`);
+      if (!silent) {
+        triggerToast("💬 Mensaje enviado al chat con éxito");
+      }
       return true;
     } else {
       addBotLog("❌ Error: El WebSocket no está abierto. Pulsa 'Activar y Conectar Bot'.");
@@ -3458,7 +3508,7 @@ function App() {
             />
           </div>
         </aside>
-      ) : ['create', 'create_content_item', 'view_participations', 'view_twitch', 'view_commands'].includes(view) && (() => {
+      ) : ['create', 'create_content_item', 'view_participations', 'view_twitch'].includes(view) && (() => {
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
@@ -3668,8 +3718,7 @@ function App() {
                 </h2>
                 <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
                   <div 
-                    className="dashboard-card" 
-                    style={{ border: '1.5px solid rgba(245, 158, 11, 0.4)', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(15, 23, 42, 0.6))' }} 
+                    className="dashboard-card theme-amber" 
                     onClick={() => restrictedNavigate('view_user_permissions', 'user_permissions')}
                   >
                     <div className="icon-bg" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B' }}>
@@ -3684,20 +3733,19 @@ function App() {
               </>
             )}
 
-            {/* 1. SECCIÓN: BOT PARA TWITCH (Arriba de todo) */}
-            <h2 className="section-title" style={{ marginTop: '2rem', marginBottom: '1.2rem', color: '#9146FF', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(145, 70, 255, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Bot size={22} color="#9146FF" /> Bot para Twitch
+            {/* 1. SECCIÓN: BOT PARA TWITCH (Verde #10B981) */}
+            <h2 className="section-title" style={{ marginTop: '2rem', marginBottom: '1.2rem', color: '#10B981', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(16, 185, 129, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Bot size={22} color="#10B981" /> Bot para Twitch
             </h2>
             <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
               
               {/* Cumpleaños */}
               <div 
-                className="dashboard-card" 
-                style={{ border: '1px solid rgba(236, 72, 153, 0.4)' }} 
+                className="dashboard-card theme-green" 
                 onClick={() => restrictedNavigate('view_birthdays', 'birthdays')}
               >
-                <div className="icon-bg" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}>
-                  <Cake size={26} />
+                <div className="icon-bg" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10B981' }}>
+                  <Cake size={26} color="#10B981" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
@@ -3707,12 +3755,11 @@ function App() {
 
               {/* Mensajes Programados */}
               <div 
-                className={`dashboard-card ${!hasAccess('scheduled_messages') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('scheduled_messages') ? '1px solid rgba(59, 130, 246, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-green ${!hasAccess('scheduled_messages') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_scheduled_messages', 'scheduled_messages')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('scheduled_messages') ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
-                  <MessageSquare size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('scheduled_messages') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
+                  <MessageSquare size={26} color="#10B981" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Mensajes programados</h3>
@@ -3722,12 +3769,11 @@ function App() {
 
               {/* Comandos del Chat */}
               <div 
-                className={`dashboard-card ${!hasAccess('commands') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('commands') ? '1px solid rgba(16, 185, 129, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-green ${!hasAccess('commands') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_commands', 'commands')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('commands') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
-                  <Settings size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('commands') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
+                  <Settings size={26} color="#10B981" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
@@ -3737,12 +3783,11 @@ function App() {
 
               {/* Credenciales Bot */}
               <div 
-                className="dashboard-card" 
-                style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }} 
+                className="dashboard-card theme-green" 
                 onClick={() => restrictedNavigate('view_bot_credentials', 'bot_credentials')}
               >
-                <div className="icon-bg" style={{ background: 'rgba(145, 70, 255, 0.1)', color: '#9146FF' }}>
-                  <Key size={26} />
+                <div className="icon-bg" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10B981' }}>
+                  <Key size={26} color="#10B981" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
@@ -3751,17 +3796,36 @@ function App() {
               </div>
             </div>
 
-            {/* 2. SECCIÓN: HERRAMIENTAS DE LA WEB */}
-            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.2rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
-              Herramientas de la Web
+            {/* SECCIÓN: CANJES POR PUNTOS DE TWITCH (Azul #3B82F6) */}
+            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.2rem', color: '#3B82F6', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(59, 130, 246, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Award size={22} color="#3B82F6" /> Canjes por puntos de Twitch
             </h2>
             <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
               <div 
-                className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
+                className={`dashboard-card theme-blue ${!hasAccess('points_wheel') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_points_wheel', 'points_wheel')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('points_wheel') ? 'rgba(59, 130, 246, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
+                  <Sparkles size={26} color="#3B82F6" />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Ruleta por Puntos</h3>
+                  <p>Ruleta interactiva con overlay para OBS que gira automáticamente al canjear puntos de canal.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. SECCIÓN: HERRAMIENTAS DE LA WEB (Rosa #EC4899) */}
+            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.2rem', color: '#EC4899', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(236, 72, 153, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Globe size={22} color="#EC4899" /> Herramientas de la Web
+            </h2>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
+              <div 
+                className={`dashboard-card theme-pink ${!hasAccess('news_only') ? 'restricted' : ''}`} 
                 onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
               >
-                <div className="icon-bg">
-                  <FilePlus size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <FilePlus size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3>Crear Noticia</h3>
@@ -3770,11 +3834,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('events_and_giveaways') ? 'restricted' : ''}`} 
+                className={`dashboard-card theme-pink ${!hasAccess('events_and_giveaways') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('create_content_item', 'events_and_giveaways')}
               >
-                <div className="icon-bg">
-                  <Calendar size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('events_and_giveaways') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <Calendar size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3>Crear Sorteo o Evento</h3>
@@ -3783,11 +3847,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('participations') ? 'restricted' : ''}`} 
+                className={`dashboard-card theme-pink ${!hasAccess('participations') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_participations', 'participations')}
               >
-                <div className="icon-bg">
-                  <Users size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('participations') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <Users size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3>Gestionar Participaciones</h3>
@@ -3796,12 +3860,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('most_streamed') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('most_streamed') ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-pink ${!hasAccess('most_streamed') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_most_streamed', 'most_streamed')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('most_streamed') ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
-                  <Gamepad2 size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('most_streamed') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <Gamepad2 size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Lo mas Streameable</h3>
@@ -3810,12 +3873,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('reports') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('reports') ? '1px solid rgba(239, 68, 68, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-pink ${!hasAccess('reports') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_reports', 'reports')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#EF4444' }}>
-                  <AlertCircle size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <AlertCircle size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
@@ -3824,12 +3886,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('minigames') ? 'restricted' : ''}`} 
+                className={`dashboard-card theme-pink ${!hasAccess('minigames') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_minijuegos', 'minigames')}
-                style={{ border: hasAccess('minigames') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }}
               >
-                <div className="icon-bg" style={{ background: hasAccess('minigames') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#A855F7' }}>
-                  <Gamepad2 size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('minigames') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <Gamepad2 size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Minijuegos</h3>
@@ -3838,12 +3899,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('tierlists') ? 'restricted' : ''}`} 
+                className={`dashboard-card theme-pink ${!hasAccess('tierlists') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_tierlists', 'tierlists')}
-                style={{ border: hasAccess('tierlists') ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }}
               >
-                <div className="icon-bg" style={{ background: hasAccess('tierlists') ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
-                  <Layers size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('tierlists') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <Layers size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Contenido Tierlists</h3>
@@ -3852,12 +3912,11 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
+                className={`dashboard-card theme-pink ${!hasAccess('news_only') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_sync_news', 'news_only')}
-                style={{ border: hasAccess('news_only') ? '1px solid rgba(56, 189, 248, 0.4)' : '1px dashed var(--border-color)' }}
               >
-                <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(56, 189, 248, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
-                  <Newspaper size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
+                  <Newspaper size={26} color="#EC4899" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Sincronizar Noticias</h3>
@@ -3866,66 +3925,64 @@ function App() {
               </div>
             </div>
 
-            {/* 3. SECCIÓN: HERRAMIENTAS TWITCH */}
-            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.2rem', color: '#A855F7', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(168, 85, 247, 0.1)', paddingBottom: '8px' }}>
-              Herramientas Twitch
+            {/* 3. SECCIÓN: HERRAMIENTAS TWITCH (Celeste #38BDF8) */}
+            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.2rem', color: '#38BDF8', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(56, 189, 248, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Tv size={22} color="#38BDF8" /> Herramientas Twitch
             </h2>
             <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.2rem' }}>
               <div 
-                className={`dashboard-card ${!hasAccess('ruleta') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('ruleta') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-cyan ${!hasAccess('ruleta') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_ruleta', 'ruleta')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('ruleta') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('ruleta') ? '#A855F7' : 'var(--primary)' }}>
-                  <Disc size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('ruleta') ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
+                  <Disc size={26} color="#38BDF8" />
                 </div>
                 <div className="dashboard-card-info">
-                  <h3 style={{ color: hasAccess('ruleta') ? '#A855F7' : 'var(--text-main)' }}>Ruleta de Sorteos</h3>
+                  <h3 style={{ color: 'var(--text-main)' }}>Ruleta de Sorteos</h3>
                   <p>Girador de ruleta animada personalizable para realizar sorteos en directo.</p>
                 </div>
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('twitch_giveaway') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('twitch_giveaway') ? '1px solid rgba(145, 70, 255, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-cyan ${!hasAccess('twitch_giveaway') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_twitch_giveaway', 'twitch_giveaway')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('twitch_giveaway') ? 'rgba(145, 70, 255, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--primary)' }}>
-                  <Gift size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('twitch_giveaway') ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
+                  <Gift size={26} color="#38BDF8" />
                 </div>
                 <div className="dashboard-card-info">
-                  <h3 style={{ color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
+                  <h3 style={{ color: 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
                   <p>Escucha el chat de Twitch en tiempo real por palabras clave para sortear ganadores.</p>
                 </div>
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('twitch') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('twitch') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-cyan ${!hasAccess('twitch') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_twitch', 'twitch')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch') ? '#A855F7' : 'var(--primary)' }}>
-                  <LayoutTemplate size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
+                  <LayoutTemplate size={26} color="#38BDF8" />
                 </div>
                 <div className="dashboard-card-info">
-                  <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
+                  <h3 style={{ color: 'var(--text-main)' }}>Canjes de Twitch</h3>
                   <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
                 </div>
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('song_request') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('song_request') ? '1px solid rgba(245, 158, 11, 0.4)' : '1px dashed var(--border-color)' }} 
+                className={`dashboard-card theme-cyan ${!hasAccess('song_request') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_song_request', 'song_request')}
               >
-                <div className="icon-bg" style={{ background: hasAccess('song_request') ? 'rgba(245, 158, 11, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#F59E0B' }}>
-                  <Play size={26} />
+                <div className="icon-bg" style={{ background: hasAccess('song_request') ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
+                  <Play size={26} color="#38BDF8" />
                 </div>
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Song Request</h3>
                   <p>Gestiona la cola de canciones pedidas por el chat y visualiza el reproductor.</p>
                 </div>
               </div>
+
+
             </div>
           </div>
         ) : view === 'create_content_item' ? (
@@ -4573,205 +4630,39 @@ function App() {
               setMessages={setScheduledMessages}
             />
           </div>
-        ) : view === 'view_commands' ? (
-          <div className="builder-view" style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <div className="builder-header animate-slide-down">
+        ) : view === 'view_points_wheel' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                Creador de Comandos
-              </h1>
             </div>
 
-            <div className="card animate-slide-down" style={{ animationDelay: '0.15s', margin: 0 }}>
-              <h2 style={{ color: 'var(--primary)', marginTop: 0, fontSize: '1.25rem' }}>
-                Configurar Comando
-              </h2>
-              
-              <div className="form-group">
-                <label className="form-label">Nombre del Comando (Ej: !pelea o !abrazo)</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="Escribe el comando iniciando con !"
-                  value={cmdFormName}
-                  onChange={(e) => setCmdFormName(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Descripción del Comando</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="Para qué sirve el comando..."
-                  value={cmdFormDesc}
-                  onChange={(e) => setCmdFormDesc(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Tipo de Plantilla Interactiva</label>
-                <select 
-                  className="form-control"
-                  value={cmdFormType}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setCmdFormType(val);
-                    // Autofill template responses
-                    if (val === 'versus') {
-                      setCmdFormResponses(["{user} reta a {target} a una dura pelea de espadas. ¡Tras chocar acero, {winner} vence heroicamente dejando a {loser} en el suelo!"]);
-                    } else if (val === 'action') {
-                      setCmdFormResponses(["{user} le da un fuerte y cálido abrazo a {target}! <3"]);
-                    } else if (val === 'random') {
-                      setCmdFormResponses(["Sí, definitivamente.", "No, no lo creo.", "Tal vez, pregunta de nuevo.", "Es muy probable!"]);
-                    } else if (val === 'love') {
-                      setCmdFormResponses(["¡El termómetro del amor dice que {user} y {target} son un {percentage}% compatibles! ❤️"]);
-                    } else if (val === 'roulette') {
-                      setCmdFormResponses(["🔫 {user} jala del gatillo... ¡CLIC! El tambor gira y el arma no se dispara. Te has salvado. 😌", "🔫 {user} jala del gatillo... ¡BANG! El arma se dispara y caes eliminado del combate. 💀"]);
-                    } else if (val === 'level') {
-                      setCmdFormResponses(["Escaneando a {target}... ¡Nivel de toxicidad detectado: {level}%! ☢️", "Escaneando a {target}... ¡Nivel de guapeza detectado: {level}%! 😎"]);
-                    }
-                  }}
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '10px' }}
-                >
-                  <option value="versus">⚔️ Versus (Pelea / Duelo con Ganador Aleatorio)</option>
-                  <option value="action">❤️ Acción Simple (Abrazo / Saludo entre usuarios)</option>
-                  <option value="random">🔮 Decisión Aleatoria (8ball / Respuestas aleatorias)</option>
-                  <option value="love">💖 Medidor de Amor (Porcentaje de afinidad entre usuarios)</option>
-                  <option value="roulette">🔫 Ruleta Rusa (Tensión y supervivencia con frases aleatorias)</option>
-                  <option value="level">📊 Medidor de Nivel (Estadísticas locas 0-100%)</option>
-                </select>
-              </div>
-
-              {/* Variables Helper Box */}
-              <div style={{ 
-                background: 'rgba(168, 85, 247, 0.05)', 
-                border: '1px dashed rgba(168, 85, 247, 0.2)', 
-                borderRadius: '8px', 
-                padding: '12px', 
-                marginBottom: '15px', 
-                fontSize: '0.8rem', 
-                color: 'var(--text-muted)',
-                lineHeight: '1.4'
-              }}>
-                <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>Variables disponibles para la frase:</strong>
-                {cmdFormType === 'versus' && (
-                  <>
-                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El streamer o usuario que envía el comando.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: La persona que fue etiquetada tras el comando.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{winner}"}</code>: Ganador del duelo elegido de forma aleatoria (50% de probabilidad).<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{loser}"}</code>: Perdedor del duelo (el que no salió elegido ganador).
-                  </>
-                )}
-                {cmdFormType === 'action' && (
-                  <>
-                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que envía el comando.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: La persona etiquetada que recibe la acción.
-                  </>
-                )}
-                {cmdFormType === 'random' && (
-                  <>
-                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que consulta al bot.<br />
-                    Escribe múltiples respuestas abajo y el bot elegirá una de ellas al azar para responder a la pregunta.
-                  </>
-                )}
-                {cmdFormType === 'love' && (
-                  <>
-                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que envía el comando.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: La pareja o persona elegida.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{percentage}"}</code>: Porcentaje aleatorio entre 0% y 100%.
-                  </>
-                )}
-                {cmdFormType === 'roulette' && (
-                  <>
-                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El valiente que arriesga su vida en el chat.<br />
-                    Escribe los resultados (ej: uno de salvado y otro de eliminado) en la lista de frases posibles.
-                  </>
-                )}
-                {cmdFormType === 'level' && (
-                  <>
-                    • <code style={{ color: '#E9D5FF' }}>{"{user}"}</code>: El usuario que realiza el escaneo.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{target}"}</code>: El usuario analizado.<br />
-                    • <code style={{ color: '#E9D5FF' }}>{"{level}"}</code>: Porcentaje del nivel medido (0-100%).
-                  </>
-                )}
-              </div>
-
-              {/* Responses list */}
-              <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Frases / Respuestas posibles</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setCmdFormResponses([...cmdFormResponses, ''])}
-                    style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
-                  >
-                    + Añadir Frase
-                  </button>
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
-                  {cmdFormResponses.map((resp, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '8px' }}>
-                      <textarea 
-                        className="form-control" 
-                        placeholder="Escribe la frase utilizando las variables..."
-                        value={resp}
-                        onChange={(e) => {
-                          const newResps = [...cmdFormResponses];
-                          newResps[i] = e.target.value;
-                          setCmdFormResponses(newResps);
-                        }}
-                        rows={2}
-                        style={{ flex: 1, resize: 'vertical', minHeight: '55px', fontSize: '0.85rem', padding: '8px' }}
-                      />
-                      {cmdFormResponses.length > 1 && (
-                        <button 
-                          type="button" 
-                          onClick={() => setCmdFormResponses(cmdFormResponses.filter((_, idx) => idx !== i))}
-                          style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0 10px', borderRadius: '6px', cursor: 'pointer' }}
-                        >
-                          X
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button 
-                  type="button" 
-                  className="btn-submit" 
-                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', marginTop: 0 }}
-                  onClick={() => {
-                    setCmdFormName('');
-                    setCmdFormDesc('');
-                    setCmdFormType('versus');
-                    setCmdFormResponses(['']);
-                  }}
-                >
-                  Limpiar
-                </button>
-                <button 
-                  type="button" 
-                  className="btn-submit"
-                  style={{ marginTop: 0 }}
-                  onClick={async () => {
-                    const success = await handleSaveChatCommand(cmdFormName, cmdFormType, cmdFormDesc, cmdFormResponses);
-                    if (success) {
-                      setCmdFormName('');
-                      setCmdFormDesc('');
-                      setCmdFormResponses(['']);
-                    }
-                  }}
-                >
-                  Guardar Comando
-                </button>
-              </div>
-
+            <PointsWheelManager 
+              supabase={supabase}
+              triggerToast={triggerToast}
+              enviarMensajeTwitch={enviarMensajeTwitch}
+              isBotConnected={isBotConnected}
+            />
+          </div>
+        ) : view === 'view_commands' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
             </div>
+
+            <ChatCommandsManager 
+              supabase={supabase}
+              triggerToast={triggerToast}
+              chatCommands={chatCommands}
+              fetchChatCommands={fetchChatCommands}
+              handleSaveChatCommand={handleSaveChatCommand}
+              handleDeleteChatCommand={handleDeleteChatCommand}
+              enviarMensajeTwitch={enviarMensajeTwitch}
+              isBotConnected={isBotConnected}
+            />
           </div>
         ) : view === 'view_reports' ? (
           <div className="builder-view" style={{ maxWidth: '1500px', width: '98%' }}>

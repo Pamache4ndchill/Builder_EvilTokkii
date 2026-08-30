@@ -15,6 +15,7 @@ const PERMISSION_COLUMNS = [
     { key: 'access_minigames', label: 'Minijuegos', desc: 'Banco de preguntas y dinámicas', color: '#A855F7' },
     { key: 'access_tierlists', label: 'Tierlists', desc: 'Edición de personajes de tierlists', color: '#F59E0B' },
     { key: 'access_ruleta', label: 'Ruleta de Sorteos', desc: 'Ruleta animada en directo', color: '#A855F7' },
+    { key: 'access_points_wheel', label: 'Ruleta por Puntos', desc: 'Ruleta de puntos con overlay OBS', color: '#38BDF8' },
     { key: 'access_twitch_giveaway', label: 'Sorteo en Vivo (Chat)', desc: 'Sorteo de palabras clave', color: '#9146FF' },
     { key: 'access_twitch', label: 'Canjes de Twitch', desc: 'Reclamos de puntos de canal', color: '#8B5CF6' },
     { key: 'access_scheduled_messages', label: 'Mensajes Programados', desc: 'Temporizadores del bot', color: '#3B82F6' },
@@ -90,12 +91,18 @@ export default function UserPermissionsManager({ supabase, triggerToast, session
                 .update({ [permKey]: newValue })
                 .eq('email', userObj.email);
 
-            if (error) throw error;
-            triggerToast(`Permiso actualizado para @${userObj.username || userObj.email}`);
+            if (error) {
+                if (error.message && error.message.includes('column')) {
+                    triggerToast(`⚠️ La columna ${permKey} aún no existe en Supabase (ejecuta el script SQL abajo)`);
+                } else {
+                    throw error;
+                }
+            } else {
+                triggerToast(`Permiso actualizado para @${userObj.username || userObj.email}`);
+            }
         } catch (err) {
             console.error('Error updating permission:', err);
-            triggerToast('⚠️ Error al actualizar permiso en base de datos');
-            fetchUsers(); // Revert
+            triggerToast('⚠️ Error al actualizar permiso');
         }
     };
 

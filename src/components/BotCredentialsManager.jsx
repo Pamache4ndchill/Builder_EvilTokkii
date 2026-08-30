@@ -38,18 +38,14 @@ export default function BotCredentialsManager({
 }) {
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_username');
-    if (!saved || /eviltokki/i.test(saved)) {
-      localStorage.setItem('twitch_bot_username', DEFAULT_USERNAME);
-      return DEFAULT_USERNAME;
-    }
-    return saved;
+    localStorage.setItem('twitch_bot_username', DEFAULT_USERNAME);
+    return DEFAULT_USERNAME;
   });
     const [botOauth, setBotOauth] = useState(() => {
     const saved = localStorage.getItem('twitch_bot_oauth') || '';
-    if (saved.includes('dahm5c9z') || saved.includes('ol3ji2g7')) {
-      localStorage.removeItem('twitch_bot_oauth');
-      return '';
+    if (!saved || saved !== 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+      localStorage.setItem('twitch_bot_oauth', 'eqwqvqkwf6onasha2qzupnzxlardxd');
+      return 'eqwqvqkwf6onasha2qzupnzxlardxd';
     }
     return saved;
   });

@@ -242,6 +242,104 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 16px var(--primary-glow);
 }
 
+
+
+/* THEME BLUE (Canjes por puntos de Twitch) */
+.dashboard-card.theme-blue {
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+.dashboard-card.theme-blue:hover {
+  border-color: #3B82F6 !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  box-shadow: 0 10px 30px -6px rgba(59, 130, 246, 0.45) !important;
+}
+.dashboard-card.theme-blue:hover .icon-bg {
+  background: #3B82F6 !important;
+  color: #fff !important;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.6) !important;
+}
+.dashboard-card.theme-blue:hover .icon-bg svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
+/* THEME GREEN (Bot para Twitch) */
+.dashboard-card.theme-green {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.dashboard-card.theme-green:hover {
+  border-color: #10B981 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+  box-shadow: 0 10px 30px -6px rgba(16, 185, 129, 0.45) !important;
+}
+.dashboard-card.theme-green:hover .icon-bg {
+  background: #10B981 !important;
+  color: #fff !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.6) !important;
+}
+.dashboard-card.theme-green:hover .icon-bg svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
+/* THEME PINK (Herramientas de la Web) */
+.dashboard-card.theme-pink {
+  border: 1px solid rgba(236, 72, 153, 0.35);
+}
+.dashboard-card.theme-pink:hover {
+  border-color: #EC4899 !important;
+  background: rgba(236, 72, 153, 0.08) !important;
+  box-shadow: 0 10px 30px -6px rgba(236, 72, 153, 0.45) !important;
+}
+.dashboard-card.theme-pink:hover .icon-bg {
+  background: #EC4899 !important;
+  color: #fff !important;
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.6) !important;
+}
+.dashboard-card.theme-pink:hover .icon-bg svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
+/* THEME CYAN (Herramientas Twitch) */
+.dashboard-card.theme-cyan {
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.dashboard-card.theme-cyan:hover {
+  border-color: #38BDF8 !important;
+  background: rgba(56, 189, 248, 0.08) !important;
+  box-shadow: 0 10px 30px -6px rgba(56, 189, 248, 0.45) !important;
+}
+.dashboard-card.theme-cyan:hover .icon-bg {
+  background: #38BDF8 !important;
+  color: #fff !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.6) !important;
+}
+.dashboard-card.theme-cyan:hover .icon-bg svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
+/* THEME AMBER (Superadministrador Pamache) */
+.dashboard-card.theme-amber {
+  border: 1.5px solid rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(15, 23, 42, 0.6));
+}
+.dashboard-card.theme-amber:hover {
+  border-color: #F59E0B !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  box-shadow: 0 10px 30px -6px rgba(245, 158, 11, 0.5) !important;
+}
+.dashboard-card.theme-amber:hover .icon-bg {
+  background: #F59E0B !important;
+  color: #fff !important;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.6) !important;
+}
+.dashboard-card.theme-amber:hover .icon-bg svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
 .dashboard-card-info {
   flex: 1;
   display: flex;

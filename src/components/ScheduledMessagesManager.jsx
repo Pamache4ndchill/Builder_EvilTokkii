@@ -193,18 +193,14 @@ export default function ScheduledMessagesManager({
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_username');
-    if (!saved || /eviltokki/i.test(saved)) {
-      localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
-      return 'EmiliaMaria_exe';
-    }
-    return saved;
+    localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
+    return 'EmiliaMaria_exe';
   });
     const [botOauth, setBotOauth] = useState(() => {
     const saved = localStorage.getItem('twitch_bot_oauth') || '';
-    if (saved.includes('dahm5c9z') || saved.includes('ol3ji2g7')) {
-      localStorage.removeItem('twitch_bot_oauth');
-      return '';
+    if (!saved || saved !== 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+      localStorage.setItem('twitch_bot_oauth', 'eqwqvqkwf6onasha2qzupnzxlardxd');
+      return 'eqwqvqkwf6onasha2qzupnzxlardxd';
     }
     return saved;
   });
@@ -224,12 +220,20 @@ export default function ScheduledMessagesManager({
     const setBotLogs = propSetBotLogs !== undefined ? propSetBotLogs : setLocalLogs;
     const [chatActivityCount, setChatActivityCount] = useState(0);
 
+    const DEFAULT_MSGS = [
+        { id: '1', text: "🌟 ¡Recuerda seguir el canal y activar las notificaciones para estar al día de todos los directos!", intervalMinutes: 10, minChatMessages: 10, active: true },
+        { id: '2', text: "/announce 🌐 ¡Visita nuestra web oficial con minijuegos y sorteos diarios: https://tokkii.online!", intervalMinutes: 15, minChatMessages: 15, active: true }
+    ];
+
     const [localMessages, setLocalMessages] = useState(() => {
         try {
             const saved = localStorage.getItem('twitch_scheduled_messages_v3');
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
         } catch (e) {}
-        return [];
+        return DEFAULT_MSGS;
     });
     const messages = propMessages !== undefined ? propMessages : localMessages;
     const setMessages = propSetMessages !== undefined ? propSetMessages : setLocalMessages;
@@ -467,7 +471,7 @@ export default function ScheduledMessagesManager({
         }
     };
 
-    const handleSaveMessage = (e) => {
+    const handleSaveMessage = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (e && e.stopPropagation) e.stopPropagation();
 
@@ -496,15 +500,19 @@ export default function ScheduledMessagesManager({
                 triggerToast('✅ Nuevo mensaje programado creado');
 
                 if (supabase) {
-                    supabase.from('twitch_scheduled_messages').upsert({
-                        id: targetId,
-                        text: cleanText,
-                        interval_minutes: intervalMins,
-                        min_chat_messages: minChats,
-                        active: true,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    }).catch(e => console.warn("Supabase insert note:", e));
+                    try {
+                        await supabase.from('twitch_scheduled_messages').upsert({
+                            id: targetId,
+                            text: cleanText,
+                            interval_minutes: intervalMins,
+                            min_chat_messages: minChats,
+                            active: true,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        });
+                    } catch (e) {
+                        console.warn("Supabase insert note:", e);
+                    }
                 }
             } else {
                 updatedList = messages.map(m => m.id === editingMsg.id ? {
@@ -517,12 +525,16 @@ export default function ScheduledMessagesManager({
                 triggerToast('✅ Mensaje programado actualizado');
 
                 if (supabase) {
-                    supabase.from('twitch_scheduled_messages').update({
-                        text: cleanText,
-                        interval_minutes: intervalMins,
-                        min_chat_messages: minChats,
-                        updated_at: new Date().toISOString()
-                    }).eq('id', targetId).catch(e => console.warn("Supabase update note:", e));
+                    try {
+                        await supabase.from('twitch_scheduled_messages').update({
+                            text: cleanText,
+                            interval_minutes: intervalMins,
+                            min_chat_messages: minChats,
+                            updated_at: new Date().toISOString()
+                        }).eq('id', targetId);
+                    } catch (e) {
+                        console.warn("Supabase update note:", e);
+                    }
                 }
             }
 
