@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers } from 'lucide-react';
+import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
@@ -11,7 +11,9 @@ import BirthdaysManager from './components/BirthdaysManager';
 import BotCredentialsManager from './components/BotCredentialsManager';
 import ChatCommandsManager from './components/ChatCommandsManager';
 import PointsWheelManager, { PointsWheelOBSOverlay } from './components/PointsWheelManager';
+import TTSVoiceManager, { TTSAudioOBSOverlay, DEFAULT_CHARACTERS, TTSSpeechEngine } from './components/TTSVoiceManager';
 import UserPermissionsManager from './components/UserPermissionsManager';
+import PendingAuthorizationsManager from './components/PendingAuthorizationsManager';
 
 import md5 from 'blueimp-md5';
 import { DOWNLOADED_PERKS } from './data/DbdPerksDownloaded';
@@ -478,9 +480,49 @@ function App() {
   if (isPointsWheelOverlay) {
     return <PointsWheelOBSOverlay supabase={supabase} />;
   }
+
+  const isTTSAudioOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overlay') === 'tts_audio';
+  if (isTTSAudioOverlay) {
+    return <TTSAudioOBSOverlay supabase={supabase} />;
+  }
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
   const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
   const [sessionUsername, setSessionUsername] = useState(localStorage.getItem('builder_username') || '');
+    const [pendingUsersCount, setPendingUsersCount] = useState(0);
+
+  // Monitor de solicitudes de usuarios pendientes
+  useEffect(() => {
+    if (!supabase) return;
+
+    const fetchPendingCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('whitelist')
+          .select('id', { count: 'exact', head: true })
+          .eq('approved', false);
+
+        if (!error && count !== null) {
+          setPendingUsersCount(count);
+        }
+      } catch (err) {
+        console.warn("Error fetching pending whitelist count:", err);
+      }
+    };
+
+    fetchPendingCount();
+
+    const channel = supabase
+      .channel('whitelist_count_monitor')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whitelist' }, () => {
+        fetchPendingCount();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const [sessionPermissions, setSessionPermissions] = useState(() => {
     const cached = localStorage.getItem('builder_permissions');
     if (!cached) return '*';
@@ -557,6 +599,8 @@ function App() {
           return sessionPermissions.access_bot_credentials !== undefined ? !!sessionPermissions.access_bot_credentials : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
         case 'birthdays':
           return sessionPermissions.access_birthdays !== undefined ? !!sessionPermissions.access_birthdays : (sessionPermissions.access_twitch || sessionPermissions.access_scheduled_messages || true);
+        case 'tts_voices':
+          return sessionPermissions.access_tts_voices !== undefined ? !!sessionPermissions.access_tts_voices : (sessionPermissions.access_twitch || true);
         case 'points_wheel':
           return sessionPermissions.access_points_wheel !== undefined ? !!sessionPermissions.access_points_wheel : (sessionPermissions.access_twitch || sessionPermissions.access_ruleta || true);
         case 'tierlists':
@@ -1589,10 +1633,124 @@ function App() {
               console.warn("Error detecting birthday chatter:", bdayErr);
             }
 
+              const ttsUserCooldownRef = useRef({});
+
+  const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
+    try {
+      const isTTSEnabled = localStorage.getItem('tts_bot_enabled') !== 'false';
+      if (!isTTSEnabled) return;
+
+      const ttsCmd = (localStorage.getItem('tts_bot_command') || '!voz').toLowerCase().trim();
+      const prefix = ttsCmd + ' ';
+      let rest = fullText.slice(prefix.length).trim();
+      if (!rest) return;
+
+      // Verificar cooldown
+      const cooldownSec = Number(localStorage.getItem('tts_cooldown')) || 10;
+      const now = Date.now();
+      const lastUsed = ttsUserCooldownRef.current[user.toLowerCase()] || 0;
+      if (now - lastUsed < cooldownSec * 1000) {
+        return; // En cooldown
+      }
+      ttsUserCooldownRef.current[user.toLowerCase()] = now;
+
+      // Parsear personaje y mensaje
+      const parts = rest.split(/\s+/);
+      const possibleCharKey = parts[0].toLowerCase();
+
+      // Cargar lista de personajes
+      let charactersList = DEFAULT_CHARACTERS;
+      try {
+        const saved = localStorage.getItem('tts_characters_custom');
+        if (saved) charactersList = JSON.parse(saved);
+      } catch (e) {}
+
+      let targetChar = charactersList.find(c => 
+        c.enabled !== false && 
+        (c.id.toLowerCase() === possibleCharKey || (c.alias && c.alias.some(a => a.toLowerCase() === possibleCharKey)))
+      );
+
+      let messageText = '';
+      if (targetChar) {
+        messageText = parts.slice(1).join(' ').trim();
+      } else {
+        // Personaje por defecto
+        targetChar = charactersList.find(c => c.enabled !== false) || DEFAULT_CHARACTERS[0];
+        messageText = rest;
+      }
+
+      if (!messageText) return;
+
+      // Límite de caracteres
+      const charLimit = Number(localStorage.getItem('tts_char_limit')) || 120;
+      if (messageText.length > charLimit) {
+        messageText = messageText.slice(0, charLimit) + '...';
+      }
+
+      // Filtro de censura / palabras bloqueadas
+      const blacklistStr = localStorage.getItem('tts_blacklist') || '';
+      if (blacklistStr) {
+        const bannedWords = blacklistStr.split(',').map(w => w.trim().toLowerCase()).filter(w => w.length > 0);
+        bannedWords.forEach(banned => {
+          const reg = new RegExp(banned, 'gi');
+          messageText = messageText.replace(reg, '***');
+        });
+      }
+
+      // Reproducir en navegador
+      const vol = Number(localStorage.getItem('tts_volume')) || 0.85;
+      const fakeyouToken = localStorage.getItem('tts_fakeyou_token') || '';
+      TTSSpeechEngine.speakText(messageText, targetChar, vol, fakeyouToken);
+
+      // Emitir a OBS Overlay vía Supabase Realtime
+      if (supabase) {
+        const channel = supabase.channel('tts_realtime_channel');
+        channel.send({
+          type: 'broadcast',
+          event: 'TTS_PLAY_EVENT',
+          payload: {
+            user,
+            text: messageText,
+            characterId: targetChar.id,
+            volume: vol
+          }
+        });
+      }
+
+      // Guardar en historial
+      try {
+        const historySaved = JSON.parse(localStorage.getItem('tts_history_log') || '[]');
+        const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const newEntry = {
+          user,
+          text: messageText,
+          characterId: targetChar.id,
+          characterName: targetChar.name,
+          avatar: targetChar.avatar,
+          time: timeStr
+        };
+        const updatedHistory = [newEntry, ...historySaved].slice(0, 50);
+        localStorage.setItem('tts_history_log', JSON.stringify(updatedHistory));
+      } catch (e) {}
+
+      addBotLog(`[TTS Voz] 🎙️ @${user} usó la voz de ${targetChar.name}: "${messageText}"`);
+    } catch (err) {
+      console.error("Error processing TTS message:", err);
+    }
+  };
+
+            // TTS Voice Command Parser
+            const isTTSEnabled = localStorage.getItem('tts_bot_enabled') !== 'false';
+            const ttsCmd = (localStorage.getItem('tts_bot_command') || '!voz').toLowerCase().trim();
+            const textLower = text.toLowerCase().trim();
+
+            if (isTTSEnabled && (textLower.startsWith(ttsCmd + ' ') || textLower === ttsCmd)) {
+              handleTwitchTTSMessage(user, text, rawMessage);
+            }
+
             // Song Request Command Parsers (Control Estricto y Reactivo)
             const currentSRState = isSongRequestEnabledRef.current;
             const currentSRCmd = (songRequestCommandRef.current || localStorage.getItem('song_request_command') || '!spotifybloqued').toLowerCase().trim();
-            const textLower = text.toLowerCase().trim();
             const customPrefix = currentSRCmd + ' ';
 
             // Si las peticiones están activas Y el mensaje empieza EXACTAMENTE con el comando configurado:
@@ -2263,7 +2421,8 @@ function App() {
               access_ruleta: false,
               access_twitch_giveaway: false,
               access_birthdays: false,
-              access_bot_credentials: false
+              access_bot_credentials: false,
+              access_tts_voices: false
             }
           ]);
           
@@ -3948,6 +4107,42 @@ function App() {
                   <Crown size={22} color="#F59E0B" /> Panel de Superadministrador (Pamache)
                 </h2>
                 <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                  
+                  {/* Pendientes de Autorización */}
+                  <div 
+                    className="dashboard-card theme-amber" 
+                    onClick={() => restrictedNavigate('view_pending_authorizations', 'user_permissions')}
+                    style={{ position: 'relative' }}
+                  >
+                    {pendingUsersCount > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        background: '#EF4444',
+                        color: '#FFF',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        padding: '3px 10px',
+                        borderRadius: '20px',
+                        boxShadow: '0 0 12px rgba(239, 68, 68, 0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <AlertCircle size={12} /> {pendingUsersCount} {pendingUsersCount === 1 ? 'Pendiente' : 'Pendientes'}
+                      </span>
+                    )}
+                    <div className="icon-bg" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B' }}>
+                      <UserCheck size={26} />
+                    </div>
+                    <div className="dashboard-card-info">
+                      <h3 style={{ color: '#F59E0B' }}>Pendientes de Autorización</h3>
+                      <p>Revisa, aprueba o rechaza solicitudes de nuevos usuarios registrados en el Builder con 1 solo clic.</p>
+                    </div>
+                  </div>
+
+                  {/* Gestión de Permisos */}
                   <div 
                     className="dashboard-card theme-amber" 
                     onClick={() => restrictedNavigate('view_user_permissions', 'user_permissions')}
@@ -4023,6 +4218,20 @@ function App() {
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
                   <p>Configura de forma centralizada la cuenta de Twitch secundaria (EmiliaMaria_exe), token y color.</p>
+                </div>
+              </div>
+
+              {/* Voces TTS (Text to Speech) */}
+              <div 
+                className={`dashboard-card theme-green ${!hasAccess('tts_voices') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_tts_voices', 'tts_voices')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('tts_voices') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
+                  <Volume2 size={26} color="#10B981" />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Voces TTS (Personajes)</h3>
+                  <p>Comandos de voz con personajes de anime, videojuegos y celebridades (Goku, Homero, Sonic, etc.).</p>
                 </div>
               </div>
             </div>
@@ -4867,6 +5076,18 @@ function App() {
               setBotLogs={setBotLogs}
               messages={scheduledMessages}
               setMessages={setScheduledMessages}
+            />
+          </div>
+        ) : view === 'view_tts_voices' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver
+              </button>
+            </div>
+
+            <TTSVoiceManager 
+              supabase={supabase}
             />
           </div>
         ) : view === 'view_points_wheel' ? (
@@ -5856,6 +6077,21 @@ function App() {
             })()}
               </div>
             </div>
+          </div>
+        ) : view === 'view_pending_authorizations' ? (
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
+              <button className="btn-back" onClick={() => setView('home')}>
+                <ChevronLeft size={18} /> Volver al Inicio
+              </button>
+            </div>
+
+            <PendingAuthorizationsManager 
+              supabase={supabase}
+              triggerToast={triggerToast}
+              sessionEmail={sessionEmail}
+              onGoToPermissions={() => setView('view_user_permissions')}
+            />
           </div>
         ) : view === 'view_user_permissions' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>

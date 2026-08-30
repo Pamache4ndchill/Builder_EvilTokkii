@@ -21,6 +21,7 @@ const PERMISSION_COLUMNS = [
     { key: 'access_scheduled_messages', label: 'Mensajes Programados', desc: 'Temporizadores del bot', color: '#3B82F6' },
     { key: 'access_song_request', label: 'Song Request', desc: 'Cola de Spotify y reproductor', color: '#1DB954' },
     { key: 'access_commands', label: 'Comandos del Chat', desc: 'Comandos de pelea y diversión', color: '#10B981' },
+    { key: 'access_tts_voices', label: 'Voces TTS (Personajes)', desc: 'Comandos de voces de IA para Twitch', color: '#10B981' },
     { key: 'access_birthdays', label: 'Cumpleaños', desc: 'Felicitaciones automáticas de viewers', color: '#EC4899' },
     { key: 'access_bot_credentials', label: 'Credenciales Bot', desc: 'Configuración de cuenta y token', color: '#9146FF' }
 ];
