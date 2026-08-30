@@ -4140,7 +4140,7 @@ function App() {
                   <LayoutTemplate size={26} color="#38BDF8" />
                 </div>
                 <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Canjes de Twitch</h3>
+                  <h3 style={{ color: 'var(--text-main)' }}>Inscripciones por canje</h3>
                   <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
                 </div>
               </div>
