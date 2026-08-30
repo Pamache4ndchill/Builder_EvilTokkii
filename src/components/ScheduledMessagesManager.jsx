@@ -572,48 +572,7 @@ export default function ScheduledMessagesManager({
                         {isBotConnected ? `CONECTADO A #${botChannel.toUpperCase()}` : 'DESCONECTADO'}
                     </div>
 
-                    {!isBotConnected ? (
-                        <button
-                            type="button"
-                            className="btn-submit"
-                            style={{
-                                width: 'auto',
-                                padding: '12px 24px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                background: 'linear-gradient(135deg, #9146FF, #772CE8)',
-                                color: '#fff',
-                                fontWeight: 700,
-                                boxShadow: '0 4px 15px rgba(145, 70, 255, 0.35)',
-                                borderRadius: '10px'
-                            }}
-                            onClick={handleConnectBot}
-                            disabled={isConnecting}
-                        >
-                            <Play size={18} fill="currentColor" className={isConnecting ? 'animate-spin' : ''} />
-                            {isConnecting ? 'Conectando...' : 'Conectar al Bot'}
-                        </button>
-                    ) : (
-                        <button
-                            type="button"
-                            className="btn-submit"
-                            style={{
-                                width: 'auto',
-                                padding: '12px 24px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                                color: '#fff',
-                                fontWeight: 700,
-                                borderRadius: '10px'
-                            }}
-                            onClick={handleDisconnectBot}
-                        >
-                            <Square size={18} fill="currentColor" /> Desconectar
-                        </button>
-                    )}
+
                 </div>
             </div>
 
