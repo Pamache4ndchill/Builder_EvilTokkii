@@ -3666,17 +3666,19 @@ function App() {
                 <h2 className="section-title" style={{ marginTop: '2rem', marginBottom: '1.2rem', color: '#F59E0B', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(245, 158, 11, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Crown size={22} color="#F59E0B" /> Panel de Superadministrador (Pamache)
                 </h2>
-                <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
                   <div 
                     className="dashboard-card" 
                     style={{ border: '1.5px solid rgba(245, 158, 11, 0.4)', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(15, 23, 42, 0.6))' }} 
                     onClick={() => restrictedNavigate('view_user_permissions', 'user_permissions')}
                   >
                     <div className="icon-bg" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B' }}>
-                      <ShieldCheck size={36} />
+                      <ShieldCheck size={26} />
                     </div>
-                    <h3 style={{ color: '#F59E0B' }}>Gestión de Permisos</h3>
-                    <p>Activa o desactiva casillas del Builder para cada usuario con interruptores On/Off sin entrar a Supabase.</p>
+                    <div className="dashboard-card-info">
+                      <h3 style={{ color: '#F59E0B' }}>Gestión de Permisos</h3>
+                      <p>Activa o desactiva casillas del Builder para cada usuario con interruptores On/Off sin entrar a Supabase.</p>
+                    </div>
                   </div>
                 </div>
               </>
@@ -3685,16 +3687,18 @@ function App() {
             <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.5rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
               Herramientas de la Web
             </h2>
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: '3rem', gap: '1.5rem' }}>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '3rem', gap: '1.5rem' }}>
               <div 
                 className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
                 onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
               >
                 <div className="icon-bg">
-                  <FilePlus size={36} />
+                  <FilePlus size={26} />
                 </div>
-                <h3>Crear Noticia</h3>
-                <p>Genera un nuevo artículo inmersivo con imágenes y bloques de texto para la vista principal.</p>
+                <div className="dashboard-card-info">
+                  <h3>Crear Noticia</h3>
+                  <p>Genera un nuevo artículo inmersivo con imágenes y bloques de texto para la vista principal.</p>
+                </div>
               </div>
 
               <div 
@@ -3702,10 +3706,12 @@ function App() {
                 onClick={() => restrictedNavigate('create_content_item', 'events_and_giveaways')}
               >
                 <div className="icon-bg">
-                  <Calendar size={36} />
+                  <Calendar size={26} />
                 </div>
-                <h3>Crear Sorteo o Evento</h3>
-                <p>Configura sorteos y eventos interactivos en un creador unificado con normas, premios y fechas.</p>
+                <div className="dashboard-card-info">
+                  <h3>Crear Sorteo o Evento</h3>
+                  <p>Configura sorteos y eventos interactivos en un creador unificado con normas, premios y fechas.</p>
+                </div>
               </div>
 
               <div 
@@ -3713,10 +3719,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_participations', 'participations')}
               >
                 <div className="icon-bg">
-                  <Users size={36} />
+                  <Users size={26} />
                 </div>
-                <h3>Gestionar Participaciones</h3>
-                <p>Revisa y gestiona los usuarios inscritos a los diferentes eventos y sorteos activos.</p>
+                <div className="dashboard-card-info">
+                  <h3>Gestionar Participaciones</h3>
+                  <p>Revisa y gestiona los usuarios inscritos a los diferentes eventos y sorteos activos.</p>
+                </div>
               </div>
 
               <div 
@@ -3725,10 +3733,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_most_streamed', 'most_streamed')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('most_streamed') ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
-                  <Gamepad2 size={36} />
+                  <Gamepad2 size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Lo mas Streameable</h3>
-                <p>Gestiona los 6 juegos destacados que aparecen en la sección principal de la web.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Lo mas Streameable</h3>
+                  <p>Gestiona los 6 juegos destacados que aparecen en la sección principal de la web.</p>
+                </div>
               </div>
 
               <div 
@@ -3737,10 +3747,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_reports', 'reports')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#EF4444' }}>
-                  <AlertCircle size={36} />
+                  <AlertCircle size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
-                <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
+                  <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
+                </div>
               </div>
 
               <div 
@@ -3749,10 +3761,12 @@ function App() {
                 style={{ border: hasAccess('minigames') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }}
               >
                 <div className="icon-bg" style={{ background: hasAccess('minigames') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#A855F7' }}>
-                  <Gamepad2 size={36} />
+                  <Gamepad2 size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Minijuegos</h3>
-                <p>Visualiza y edita manualmente el banco de preguntas, perks y palabras de todas las dinámicas.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Minijuegos</h3>
+                  <p>Visualiza y edita manualmente el banco de preguntas, perks y palabras de todas las dinámicas.</p>
+                </div>
               </div>
 
               <div 
@@ -3761,10 +3775,12 @@ function App() {
                 style={{ border: hasAccess('tierlists') ? '1px solid rgba(236, 72, 153, 0.4)' : '1px dashed var(--border-color)' }}
               >
                 <div className="icon-bg" style={{ background: hasAccess('tierlists') ? 'rgba(236, 72, 153, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: 'var(--primary)' }}>
-                  <Layers size={36} />
+                  <Layers size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Contenido Tierlists</h3>
-                <p>Gestiona, añade y actualiza personajes e imágenes en las 4 Tierlists oficiales de la web.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Contenido Tierlists</h3>
+                  <p>Gestiona, añade y actualiza personajes e imágenes en las 4 Tierlists oficiales de la web.</p>
+                </div>
               </div>
 
               <div 
@@ -3773,27 +3789,31 @@ function App() {
                 style={{ border: hasAccess('news_only') ? '1px solid rgba(56, 189, 248, 0.4)' : '1px dashed var(--border-color)' }}
               >
                 <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(56, 189, 248, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#38BDF8' }}>
-                  <Newspaper size={36} />
+                  <Newspaper size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Sincronizar Noticias</h3>
-                <p>Ejecuta la sincronización automática de 3 noticias de videojuegos y 3 de anime desde los feeds oficiales.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Sincronizar Noticias</h3>
+                  <p>Ejecuta la sincronización automática de 3 noticias de videojuegos y 3 de anime desde los feeds oficiales.</p>
+                </div>
               </div>
             </div>
 
             <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: '#A855F7', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(168, 85, 247, 0.1)', paddingBottom: '8px' }}>
               Herramientas Twitch
             </h2>
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
               <div 
                 className={`dashboard-card ${!hasAccess('ruleta') ? 'restricted' : ''}`} 
                 style={{ border: hasAccess('ruleta') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
                 onClick={() => restrictedNavigate('view_ruleta', 'ruleta')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('ruleta') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('ruleta') ? '#A855F7' : 'var(--primary)' }}>
-                  <Disc size={36} />
+                  <Disc size={26} />
                 </div>
-                <h3 style={{ color: hasAccess('ruleta') ? '#A855F7' : 'var(--text-main)' }}>Ruleta de Sorteos</h3>
-                <p>Girador de ruleta animada personalizable para realizar sorteos en directo.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: hasAccess('ruleta') ? '#A855F7' : 'var(--text-main)' }}>Ruleta de Sorteos</h3>
+                  <p>Girador de ruleta animada personalizable para realizar sorteos en directo.</p>
+                </div>
               </div>
 
               <div 
@@ -3802,10 +3822,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_twitch_giveaway', 'twitch_giveaway')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('twitch_giveaway') ? 'rgba(145, 70, 255, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--primary)' }}>
-                  <Gift size={36} />
+                  <Gift size={26} />
                 </div>
-                <h3 style={{ color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
-                <p>Escucha el chat de Twitch en tiempo real por palabras clave para sortear ganadores.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: hasAccess('twitch_giveaway') ? '#9146FF' : 'var(--text-main)' }}>Sorteo en Vivo (Chat)</h3>
+                  <p>Escucha el chat de Twitch en tiempo real por palabras clave para sortear ganadores.</p>
+                </div>
               </div>
 
               <div 
@@ -3814,10 +3836,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_twitch', 'twitch')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('twitch') ? 'rgba(168, 85, 247, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: hasAccess('twitch') ? '#A855F7' : 'var(--primary)' }}>
-                  <LayoutTemplate size={36} />
+                  <LayoutTemplate size={26} />
                 </div>
-                <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
-                <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: hasAccess('twitch') ? '#A855F7' : 'var(--text-main)' }}>Canjes de Twitch</h3>
+                  <p>Monitorea y organiza los reclamos de recompensas de puntos de canal vinculados.</p>
+                </div>
               </div>
 
               <div 
@@ -3826,10 +3850,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_scheduled_messages', 'scheduled_messages')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('scheduled_messages') ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
-                  <MessageSquare size={36} />
+                  <MessageSquare size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Mensajes programados</h3>
-                <p>Programa mensajes automatizados para el chat de Twitch de EvilTokkii.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Mensajes programados</h3>
+                  <p>Programa mensajes automatizados para el chat de Twitch de EvilTokkii.</p>
+                </div>
               </div>
 
               <div 
@@ -3838,10 +3864,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_song_request', 'song_request')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('song_request') ? 'rgba(245, 158, 11, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#F59E0B' }}>
-                  <Play size={36} />
+                  <Play size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Song Request</h3>
-                <p>Gestiona la cola de canciones pedidas por el chat y visualiza el reproductor.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Song Request</h3>
+                  <p>Gestiona la cola de canciones pedidas por el chat y visualiza el reproductor.</p>
+                </div>
               </div>
 
               <div 
@@ -3850,10 +3878,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_commands', 'commands')}
               >
                 <div className="icon-bg" style={{ background: hasAccess('commands') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
-                  <Settings size={36} />
+                  <Settings size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
-                <p>Crea comandos personalizados y plantillas divertidas (ej: pelea) para tu chat de Twitch.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
+                  <p>Crea comandos personalizados y plantillas divertidas (ej: pelea) para tu chat de Twitch.</p>
+                </div>
               </div>
 
               <div 
@@ -3862,10 +3892,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_birthdays', 'birthdays')}
               >
                 <div className="icon-bg" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}>
-                  <Cake size={36} />
+                  <Cake size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
-                <p>Registra fechas de cumpleaños de viewers y envía felicitaciones automáticas al chat cada 20 min.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
+                  <p>Registra fechas de cumpleaños de viewers y programa felicitaciones automáticas en el chat.</p>
+                </div>
               </div>
 
               <div 
@@ -3874,10 +3906,12 @@ function App() {
                 onClick={() => restrictedNavigate('view_bot_credentials', 'bot_credentials')}
               >
                 <div className="icon-bg" style={{ background: 'rgba(145, 70, 255, 0.1)', color: '#9146FF' }}>
-                  <Key size={36} />
+                  <Key size={26} />
                 </div>
-                <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
-                <p>Configura de forma centralizada la cuenta de Twitch secundaria (EmiliaMaria_exe) y su token OAuth.</p>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
+                  <p>Configura de forma centralizada la cuenta de Twitch secundaria (EmiliaMaria_exe) y su token OAuth.</p>
+                </div>
               </div>
             </div>
           </div>
