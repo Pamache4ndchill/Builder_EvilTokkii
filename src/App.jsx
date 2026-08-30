@@ -3684,10 +3684,78 @@ function App() {
               </>
             )}
 
-            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.5rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
+            {/* 1. SECCIÓN: BOT PARA TWITCH (Arriba de todo) */}
+            <h2 className="section-title" style={{ marginTop: '2rem', marginBottom: '1.2rem', color: '#9146FF', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(145, 70, 255, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Bot size={22} color="#9146FF" /> Bot para Twitch
+            </h2>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
+              
+              {/* Cumpleaños */}
+              <div 
+                className="dashboard-card" 
+                style={{ border: '1px solid rgba(236, 72, 153, 0.4)' }} 
+                onClick={() => restrictedNavigate('view_birthdays', 'birthdays')}
+              >
+                <div className="icon-bg" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}>
+                  <Cake size={26} />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
+                  <p>Registra fechas de cumpleaños de viewers y programa felicitaciones automáticas en el chat.</p>
+                </div>
+              </div>
+
+              {/* Mensajes Programados */}
+              <div 
+                className={`dashboard-card ${!hasAccess('scheduled_messages') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('scheduled_messages') ? '1px solid rgba(59, 130, 246, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_scheduled_messages', 'scheduled_messages')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('scheduled_messages') ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
+                  <MessageSquare size={26} />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Mensajes programados</h3>
+                  <p>Programa mensajes automatizados periódicos para el chat de Twitch de EvilTokkii.</p>
+                </div>
+              </div>
+
+              {/* Comandos del Chat */}
+              <div 
+                className={`dashboard-card ${!hasAccess('commands') ? 'restricted' : ''}`} 
+                style={{ border: hasAccess('commands') ? '1px solid rgba(16, 185, 129, 0.4)' : '1px dashed var(--border-color)' }} 
+                onClick={() => restrictedNavigate('view_commands', 'commands')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('commands') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
+                  <Settings size={26} />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
+                  <p>Crea comandos personalizados y plantillas interactivas (ej: versus/peleas) para el chat.</p>
+                </div>
+              </div>
+
+              {/* Credenciales Bot */}
+              <div 
+                className="dashboard-card" 
+                style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }} 
+                onClick={() => restrictedNavigate('view_bot_credentials', 'bot_credentials')}
+              >
+                <div className="icon-bg" style={{ background: 'rgba(145, 70, 255, 0.1)', color: '#9146FF' }}>
+                  <Key size={26} />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
+                  <p>Configura de forma centralizada la cuenta de Twitch secundaria (EmiliaMaria_exe), token y color.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. SECCIÓN: HERRAMIENTAS DE LA WEB */}
+            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.2rem', color: '#EF4444', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(239, 68, 68, 0.1)', paddingBottom: '8px' }}>
               Herramientas de la Web
             </h2>
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '3rem', gap: '1.5rem' }}>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
               <div 
                 className={`dashboard-card ${!hasAccess('news_only') ? 'restricted' : ''}`} 
                 onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
@@ -3798,10 +3866,11 @@ function App() {
               </div>
             </div>
 
-            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.5rem', color: '#A855F7', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(168, 85, 247, 0.1)', paddingBottom: '8px' }}>
+            {/* 3. SECCIÓN: HERRAMIENTAS TWITCH */}
+            <h2 className="section-title" style={{ marginTop: '2.5rem', marginBottom: '1.2rem', color: '#A855F7', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(168, 85, 247, 0.1)', paddingBottom: '8px' }}>
               Herramientas Twitch
             </h2>
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.2rem' }}>
               <div 
                 className={`dashboard-card ${!hasAccess('ruleta') ? 'restricted' : ''}`} 
                 style={{ border: hasAccess('ruleta') ? '1px solid rgba(168, 85, 247, 0.4)' : '1px dashed var(--border-color)' }} 
@@ -3845,20 +3914,6 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card ${!hasAccess('scheduled_messages') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('scheduled_messages') ? '1px solid rgba(59, 130, 246, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_scheduled_messages', 'scheduled_messages')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('scheduled_messages') ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
-                  <MessageSquare size={26} />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Mensajes programados</h3>
-                  <p>Programa mensajes automatizados para el chat de Twitch de EvilTokkii.</p>
-                </div>
-              </div>
-
-              <div 
                 className={`dashboard-card ${!hasAccess('song_request') ? 'restricted' : ''}`} 
                 style={{ border: hasAccess('song_request') ? '1px solid rgba(245, 158, 11, 0.4)' : '1px dashed var(--border-color)' }} 
                 onClick={() => restrictedNavigate('view_song_request', 'song_request')}
@@ -3869,48 +3924,6 @@ function App() {
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Song Request</h3>
                   <p>Gestiona la cola de canciones pedidas por el chat y visualiza el reproductor.</p>
-                </div>
-              </div>
-
-              <div 
-                className={`dashboard-card ${!hasAccess('commands') ? 'restricted' : ''}`} 
-                style={{ border: hasAccess('commands') ? '1px solid rgba(16, 185, 129, 0.4)' : '1px dashed var(--border-color)' }} 
-                onClick={() => restrictedNavigate('view_commands', 'commands')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('commands') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
-                  <Settings size={26} />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Comandos del Chat</h3>
-                  <p>Crea comandos personalizados y plantillas divertidas (ej: pelea) para tu chat de Twitch.</p>
-                </div>
-              </div>
-
-              <div 
-                className="dashboard-card" 
-                style={{ border: '1px solid rgba(236, 72, 153, 0.4)' }} 
-                onClick={() => restrictedNavigate('view_birthdays', 'birthdays')}
-              >
-                <div className="icon-bg" style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#EC4899' }}>
-                  <Cake size={26} />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Cumpleaños</h3>
-                  <p>Registra fechas de cumpleaños de viewers y programa felicitaciones automáticas en el chat.</p>
-                </div>
-              </div>
-
-              <div 
-                className="dashboard-card" 
-                style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }} 
-                onClick={() => restrictedNavigate('view_bot_credentials', 'bot_credentials')}
-              >
-                <div className="icon-bg" style={{ background: 'rgba(145, 70, 255, 0.1)', color: '#9146FF' }}>
-                  <Key size={26} />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Credenciales Bot</h3>
-                  <p>Configura de forma centralizada la cuenta de Twitch secundaria (EmiliaMaria_exe) y su token OAuth.</p>
                 </div>
               </div>
             </div>
