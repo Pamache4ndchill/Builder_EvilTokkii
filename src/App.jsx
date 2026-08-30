@@ -1990,6 +1990,7 @@ function App() {
 
   const [libraryItems, setLibraryItems] = useState([]); // Base de datos (Eventos/Sorteos)
   const [savedNews, setSavedNews] = useState([]); // Caché local para Noticias
+  const [newsMonthFilter, setNewsMonthFilter] = useState('all');
 
   const [newsData, setNewsData] = useState({
     title: '',
@@ -2661,6 +2662,31 @@ function App() {
       ...prev,
       content: prev.content.filter(block => block.id !== id)
     }));
+  };
+
+    const handleDeleteNewsByMonth = (monthLabel, itemsToDelete) => {
+    if (!itemsToDelete || itemsToDelete.length === 0) return;
+    const count = itemsToDelete.length;
+    const ids = itemsToDelete.map(item => item.id);
+
+    showConfirm(
+      `¿Seguro que deseas eliminar permanentemente TODAS las ${count} noticias de ${monthLabel}? Esta acción las borrará de Supabase y del Builder.`,
+      async () => {
+        const { error } = await supabase.from('news_articles').delete().in('id', ids);
+        if (!error) {
+          setSavedNews(prev => prev.filter(item => !ids.includes(item.id)));
+          setNewsMonthFilter('all');
+          if (editingItemId && ids.includes(editingItemId)) {
+            setEditingItemId(null);
+            setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
+          }
+          triggerToast(`✅ Se han eliminado ${count} noticias de ${monthLabel}.`);
+        } else {
+          alert("Error al eliminar noticias del mes: " + error.message);
+        }
+        closeConfirm();
+      }
+    );
   };
 
   const handleDeleteItem = (id) => {
@@ -3576,6 +3602,50 @@ function App() {
               )}
             </div>
             <div className="sidebar-content">
+              {/* FILTRO Y SELECTOR DE MES/AÑO EXCLUSIVO PARA NOTICIAS */}
+              {view === 'create' && savedNews.length > 0 && (() => {
+                // Obtener meses únicos con formato "Mes Año"
+                const monthGroupsMap = {};
+                savedNews.forEach(item => {
+                  const d = new Date(item.created_at || Date.now());
+                  const monthName = d.toLocaleDateString('es-ES', { month: 'long' });
+                  const key = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${d.getFullYear()}`;
+                  if (!monthGroupsMap[key]) monthGroupsMap[key] = [];
+                  monthGroupsMap[key].push(item);
+                });
+                const availableMonths = Object.keys(monthGroupsMap);
+
+                return (
+                  <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '8px' }}>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '5px' }}>
+                      Filtrar por Mes y Año:
+                    </label>
+                    <select
+                      value={newsMonthFilter}
+                      onChange={(e) => setNewsMonthFilter(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: 'rgba(15, 23, 42, 0.8)',
+                        border: '1px solid rgba(236, 72, 153, 0.3)',
+                        borderRadius: '6px',
+                        padding: '6px 8px',
+                        color: '#F8FAFC',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="all">📅 Todos los Meses ({savedNews.length})</option>
+                      {availableMonths.map(mKey => (
+                        <option key={mKey} value={mKey}>
+                          📅 {mKey} ({monthGroupsMap[mKey].length})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
+
               {isLoadingLibrary && (activeList || []).length === 0 && view !== 'create' && view !== 'view_scheduled_messages' ? (
                 <div className="empty-sidebar" style={{ opacity: 0.6, transition: 'opacity 0.2s' }}>
                   <div style={{ marginBottom: '10px' }}><LayoutTemplate size={40} /></div>
@@ -3586,7 +3656,114 @@ function App() {
                   <div style={{ opacity: 0.5 }}><LayoutTemplate size={40} /></div>
                   Aún no hay registros de {titleText.toLowerCase()}.
                 </div>
-              ) : (
+              ) : view === 'create' ? (() => {
+                // Agrupar noticias por Mes y Año
+                const grouped = {};
+                savedNews.forEach(item => {
+                  const d = new Date(item.created_at || Date.now());
+                  const monthName = d.toLocaleDateString('es-ES', { month: 'long' });
+                  const key = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${d.getFullYear()}`;
+                  if (!grouped[key]) grouped[key] = [];
+                  grouped[key].push(item);
+                });
+
+                const groupKeys = Object.keys(grouped).filter(k => newsMonthFilter === 'all' || newsMonthFilter === k);
+
+                if (groupKeys.length === 0) {
+                  return (
+                    <div className="empty-sidebar" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No hay noticias en este mes seleccionado.
+                    </div>
+                  );
+                }
+
+                return groupKeys.map(groupMonth => {
+                  const itemsInMonth = grouped[groupMonth];
+
+                  return (
+                    <div key={groupMonth} style={{ marginBottom: '14px' }}>
+                      {/* Cabecera del Mes con Botón de Eliminar Mes */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '6px 10px',
+                        background: 'linear-gradient(90deg, rgba(236, 72, 153, 0.15) 0%, rgba(15, 23, 42, 0.5) 100%)',
+                        borderLeft: '3px solid #EC4899',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        marginTop: '4px'
+                      }}>
+                        <span style={{ color: '#F8FAFC', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          📅 {groupMonth} <span style={{ color: '#EC4899', fontSize: '0.75rem' }}>({itemsInMonth.length})</span>
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteNewsByMonth(groupMonth, itemsInMonth)}
+                          title={`Eliminar todas las noticias de ${groupMonth} en Supabase y Builder`}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#EF4444',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            borderRadius: '4px',
+                            padding: '3px 7px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <Trash2 size={12} /> Eliminar Mes
+                        </button>
+                      </div>
+
+                      {/* Lista de Noticias del Mes */}
+                      {itemsInMonth.map(item => {
+                        const isActive = editingItemId === item.id;
+
+                        return (
+                          <div 
+                            key={item.id} 
+                            className={`news-item animate-slide-down ${isActive ? 'active' : ''}`} 
+                            style={{ 
+                              cursor: 'pointer',
+                              borderLeft: isActive ? '4px solid var(--primary)' : 'none',
+                              backgroundColor: isActive ? 'var(--bg-card-hover)' : 'var(--bg-card)',
+                              marginBottom: '6px'
+                            }} 
+                            onClick={() => { 
+                              handleEditItem(item.id, 'noticia');
+                            }}
+                          >
+                            <button 
+                              className="btn-delete-news" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                handleDeleteItem(item.id); 
+                              }}
+                              title="Eliminar noticia individual"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <div className="news-item-title" style={{ paddingRight: '20px' }}>
+                              {item.titulo || item.title}
+                            </div>
+                            <div className="news-item-date" style={{ textTransform: 'capitalize', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div>
+                                Noticia • {item.author || 'Sin Autor'} • {new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })() : (
                 (activeList || []).map(item => {
                   const isActive = selectedEventId === item.id || 
                                    selectedRewardName === item.id || 
@@ -3618,7 +3795,7 @@ function App() {
                           setCmdFormDesc(item.description || '');
                           setCmdFormResponses(item.responses);
                         } else {
-                          handleEditItem(item.id, view === 'create' ? 'noticia' : null);
+                          handleEditItem(item.id, null);
                         }
                       }}
                     >
@@ -3647,7 +3824,6 @@ function App() {
                       <div className="news-item-date" style={{ textTransform: 'capitalize', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div>
                           {view === 'view_twitch' ? 'Categoría Twitch' : 
-                           view === 'create' ? `Noticia • ${item.author || 'Sin Autor'}` : 
                            view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
                            view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
                            (item.tipo || 'Objeto')} 
