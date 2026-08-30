@@ -172,18 +172,20 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .home-header-title {
-  font-size: 2.5rem;
-  font-weight: 800;
+  font-size: 2.6rem;
+  font-weight: 900;
   margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #f472b6, #db2777);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #EC4899;
+  text-shadow: 0 0 20px rgba(236, 72, 153, 0.75), 0 0 45px rgba(236, 72, 153, 0.45);
+  letter-spacing: -0.5px;
 }
 
 .home-header-subtitle {
-  color: var(--text-muted);
-  font-size: 1.1rem;
-  margin-bottom: 3rem;
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+  font-size: 1.05rem;
+  margin-bottom: 2.5rem;
+  opacity: 0.95;
 }
 
 .dashboard-grid {

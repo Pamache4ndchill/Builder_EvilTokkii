@@ -42,12 +42,21 @@ export const RuletaSidebar = ({
                     className="add-input"
                     style={{ width: '100%', resize: 'none', height: '90px', fontSize: '0.9rem', marginBottom: '0.75rem', lineHeight: '1.4' }}
                 />
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={addParticipant} className="add-btn" style={{ flex: 1, padding: '0.65rem 1rem', fontSize: '0.85rem' }}>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <button 
+                        onClick={addParticipant} 
+                        className="add-btn" 
+                        style={{ flex: 1, padding: '0.65rem 0.8rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                    >
                         <Plus size={16} /> Agregar
                     </button>
-                    <button onClick={clearParticipants} className="add-btn delete" style={{ background: '#ef4444', padding: '0.65rem 0.8rem' }} title="Limpiar Lista">
-                        <Trash2 size={16} />
+                    <button 
+                        onClick={clearParticipants} 
+                        className="add-btn delete" 
+                        style={{ flex: 1, background: '#ef4444', padding: '0.65rem 0.8rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', whiteSpace: 'nowrap' }} 
+                        title="Limpiar Lista"
+                    >
+                        <Trash2 size={16} /> Limpiar Lista
                     </button>
                 </div>
             </div>

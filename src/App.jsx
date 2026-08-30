@@ -2070,11 +2070,17 @@ function App() {
     setTimeout(() => setRuletaShowToast(false), 3000);
   };
 
-  // Twitch Giveaway States & Handlers
+  // Twitch Giveaway States & Advanced Rule Handlers
   const [twitchGiveawayParticipants, setTwitchGiveawayParticipants] = useState([]);
   const [twitchGiveawayKeyword, setTwitchGiveawayKeyword] = useState('!web');
   const [twitchGiveawayIsStarted, setTwitchGiveawayIsStarted] = useState(false);
   const [twitchGiveawayWinner, setTwitchGiveawayWinner] = useState(null);
+
+  // Reglas de Sorteo
+  const [giveawaySubMultiplier, setGiveawaySubMultiplier] = useState(false);
+  const [giveawaySubsOnly, setGiveawaySubsOnly] = useState(false);
+  const [giveawayAllowMods, setGiveawayAllowMods] = useState(true);
+  const [giveawayAllowVips, setGiveawayAllowVips] = useState(true);
 
   const twitchGiveawayClientRef = useRef(null);
   const twitchGiveawayParticipantsRef = useRef([]);
@@ -2092,9 +2098,26 @@ function App() {
         if (self || !twitchGiveawayIsStarted) return;
         const text = msg.trim();
         const user = tags['display-name'] || tags.username;
-        if (text === twitchGiveawayKeyword.trim() && user) {
-          if (!twitchGiveawayParticipantsRef.current.includes(user)) {
-            setTwitchGiveawayParticipants(prev => prev.includes(user) ? prev : [user, ...prev]);
+        if (text.toLowerCase() === twitchGiveawayKeyword.trim().toLowerCase() && user) {
+          // Detectar Insignias de Twitch
+          const isSub = !!(tags.subscriber || tags.badges?.subscriber || tags.badges?.founder);
+          const isMod = !!(tags.mod || tags.badges?.moderator || tags.badges?.broadcaster);
+          const isVip = !!(tags.vip || tags.badges?.vip);
+
+          // Filtros de Reglas
+          if (giveawaySubsOnly && !isSub) return;
+          if (!giveawayAllowMods && isMod) return;
+          if (!giveawayAllowVips && isVip) return;
+
+          const exists = twitchGiveawayParticipantsRef.current.some(p => (typeof p === 'object' ? p.username : p).toLowerCase() === user.toLowerCase());
+          if (!exists) {
+            const participantObj = {
+              username: user,
+              isSub,
+              isMod,
+              isVip
+            };
+            setTwitchGiveawayParticipants(prev => [participantObj, ...prev]);
           }
         }
       });
@@ -2102,7 +2125,7 @@ function App() {
     } catch (err) {
       console.error(err);
     }
-  }, [twitchGiveawayIsStarted, twitchGiveawayKeyword]);
+  }, [twitchGiveawayIsStarted, twitchGiveawayKeyword, giveawaySubsOnly, giveawayAllowMods, giveawayAllowVips]);
 
   useEffect(() => {
     if (twitchGiveawayIsStarted) {
@@ -2121,17 +2144,30 @@ function App() {
 
   const handleDrawTwitchGiveaway = () => {
     if (twitchGiveawayParticipants.length === 0) {
-      alert("No hay participantes todavía.");
+      triggerToast("⚠️ No hay participantes todavía en la lista.");
       return;
     }
     setTwitchGiveawayIsStarted(false);
-    const randomIndex = Math.floor(Math.random() * twitchGiveawayParticipants.length);
-    setTwitchGiveawayWinner(twitchGiveawayParticipants[randomIndex]);
+
+    // Bolsa de Tickets con Ponderación x2 para Subs si está activo
+    const ticketPool = [];
+    twitchGiveawayParticipants.forEach(item => {
+      const user = typeof item === 'object' ? item.username : item;
+      const isSub = typeof item === 'object' ? item.isSub : false;
+      const entries = (giveawaySubMultiplier && isSub) ? 2 : 1;
+      for (let i = 0; i < entries; i++) {
+        ticketPool.push(user);
+      }
+    });
+
+    const randomIndex = Math.floor(Math.random() * ticketPool.length);
+    setTwitchGiveawayWinner(ticketPool[randomIndex]);
   };
 
   const handleClearTwitchGiveaway = () => {
     setTwitchGiveawayParticipants([]);
     setTwitchGiveawayWinner(null);
+    triggerToast("🗑️ Lista de participantes limpiada.");
   };
 
   // Control Estricto de Conexión del Bot: Solo se conecta si el interruptor está ACTIVADO
@@ -3516,8 +3552,19 @@ function App() {
         <aside className="sidebar animate-slide-down">
           <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Gift size={24} color="var(--primary)" />
-              <h2 style={{ whiteSpace: 'nowrap', fontSize: '1.1rem', margin: 0 }}>Sorteo en Vivo</h2>
+              <Gift size={24} color="#3B82F6" />
+              <h2 style={{ 
+                whiteSpace: 'nowrap', 
+                fontSize: '1.1rem', 
+                margin: 0,
+                color: '#3B82F6',
+                background: 'none',
+                WebkitTextFillColor: '#3B82F6',
+                WebkitBackgroundClip: 'initial',
+                textShadow: '0 0 12px rgba(59, 130, 246, 0.6)'
+              }}>
+                Sorteo en Vivo
+              </h2>
             </div>
           </div>
           <div className="sidebar-content" style={{ padding: 0 }}>
@@ -3531,6 +3578,14 @@ function App() {
               handleDraw={handleDrawTwitchGiveaway}
               participants={twitchGiveawayParticipants}
               winner={twitchGiveawayWinner}
+              subMultiplierActive={giveawaySubMultiplier}
+              setSubMultiplierActive={setGiveawaySubMultiplier}
+              subsOnly={giveawaySubsOnly}
+              setSubsOnly={setGiveawaySubsOnly}
+              allowMods={giveawayAllowMods}
+              setAllowMods={setGiveawayAllowMods}
+              allowVips={giveawayAllowVips}
+              setAllowVips={setGiveawayAllowVips}
             />
           </div>
         </aside>
@@ -3874,7 +3929,7 @@ function App() {
         {view === 'home' ? (
           <div className="home-view animate-slide-down">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h1 className="home-header-title">Panel de Creadores</h1>
+              <h1 className="home-header-title">Builder de EvilTokkii</h1>
               <button 
                 onClick={handleLogout}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}
@@ -3884,7 +3939,7 @@ function App() {
               </button>
             </div>
             <p className="home-header-subtitle">
-              Gestiona el contenido estructurado de la web. Selecciona una acción para comenzar.
+              Gestiona el contenido estructurado de la web, Bot y contenido para Twitch. Bienvenidos y usar con mucha responsabilidad.
             </p>
             
             {isPamacheAdmin && (
@@ -4353,13 +4408,15 @@ function App() {
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ 
+              <h1 style={{ 
                 fontSize: '2.2rem', 
                 fontWeight: 900,
                 textTransform: 'uppercase',
-                background: 'linear-gradient(135deg, #a855f7, #ec4899)', 
-                WebkitBackgroundClip: 'text', 
-                WebkitTextFillColor: 'transparent',
+                color: '#EC4899',
+                background: 'none',
+                WebkitTextFillColor: '#EC4899',
+                WebkitBackgroundClip: 'initial',
+                textShadow: '0 0 20px rgba(236, 72, 153, 0.75), 0 0 45px rgba(236, 72, 153, 0.45)',
                 position: 'absolute',
                 left: '50%',
                 transform: 'translateX(-50%)',
@@ -4387,20 +4444,22 @@ function App() {
               <button className="btn-back" onClick={() => setView('home')}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ 
+              <h1 style={{ 
                 fontSize: '2.2rem', 
                 fontWeight: 900,
                 textTransform: 'uppercase',
-                background: 'linear-gradient(135deg, #9146FF, #00d4ff)', 
-                WebkitBackgroundClip: 'text', 
-                WebkitTextFillColor: 'transparent',
+                color: '#3B82F6',
+                background: 'none',
+                WebkitTextFillColor: '#3B82F6',
+                WebkitBackgroundClip: 'initial',
+                textShadow: '0 0 20px rgba(59, 130, 246, 0.85), 0 0 45px rgba(59, 130, 246, 0.55)',
                 position: 'absolute',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 margin: 0,
                 whiteSpace: 'nowrap'
               }}>
-                Sorteo en Vivo (Twitch)
+                Sorteo en Vivo
               </h1>
             </div>
 
@@ -4411,6 +4470,10 @@ function App() {
                 winner={twitchGiveawayWinner}
                 setWinner={setTwitchGiveawayWinner}
                 participants={twitchGiveawayParticipants}
+                subMultiplierActive={giveawaySubMultiplier}
+                subsOnly={giveawaySubsOnly}
+                allowMods={giveawayAllowMods}
+                allowVips={giveawayAllowVips}
               />
             </div>
           </div>
