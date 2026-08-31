@@ -1107,6 +1107,7 @@ function App() {
       }
 
       let track = null;
+      let lastSearchError = null;
 
       // 1. Buscar por URL directa
       if (queryClean.includes('spotify.com/track/')) {
@@ -1116,34 +1117,64 @@ function App() {
         });
         if (res.status === 401) {
           spotifyToken = await getValidSpotifyAccessToken(true);
-          res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-            headers: { Authorization: `Bearer ${spotifyToken}` }
-          });
+          if (spotifyToken) {
+            res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+              headers: { Authorization: `Bearer ${spotifyToken}` }
+            });
+          }
         }
-        if (res.ok) track = await res.json();
+        if (res.ok) {
+          track = await res.json();
+        } else {
+          lastSearchError = `HTTP ${res.status}`;
+        }
       } else {
         // 2. Buscar por texto en Spotify API
-        let searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(queryClean)}&type=track&limit=5`;
-        let res = await fetch(searchUrl, {
-          headers: { Authorization: `Bearer ${spotifyToken}` }
-        });
-        
-        if (res.status === 401) {
-          spotifyToken = await getValidSpotifyAccessToken(true);
-          res = await fetch(searchUrl, {
-            headers: { Authorization: `Bearer ${spotifyToken}` }
-          });
+        const searchTerms = [queryClean];
+        // Si tiene varias palabras, agregar fallback con las primeras 2 palabras
+        const words = queryClean.split(/\s+/);
+        if (words.length > 2) {
+          searchTerms.push(words.slice(0, 2).join(' '));
         }
 
-        if (res.ok) {
-          const data = await res.json();
-          track = data.tracks?.items?.[0] || null;
+        for (const term of searchTerms) {
+          if (track) break;
+
+          let searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(term)}&type=track&limit=5`;
+          let res = await fetch(searchUrl, {
+            headers: { Authorization: `Bearer ${spotifyToken}` }
+          });
+
+          if (res.status === 401) {
+            spotifyToken = await getValidSpotifyAccessToken(true);
+            if (spotifyToken) {
+              res = await fetch(searchUrl, {
+                headers: { Authorization: `Bearer ${spotifyToken}` }
+              });
+            }
+          }
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.tracks?.items && data.tracks.items.length > 0) {
+              track = data.tracks.items[0];
+            }
+          } else {
+            lastSearchError = `HTTP ${res.status}`;
+            const errBody = await res.json().catch(() => ({}));
+            addBotLog(`[Spotify Search Error] ${res.status}: ${JSON.stringify(errBody)}`);
+          }
         }
       }
 
       if (!track) {
-        addBotLog(`[Spotify SR] No se encontró pista para: "${queryClean}"`);
-        enviarMensajeTwitch(`@${requester} ⚠️ No se encontró esa canción en Spotify. Intenta con el nombre exacto o el enlace.`, true);
+        if (lastSearchError && (lastSearchError.includes('401') || lastSearchError.includes('403'))) {
+          addBotLog(`[Spotify SR] Error de autenticación en Spotify (${lastSearchError}).`);
+          enviarMensajeTwitch(`@${requester} ⚠️ La sesión de Spotify necesita ser reconectada en el Builder (Error ${lastSearchError}).`, true);
+        } else {
+          addBotLog(`[Spotify SR] No se encontró pista para: "${queryClean}"`);
+          enviarMensajeTwitch(`@${requester} ⚠️ No se encontró la canción "${queryClean}" en Spotify. Intenta con el nombre y artista.`, true);
+        }
         return;
       }
 
