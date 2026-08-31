@@ -1023,15 +1023,15 @@ function App() {
     localStorage.setItem('dashboard_player_enabled', isPlayerEnabledInDashboard ? 'true' : 'false');
   }, [isPlayerEnabledInDashboard]);
 
-  // Helper para obtener token válido de Spotify con auto-refresh
-  const getValidSpotifyAccessToken = async () => {
+  // Helper para obtener token válido de Spotify con auto-refresh forzado
+  const getValidSpotifyAccessToken = async (forceRefresh = false) => {
     let token = localStorage.getItem('spotify_access_token');
     const refreshToken = localStorage.getItem('spotify_refresh_token');
+    const clientId = localStorage.getItem('spotify_custom_client_id') || '467b4e8480964c26913cb87d276ed20c';
 
     if (!token && !refreshToken) return null;
 
-    // Probar si el token sigue vivo
-    if (token) {
+    if (!forceRefresh && token) {
       try {
         const check = await fetch('https://api.spotify.com/v1/me', {
           headers: { Authorization: `Bearer ${token}` }
@@ -1040,11 +1040,11 @@ function App() {
       } catch (e) {}
     }
 
-    // Si falló y tenemos refresh_token, renovarlo
+    // Renovar con refresh_token
     if (refreshToken) {
       try {
         const body = new URLSearchParams({
-          client_id: '467b4e8480964c26913cb87d276ed20c',
+          client_id: clientId,
           grant_type: 'refresh_token',
           refresh_token: refreshToken
         });
@@ -1066,7 +1066,7 @@ function App() {
           }
         }
       } catch (e) {
-        console.error("Error refreshing Spotify token in background:", e);
+        console.error("Error refreshing Spotify token:", e);
       }
     }
 
@@ -1076,14 +1076,23 @@ function App() {
   const handleSongRequest = async (query, requester) => {
     const isSREnabled = localStorage.getItem('song_request_enabled') !== 'false';
     if (!isSREnabled) {
-      addBotLog(`[Song Request] Petición de @${requester} ignorada porque las peticiones están pausadas en el Builder.`);
+      addBotLog(`[Song Request] Petición de @${requester} ignorada porque las peticiones están pausadas.`);
       return;
     }
 
     try {
-      addBotLog(`[Spotify Free SR] Petición recibida de @${requester}: "${query}"`);
+      // Limpiar query eliminando palabras accidentales como "free " o "spotify "
+      let queryClean = query.trim();
+      if (queryClean.toLowerCase().startsWith('free ')) {
+        queryClean = queryClean.slice(5).trim();
+      }
+      if (queryClean.toLowerCase().startsWith('spotify ')) {
+        queryClean = queryClean.slice(8).trim();
+      }
+
+      addBotLog(`[Spotify Free SR] Buscando canción para @${requester}: "${queryClean}"`);
       
-      const spotifyToken = await getValidSpotifyAccessToken();
+      let spotifyToken = await getValidSpotifyAccessToken();
       if (!spotifyToken) {
         addBotLog(`[Spotify SR] ⚠️ No hay cuenta de Spotify conectada en el Builder.`);
         enviarMensajeTwitch(`@${requester} ⚠️ Spotify no está conectado actualmente en el stream.`, true);
@@ -1097,35 +1106,49 @@ function App() {
         return;
       }
 
-      let querySearch = query.trim();
       let track = null;
 
-      // Buscar por ID si es enlace directo de Spotify
-      if (querySearch.includes('spotify.com/track/')) {
-        const trackId = querySearch.split('track/')[1]?.split('?')[0];
-        const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+      // 1. Buscar por URL directa
+      if (queryClean.includes('spotify.com/track/')) {
+        const trackId = queryClean.split('track/')[1]?.split('?')[0]?.split('/')[0];
+        let res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
           headers: { Authorization: `Bearer ${spotifyToken}` }
         });
+        if (res.status === 401) {
+          spotifyToken = await getValidSpotifyAccessToken(true);
+          res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+            headers: { Authorization: `Bearer ${spotifyToken}` }
+          });
+        }
         if (res.ok) track = await res.json();
       } else {
-        // Buscar por texto en la API de Spotify
-        const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(querySearch)}&type=track&limit=1`, {
+        // 2. Buscar por texto en Spotify API
+        let searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(queryClean)}&type=track&limit=5`;
+        let res = await fetch(searchUrl, {
           headers: { Authorization: `Bearer ${spotifyToken}` }
         });
+        
+        if (res.status === 401) {
+          spotifyToken = await getValidSpotifyAccessToken(true);
+          res = await fetch(searchUrl, {
+            headers: { Authorization: `Bearer ${spotifyToken}` }
+          });
+        }
+
         if (res.ok) {
           const data = await res.json();
-          track = data.tracks?.items?.[0];
+          track = data.tracks?.items?.[0] || null;
         }
       }
 
       if (!track) {
-        addBotLog(`[Spotify SR] No se encontró ninguna pista para: "${query}"`);
+        addBotLog(`[Spotify SR] No se encontró pista para: "${queryClean}"`);
         enviarMensajeTwitch(`@${requester} ⚠️ No se encontró esa canción en Spotify. Intenta con el nombre exacto o el enlace.`, true);
         return;
       }
 
-      // Añadir la canción a la Playlist de Spotify Free
-      const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+      // Añadir a la Playlist de Spotify Free
+      let addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${spotifyToken}`,
@@ -1134,9 +1157,21 @@ function App() {
         body: JSON.stringify({ uris: [track.uri] })
       });
 
+      if (addRes.status === 401) {
+        spotifyToken = await getValidSpotifyAccessToken(true);
+        addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+          method: 'POST',
+          headers: { 
+            Authorization: `Bearer ${spotifyToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uris: [track.uri] })
+        });
+      }
+
       if (!addRes.ok) {
         const errJson = await addRes.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || 'Error al agregar track a la playlist');
+        throw new Error(errJson.error?.message || 'Error al agregar canción a la playlist');
       }
 
       // Guardar en Supabase para el historial
@@ -1150,7 +1185,7 @@ function App() {
         }]);
       }
 
-      addBotLog(`[Spotify SR] ✅ Agregada a la Playlist de Spotify: "${track.name}" por @${requester}`);
+      addBotLog(`[Spotify SR] ✅ Agregada a la Playlist: "${track.name}" de ${artistsStr} por @${requester}`);
       
       const template = localStorage.getItem('spotify_sr_response_template') || '🎵 @{user} ¡Canción agregada a la Playlist del stream! "{song}" - {artist}';
       const finalMsg = template
@@ -1164,7 +1199,7 @@ function App() {
 
     } catch (err) {
       addBotLog(`[Spotify SR Error] ${err.message}`);
-      enviarMensajeTwitch(`@${requester} ⚠️ Error al agregar la canción a la Playlist de Spotify. Intenta de nuevo.`, true);
+      enviarMensajeTwitch(`@${requester} ⚠️ Error al agregar la canción a la Playlist de Spotify: ${err.message}`, true);
     }
   };
 
