@@ -307,23 +307,28 @@ export default function SpotifySongRequestManager({
             scope: SPOTIFY_SCOPES,
             code_challenge_method: 'S256',
             code_challenge: codeChallenge,
-            redirect_uri: redirectUri
+            redirect_uri: redirectUri,
+            show_dialog: 'true'
         };
 
         authUrl.search = new URLSearchParams(params).toString();
         window.location.href = authUrl.toString();
     };
 
-    // Logout Spotify
+    // Logout Spotify (Reinicio Completo desde cero)
     const handleLogoutSpotify = () => {
         localStorage.removeItem('spotify_access_token');
         localStorage.removeItem('spotify_refresh_token');
         localStorage.removeItem('spotify_code_verifier');
+        localStorage.removeItem('spotify_sr_playlist_id');
+        localStorage.removeItem('spotify_sr_playlist_name');
+        localStorage.removeItem('spotify_sr_playlist_url');
         setSpotifyToken('');
         setRefreshToken('');
         setSpotifyUser(null);
         setPlaylistData(null);
-        if (triggerToast) triggerToast('Spotify desconectado.');
+        setPlaylistInput('');
+        if (triggerToast) triggerToast('🔄 Sesión de Spotify y datos reiniciados desde cero.');
     };
 
     // Guardar URL/ID de Playlist
