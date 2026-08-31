@@ -1210,8 +1210,12 @@ function App() {
         return;
       }
 
+      // Limpiar playlist ID para asegurar que sea solo el ID alfanumérico
+      const cleanPlaylistId = (playlistId.match(/playlist\/([a-zA-Z0-9]+)/)?.[1] || playlistId.split('?')[0].split('/')[0]).trim();
+      addBotLog(`[Spotify SR] Añadiendo URI "${track.uri}" a Playlist ID: "${cleanPlaylistId}"`);
+
       // Añadir a la Playlist de Spotify Free
-      let addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+      let addRes = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${spotifyToken}`,
@@ -1222,19 +1226,30 @@ function App() {
 
       if (addRes.status === 401) {
         spotifyToken = await getValidSpotifyAccessToken(true);
-        addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-          method: 'POST',
-          headers: { 
-            Authorization: `Bearer ${spotifyToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ uris: [track.uri] })
-        });
+        if (spotifyToken) {
+          addRes = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
+            method: 'POST',
+            headers: { 
+              Authorization: `Bearer ${spotifyToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ uris: [track.uri] })
+          });
+        }
       }
 
       if (!addRes.ok) {
         const errJson = await addRes.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || 'Error al agregar canción a la playlist');
+        const rawMsg = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+        addBotLog(`[Spotify SR Add Error] Status ${addRes.status}: ${rawMsg}`);
+        
+        if (addRes.status === 403) {
+          throw new Error('Faltan permisos de modificación en tu cuenta o la Playlist no es tuya. Dale a "Desconectar" y vuelve a "Conectar Cuenta" en el Builder.');
+        } else if (addRes.status === 404) {
+          throw new Error('No se encontró la Playlist. Asegúrate de haber pegado una Playlist creada por ti en tu Spotify.');
+        } else {
+          throw new Error(rawMsg);
+        }
       }
 
       // Guardar en Supabase para el historial
