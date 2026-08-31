@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-    Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, 
-    Music, Search, Plus, Trash2, CheckCircle2, AlertCircle, 
-    ExternalLink, RefreshCw, Radio, Sparkles, Disc3, ShieldCheck, MessageSquare
+    Play, Pause, Music, Search, Plus, Trash2, CheckCircle2, AlertCircle, 
+    ExternalLink, RefreshCw, Radio, Sparkles, Disc3, ShieldCheck, MessageSquare, ListMusic, Check, Copy, HelpCircle, Link as LinkIcon
 } from 'lucide-react';
 
-const SPOTIFY_CLIENT_ID = '467b4e8480964c26913cb87d276ed20c';
+export const DEFAULT_SPOTIFY_CLIENT_ID = '467b4e8480964c26913cb87d276ed20c';
 const SPOTIFY_SCOPES = [
-    'user-read-playback-state',
-    'user-modify-playback-state',
-    'user-read-currently-playing',
-    'streaming',
     'playlist-read-private',
+    'playlist-read-collaborative',
     'playlist-modify-public',
-    'playlist-modify-private'
+    'playlist-modify-private',
+    'user-read-playback-state',
+    'user-read-currently-playing'
 ].join(' ');
 
 // PKCE Helpers
@@ -36,6 +34,16 @@ function base64encode(input) {
         .replace(/\//g, '_');
 }
 
+// Extraer ID limpio de Playlist desde URL o texto
+export function extractSpotifyPlaylistId(input) {
+    if (!input) return '';
+    const clean = input.trim();
+    if (clean.includes('spotify.com/playlist/')) {
+        return clean.split('playlist/')[1]?.split('?')[0]?.split('/')[0] || '';
+    }
+    return clean;
+}
+
 export default function SpotifySongRequestManager({ 
     supabase, 
     triggerToast, 
@@ -45,35 +53,73 @@ export default function SpotifySongRequestManager({
     setIsSongRequestEnabled: propSetEnabled
 }) {
     // Spotify Auth State
+    // Spotify Client ID & Redirect URI configurables
+    const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('spotify_custom_client_id') || DEFAULT_SPOTIFY_CLIENT_ID);
+    const activeClientId = clientIdInput.trim() || DEFAULT_SPOTIFY_CLIENT_ID;
+
+    const currentOriginPath = window.location.origin + window.location.pathname;
+    const [selectedRedirectUri, setSelectedRedirectUri] = useState(() => localStorage.getItem('spotify_custom_redirect_uri') || currentOriginPath);
+    const [showConfigModal, setShowConfigModal] = useState(false);
+    const [copiedRedirect, setCopiedRedirect] = useState(false);
+
     const [spotifyToken, setSpotifyToken] = useState(() => localStorage.getItem('spotify_access_token') || '');
     const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem('spotify_refresh_token') || '');
     const [spotifyUser, setSpotifyUser] = useState(null);
-    const [activeDevice, setActiveDevice] = useState(null);
-    
-    // Playback State
-    const [currentTrack, setCurrentTrack] = useState(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [progressMs, setProgressMs] = useState(0);
-    const [durationMs, setDurationMs] = useState(0);
-    const [volume, setVolume] = useState(() => Number(localStorage.getItem('spotify_player_volume')) || 50);
+
+    // Playlist State (Modo Spotify Free)
+    const [playlistInput, setPlaylistInput] = useState(() => localStorage.getItem('spotify_sr_playlist_url') || '');
+    const [playlistData, setPlaylistData] = useState(null);
+    const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false);
 
     // Queue & Requests
     const [songQueue, setSongQueue] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [localCmd, setLocalCmd] = useState(() => localStorage.getItem('song_request_command') || '!spotifybloqued');
+    const [isAddingSong, setIsAddingSong] = useState(false);
+
+    // Command & Settings
+    const [localCmd, setLocalCmd] = useState(() => localStorage.getItem('song_request_command') || '!sr');
     const songRequestCommand = propCmd !== undefined ? propCmd : localCmd;
     const setSongRequestCommand = propSetCmd !== undefined ? propSetCmd : setLocalCmd;
-    const [customCommandInput, setCustomCommandInput] = useState(() => localStorage.getItem('song_request_command') || '!spotifybloqued');
+    const [customCommandInput, setCustomCommandInput] = useState(() => localStorage.getItem('song_request_command') || '!sr');
 
-    const [localEnabled, setLocalEnabled] = useState(() => localStorage.getItem('song_request_enabled') === 'true');
+    const [localEnabled, setLocalEnabled] = useState(() => localStorage.getItem('song_request_enabled') !== 'false');
     const isSongRequestEnabled = propEnabled !== undefined ? propEnabled : localEnabled;
     const setIsSongRequestEnabled = propSetEnabled !== undefined ? propSetEnabled : setLocalEnabled;
 
-    const [responseTemplate, setResponseTemplate] = useState(() => localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}');
+    // Modal de confirmación emergente estilizado
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirmar',
+        onConfirm: null
+    });
 
-    const pollIntervalRef = useRef(null);
+    const openConfirmModal = (title, message, confirmText, action) => {
+        setConfirmDialog({
+            isOpen: true,
+            title,
+            message,
+            confirmText: confirmText || 'Eliminar',
+            onConfirm: action
+        });
+    };
+
+    const closeConfirmModal = () => {
+        setConfirmDialog({
+            isOpen: false,
+            title: '',
+            message: '',
+            confirmText: 'Confirmar',
+            onConfirm: null
+        });
+    };
+
+    const [responseTemplate, setResponseTemplate] = useState(() => 
+        localStorage.getItem('spotify_sr_response_template') || '🎵 @{user} ¡Canción agregada a la Playlist del stream! "{song}" - {artist}'
+    );
 
     // Helper: Refresh Access Token with PKCE
     const refreshSpotifyToken = useCallback(async () => {
@@ -116,890 +162,1164 @@ export default function SpotifySongRequestManager({
 
         if (code) {
             const codeVerifier = localStorage.getItem('spotify_code_verifier');
-            const redirectUri = window.location.origin + window.location.pathname;
+            const storedRedirect = localStorage.getItem('spotify_custom_redirect_uri') || (window.location.origin + window.location.pathname);
+            const storedClientId = localStorage.getItem('spotify_custom_client_id') || DEFAULT_SPOTIFY_CLIENT_ID;
 
-            const exchangeCode = async () => {
-                try {
-                    const body = new URLSearchParams({
-                        client_id: SPOTIFY_CLIENT_ID,
-                        grant_type: 'authorization_code',
-                        code: code,
-                        redirect_uri: redirectUri,
-                        code_verifier: codeVerifier || ''
-                    });
-
-                    const res = await fetch('https://accounts.spotify.com/api/token', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: body.toString()
-                    });
-
-                    if (res.ok) {
-                        const data = await res.json();
-                        setSpotifyToken(data.access_token);
-                        localStorage.setItem('spotify_access_token', data.access_token);
-                        if (data.refresh_token) {
-                            setRefreshToken(data.refresh_token);
-                            localStorage.setItem('spotify_refresh_token', data.refresh_token);
-                        }
-                        localStorage.removeItem('spotify_code_verifier');
-                        window.history.replaceState(null, '', window.location.pathname);
-                        triggerToast('✅ ¡Spotify conectado con éxito!');
-                    } else {
-                        const errData = await res.json();
-                        console.error('Token exchange error:', errData);
+            fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    client_id: storedClientId,
+                    grant_type: 'authorization_code',
+                    code: code,
+                    redirect_uri: storedRedirect,
+                    code_verifier: codeVerifier
+                }).toString()
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.access_token) {
+                    setSpotifyToken(data.access_token);
+                    localStorage.setItem('spotify_access_token', data.access_token);
+                    if (data.refresh_token) {
+                        setRefreshToken(data.refresh_token);
+                        localStorage.setItem('spotify_refresh_token', data.refresh_token);
                     }
-                } catch (err) {
-                    console.error('Exchange fetch failed:', err);
+                    if (triggerToast) triggerToast('✅ ¡Cuenta de Spotify vinculada exitosamente!');
+                    window.history.replaceState({}, document.title, window.location.pathname);
                 }
-            };
-
-            exchangeCode();
+            })
+            .catch(err => {
+                console.error('Error exchanging PKCE code:', err);
+                if (triggerToast) triggerToast('❌ Error al autorizar con Spotify.');
+            });
         }
     }, [triggerToast]);
 
-    // Handle Login with Spotify using PKCE (response_type=code)
-    const handleConnectSpotify = async () => {
-        const codeVerifier = generateRandomString(64);
-        const hashed = await sha256(codeVerifier);
-        const codeChallenge = base64encode(hashed);
+    // Fetch User Profile
+    useEffect(() => {
+        if (!spotifyToken) return;
 
-        localStorage.setItem('spotify_code_verifier', codeVerifier);
+        fetch('https://api.spotify.com/v1/me', {
+            headers: { Authorization: `Bearer ${spotifyToken}` }
+        })
+        .then(res => {
+            if (res.status === 401) {
+                refreshSpotifyToken();
+                return null;
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data && !data.error) setSpotifyUser(data);
+        })
+        .catch(console.error);
+    }, [spotifyToken, refreshSpotifyToken]);
 
-        const redirectUri = window.location.origin + window.location.pathname;
-        const params = new URLSearchParams({
-            client_id: SPOTIFY_CLIENT_ID,
-            response_type: 'code',
-            redirect_uri: redirectUri,
-            scope: SPOTIFY_SCOPES,
-            code_challenge_method: 'S256',
-            code_challenge: codeChallenge,
-            show_dialog: 'true'
-        });
-
-        window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
-    };
-
-    const handleDisconnectSpotify = () => {
-        setSpotifyToken('');
-        setRefreshToken('');
-        localStorage.removeItem('spotify_access_token');
-        localStorage.removeItem('spotify_refresh_token');
-        localStorage.removeItem('spotify_code_verifier');
-        setSpotifyUser(null);
-        setCurrentTrack(null);
-        triggerToast('Spotify desconectado');
-    };
-
-    // Fetch Spotify User Profile
-    const fetchSpotifyProfile = useCallback(async (token) => {
-        if (!token) return;
+    // Fetch Playlist Data
+    const fetchPlaylistDetails = useCallback(async (playlistId) => {
+        if (!spotifyToken || !playlistId) return;
+        setIsLoadingPlaylist(true);
         try {
-            const res = await fetch('https://api.spotify.com/v1/me', {
-                headers: { Authorization: 'Bearer ' + token }
+            const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+                headers: { Authorization: `Bearer ${spotifyToken}` }
             });
+
+            if (res.status === 401) {
+                await refreshSpotifyToken();
+                return;
+            }
+
             if (res.ok) {
                 const data = await res.json();
-                setSpotifyUser(data);
-            } else if (res.status === 401) {
-                refreshSpotifyToken();
+                setPlaylistData(data);
+                localStorage.setItem('spotify_sr_playlist_id', data.id);
+                localStorage.setItem('spotify_sr_playlist_name', data.name);
+            } else {
+                setPlaylistData(null);
             }
-        } catch (err) {
-            console.error('Error fetching Spotify profile:', err);
-        }
-    }, [refreshSpotifyToken]);
-
-    // Fetch Current Playback from Spotify
-    const fetchCurrentPlayback = useCallback(async () => {
-        if (!spotifyToken) return;
-        try {
-            const res = await fetch('https://api.spotify.com/v1/me/player', {
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
-            if (res.status === 200) {
-                const data = await res.json();
-                if (data && data.item) {
-                    setCurrentTrack({
-                        id: data.item.id,
-                        uri: data.item.uri,
-                        title: data.item.name,
-                        artist: data.item.artists.map(a => a.name).join(', '),
-                        album: data.item.album.name,
-                        albumCover: data.item.album.images[0]?.url || '',
-                        durationMs: data.item.duration_ms
-                    });
-                    setIsPlaying(data.is_playing);
-                    setProgressMs(data.progress_ms || 0);
-                    setDurationMs(data.item.duration_ms || 0);
-                    if (data.device) {
-                        setActiveDevice(data.device.name);
-                    }
-                }
-            } else if (res.status === 204) {
-                setIsPlaying(false);
-            } else if (res.status === 401) {
-                refreshSpotifyToken();
-            }
-        } catch (err) {
-            console.error('Error polling playback:', err);
+        } catch (e) {
+            console.error('Error fetching playlist:', e);
+            setPlaylistData(null);
+        } finally {
+            setIsLoadingPlaylist(false);
         }
     }, [spotifyToken, refreshSpotifyToken]);
 
-    // Poll current playback every 2.5 seconds
+    // Cargar Playlist al inicio
     useEffect(() => {
-        if (spotifyToken) {
-            fetchSpotifyProfile(spotifyToken);
-            fetchCurrentPlayback();
-            pollIntervalRef.current = setInterval(fetchCurrentPlayback, 2500);
-        } else {
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        const savedId = localStorage.getItem('spotify_sr_playlist_id') || extractSpotifyPlaylistId(playlistInput);
+        if (savedId && spotifyToken) {
+            fetchPlaylistDetails(savedId);
         }
-        return () => {
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        };
-    }, [spotifyToken, fetchSpotifyProfile, fetchCurrentPlayback]);
+    }, [spotifyToken, fetchPlaylistDetails, playlistInput]);
 
-    // Fetch Song Requests from Supabase
-    const fetchQueue = useCallback(async () => {
+    // Fetch Song Requests History from Supabase
+    const fetchHistory = useCallback(async () => {
         if (!supabase) return;
         try {
             const { data, error } = await supabase
                 .from('song_requests')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(30);
+                .limit(40);
+
             if (!error && data) {
                 setSongQueue(data);
             }
         } catch (e) {
-            console.error('Error fetching queue:', e);
+            console.error('Error fetching song requests history:', e);
         }
     }, [supabase]);
 
     useEffect(() => {
-        fetchQueue();
-        if (!supabase) return;
-        const channel = supabase
-            .channel('spotify_song_requests_realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'song_requests' }, () => {
-                fetchQueue();
-            })
-            .subscribe();
+        fetchHistory();
+        if (supabase) {
+            const channel = supabase
+                .channel('spotify_song_requests_realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'song_requests' }, () => {
+                    fetchHistory();
+                })
+                .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }
+    }, [fetchHistory, supabase]);
+
+    // Login Spotify PKCE
+    const handleLoginSpotify = async (customRedirect = null) => {
+        const codeVerifier = generateRandomString(64);
+        const hashed = await sha256(codeVerifier);
+        const codeChallenge = base64encode(hashed);
+
+        localStorage.setItem('spotify_code_verifier', codeVerifier);
+        localStorage.setItem('spotify_custom_client_id', activeClientId);
+
+        const redirectUri = customRedirect || selectedRedirectUri || currentOriginPath;
+        localStorage.setItem('spotify_custom_redirect_uri', redirectUri);
+
+        const authUrl = new URL('https://accounts.spotify.com/authorize');
+        const params = {
+            response_type: 'code',
+            client_id: activeClientId,
+            scope: SPOTIFY_SCOPES,
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
+            redirect_uri: redirectUri
         };
-    }, [fetchQueue, supabase]);
 
-    // Playback Controls
-    const handlePlayPause = async () => {
-        if (!spotifyToken) return;
-        const endpoint = isPlaying 
-            ? 'https://api.spotify.com/v1/me/player/pause' 
-            : 'https://api.spotify.com/v1/me/player/play';
-        try {
-            await fetch(endpoint, {
-                method: 'PUT',
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
-            setIsPlaying(!isPlaying);
-            setTimeout(fetchCurrentPlayback, 400);
-        } catch (e) {
-            triggerToast('⚠️ Abre Spotify en tu PC o móvil para reproducir');
+        authUrl.search = new URLSearchParams(params).toString();
+        window.location.href = authUrl.toString();
+    };
+
+    // Logout Spotify
+    const handleLogoutSpotify = () => {
+        localStorage.removeItem('spotify_access_token');
+        localStorage.removeItem('spotify_refresh_token');
+        localStorage.removeItem('spotify_code_verifier');
+        setSpotifyToken('');
+        setRefreshToken('');
+        setSpotifyUser(null);
+        setPlaylistData(null);
+        if (triggerToast) triggerToast('Spotify desconectado.');
+    };
+
+    // Guardar URL/ID de Playlist
+    const handleSavePlaylist = () => {
+        const id = extractSpotifyPlaylistId(playlistInput);
+        if (!id) {
+            if (triggerToast) triggerToast('⚠️ Pega un enlace o ID válido de tu Playlist de Spotify.');
+            return;
         }
+        localStorage.setItem('spotify_sr_playlist_url', playlistInput.trim());
+        localStorage.setItem('spotify_sr_playlist_id', id);
+        fetchPlaylistDetails(id);
+        if (triggerToast) triggerToast('✅ Playlist de Spotify vinculada correctamente.');
     };
 
-    const handleSkip = async () => {
-        if (!spotifyToken) return;
-        try {
-            await fetch('https://api.spotify.com/v1/me/player/next', {
-                method: 'POST',
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
-            triggerToast('⏭️ Pista siguiente');
-            setTimeout(fetchCurrentPlayback, 500);
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const handlePrevious = async () => {
-        if (!spotifyToken) return;
-        try {
-            await fetch('https://api.spotify.com/v1/me/player/previous', {
-                method: 'POST',
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
-            setTimeout(fetchCurrentPlayback, 500);
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const handleVolumeChange = async (newVol) => {
-        setVolume(newVol);
-        localStorage.setItem('spotify_player_volume', newVol);
-        if (!spotifyToken) return;
-        try {
-            await fetch('https://api.spotify.com/v1/me/player/volume?volume_percent=' + newVol, {
-                method: 'PUT',
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
-        } catch (e) {}
-    };
-
-    // Search and Add to Spotify Queue
+    // Búsqueda Manual
     const handleSearch = async (e) => {
-        e.preventDefault();
+        e?.preventDefault();
         if (!searchQuery.trim() || !spotifyToken) return;
-        setIsSearching(true);
 
+        setIsSearching(true);
         try {
-            let query = searchQuery.trim();
-            if (query.includes('spotify.com/track/')) {
-                const trackId = query.split('track/')[1]?.split('?')[0];
-                if (trackId) {
-                    const res = await fetch('https://api.spotify.com/v1/tracks/' + trackId, {
-                        headers: { Authorization: 'Bearer ' + spotifyToken }
-                    });
-                    if (res.ok) {
-                        const track = await res.json();
-                        setSearchResults([track]);
-                        setIsSearching(false);
-                        return;
-                    }
-                }
+            const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery.trim())}&type=track&limit=6`, {
+                headers: { Authorization: `Bearer ${spotifyToken}` }
+            });
+
+            if (res.status === 401) {
+                await refreshSpotifyToken();
+                return;
             }
 
-            const res = await fetch('https://api.spotify.com/v1/search?q=' + encodeURIComponent(query) + '&type=track&limit=5', {
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
             if (res.ok) {
                 const data = await res.json();
                 setSearchResults(data.tracks?.items || []);
             }
-        } catch (err) {
-            console.error('Error searching Spotify:', err);
+        } catch (e) {
+            console.error('Error searching track:', e);
         } finally {
             setIsSearching(false);
         }
     };
 
-    // Get active or first available Spotify device
-    const getAvailableDeviceId = async () => {
-        if (!spotifyToken) return null;
-        try {
-            const res = await fetch('https://api.spotify.com/v1/me/player/devices', {
-                headers: { Authorization: 'Bearer ' + spotifyToken }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const devices = data.devices || [];
-                const active = devices.find(d => d.is_active);
-                return active ? active.id : (devices[0] ? devices[0].id : null);
-            }
-        } catch (e) {
-            console.error('Error fetching devices:', e);
-        }
-        return null;
-    };
-
-    const handleAddTrackToQueue = async (track, requestedBy = 'Streamer') => {
-        if (!spotifyToken) {
-            triggerToast('⚠️ Conecta tu cuenta de Spotify primero');
+    // Añadir canción a la Playlist de Spotify
+    const handleAddTrackToPlaylist = async (track, requester = 'Streamer') => {
+        const playlistId = localStorage.getItem('spotify_sr_playlist_id');
+        if (!playlistId) {
+            if (triggerToast) triggerToast('⚠️ Primero debes vincular tu Playlist de Spotify arriba.');
             return;
         }
 
+        setIsAddingSong(true);
         try {
-            const deviceId = await getAvailableDeviceId();
-            const deviceParam = deviceId ? ('&device_id=' + deviceId) : '';
-
-            // 1. Try to add to Spotify Queue
-            const res = await fetch('https://api.spotify.com/v1/me/player/queue?uri=' + encodeURIComponent(track.uri) + deviceParam, {
+            const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
                 method: 'POST',
-                headers: { Authorization: 'Bearer ' + spotifyToken }
+                headers: { 
+                    Authorization: `Bearer ${spotifyToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    uris: [track.uri]
+                })
             });
 
-            let addedSuccessfully = false;
+            if (res.status === 401) {
+                await refreshSpotifyToken();
+                return;
+            }
 
-            if (res.ok || res.status === 204) {
-                addedSuccessfully = true;
-                triggerToast('🎵 Añadida a la cola de Spotify: "' + track.name + '"');
-            } else if (res.status === 404 || res.status === 403) {
-                // If queue fails because nothing is playing, try starting playback
-                const playRes = await fetch('https://api.spotify.com/v1/me/player/play' + (deviceId ? '?device_id=' + deviceId : ''), {
-                    method: 'PUT',
-                    headers: { 
-                        Authorization: 'Bearer ' + spotifyToken,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ uris: [track.uri] })
-                });
-
-                if (playRes.ok || playRes.status === 204) {
-                    addedSuccessfully = true;
-                    triggerToast('▶️ Reproduciendo en Spotify: "' + track.name + '"');
-                    setTimeout(fetchCurrentPlayback, 600);
-                } else {
-                    const errData = await res.json().catch(() => ({}));
-                    console.warn('Queue/Play response:', res.status, errData);
-                    triggerToast('⚠️ Abre Spotify en tu PC o móvil e inicia cualquier pista para activar la sesión.');
+            if (res.ok) {
+                // Guardar en Supabase
+                const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
+                if (supabase) {
+                    await supabase.from('song_requests').insert([{
+                        title: `${track.name} - ${artistsStr}`,
+                        video_id: track.id,
+                        requested_by: requester,
+                        status: 'completed'
+                    }]);
                 }
+
+                if (triggerToast) triggerToast(`🎵 Agregada a la Playlist: "${track.name}"`);
+                fetchPlaylistDetails(playlistId);
             } else {
-                const errData = await res.json().catch(() => ({}));
-                console.warn('Queue error:', res.status, errData);
-                triggerToast('⚠️ Spotify: ' + (errData?.error?.message || 'Abre Spotify para activar el reproductor.'));
+                const errData = await res.json();
+                if (triggerToast) triggerToast(`❌ Error al agregar a la playlist: ${errData.error?.message || 'Error'}`);
             }
-
-            // 2. Register in Supabase queue / history
-            if (supabase) {
-                await supabase.from('song_requests').insert([{
-                    title: track.name + ' - ' + (track.artists ? track.artists.map(a => a.name).join(', ') : ''),
-                    video_id: track.id,
-                    requested_by: requestedBy,
-                    status: 'pending'
-                }]);
-                fetchQueue();
-            }
-
-            setSearchQuery('');
-            setSearchResults([]);
-            setTimeout(fetchCurrentPlayback, 800);
-
-        } catch (err) {
-            console.error('Error adding track:', err);
-            triggerToast('⚠️ Error: Asegúrate de tener la app de Spotify abierta.');
+        } catch (e) {
+            console.error('Error adding track to playlist:', e);
+        } finally {
+            setIsAddingSong(false);
         }
     };
 
-    const handleDeleteQueueItem = async (id) => {
-        if (!supabase) return;
-        await supabase.from('song_requests').delete().eq('id', id);
-        fetchQueue();
-        triggerToast('Elemento eliminado del historial');
+    // Guardar configuración de comando
+    const handleSaveCommand = () => {
+        const clean = customCommandInput.trim().toLowerCase();
+        if (!clean.startsWith('!')) {
+            if (triggerToast) triggerToast('⚠️ El comando debe empezar con signo de exclamación (!)');
+            return;
+        }
+        setSongRequestCommand(clean);
+        localStorage.setItem('song_request_command', clean);
+        if (triggerToast) triggerToast(`✅ Comando guardado como: ${clean}`);
     };
 
-    const formatTime = (ms) => {
-        if (!ms) return '0:00';
-        const totalSeconds = Math.floor(ms / 1000);
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+
+    // Eliminar canción individual de la Playlist de Spotify y de Supabase
+    const handleRemoveTrack = (item) => {
+        if (!supabase) return;
+
+        openConfirmModal(
+            '¿Quitar canción de la Playlist?',
+            `¿Deseas eliminar "${item.title}" de tu Playlist de Spotify y del historial del stream?`,
+            'Sí, Quitar Canción',
+            async () => {
+                const playlistId = localStorage.getItem('spotify_sr_playlist_id');
+                const trackUri = item.video_id?.startsWith('spotify:track:') 
+                    ? item.video_id 
+                    : item.video_id ? `spotify:track:${item.video_id}` : null;
+
+                try {
+                    // 1. Si hay token y playlist y trackUri válido, intentar borrar de Spotify
+                    if (spotifyToken && playlistId && trackUri) {
+                        try {
+                            await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                                method: 'DELETE',
+                                headers: {
+                                    Authorization: `Bearer ${spotifyToken}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    tracks: [{ uri: trackUri }]
+                                })
+                            });
+                        } catch (e) {
+                            console.warn("Could not delete from Spotify remote playlist:", e);
+                        }
+                    }
+
+                    // 2. Eliminar de Supabase
+                    if (item.id) {
+                        await supabase.from('song_requests').delete().eq('id', item.id);
+                    }
+
+                    setSongQueue(prev => prev.filter(s => s.id !== item.id));
+                    if (triggerToast) triggerToast('🗑️ Canción eliminada de la Playlist y del historial.');
+                    if (playlistId) fetchPlaylistDetails(playlistId);
+
+                } catch (err) {
+                    console.error("Error removing track:", err);
+                    if (triggerToast) triggerToast('❌ Error al eliminar la canción.');
+                }
+            }
+        );
+    };
+
+    // Limpiar todo el historial con Modal Emergente
+    const handleClearAllHistory = () => {
+        if (!supabase) return;
+
+        openConfirmModal(
+            '¿Vaciar todo el historial de peticiones?',
+            'Esta acción eliminará todas las canciones solicitadas del historial del Builder. Las canciones que ya estén en tu Playlist de Spotify no se verán afectadas.',
+            'Sí, Limpiar Historial',
+            async () => {
+                try {
+                    await supabase.from('song_requests').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    setSongQueue([]);
+                    if (triggerToast) triggerToast('🧹 Historial de peticiones vaciado correctamente.');
+                } catch (err) {
+                    console.error("Error clearing history:", err);
+                    if (triggerToast) triggerToast('❌ Error al vaciar el historial.');
+                }
+            }
+        );
+    };
+
+    // Toggle de estado activo
+    const handleToggleState = () => {
+        const next = !isSongRequestEnabled;
+        setIsSongRequestEnabled(next);
+        localStorage.setItem('song_request_enabled', next ? 'true' : 'false');
+        if (triggerToast) triggerToast(next ? '🟢 Song Request ACTIVADO' : '🔴 Song Request PAUSADO');
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', paddingBottom: '3rem' }}>
             
-            {/* Header Card: Estado y Conexión Spotify */}
-            <div className="card animate-slide-down" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#1DB954', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000' }}>
-                            <Disc3 size={24} className={isPlaying ? 'animate-spin' : ''} />
-                        </div>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '1.6rem', color: 'var(--text-main)' }}>
-                                Song Request (Spotify Oficial)
+            {/* ============================================================= */}
+            {/* 🔝 1. HEADER & ESTADO GLOBAL DE SONG REQUEST (SPOTIFY FREE) */}
+            {/* ============================================================= */}
+            <div style={{
+                background: isSongRequestEnabled 
+                    ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(15, 23, 42, 0.95))' 
+                    : 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(15, 23, 42, 0.95))',
+                border: isSongRequestEnabled ? '2px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '20px',
+                padding: '1.5rem 1.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                boxShadow: isSongRequestEnabled ? '0 0 30px rgba(16, 185, 129, 0.2)' : 'none',
+                marginBottom: '1.8rem',
+                flexWrap: 'wrap'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{
+                        width: '54px',
+                        height: '54px',
+                        borderRadius: '16px',
+                        background: isSongRequestEnabled ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.2)',
+                        color: isSongRequestEnabled ? '#10B981' : '#EF4444',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.8rem'
+                    }}>
+                        <ListMusic size={28} />
+                    </div>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h2 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.3rem', fontWeight: 800 }}>
+                                Song Request de Spotify (Modo Playlist 100% Free)
                             </h2>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                100% Sin anuncios • Reproducción directa en Spotify
+                            <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 800,
+                                padding: '2px 10px',
+                                borderRadius: '12px',
+                                background: isSongRequestEnabled ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                                color: isSongRequestEnabled ? '#10B981' : '#EF4444',
+                                border: isSongRequestEnabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)'
+                            }}>
+                                {isSongRequestEnabled ? '🟢 ACTIVO' : '🔴 PAUSADO'}
                             </span>
                         </div>
+                        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Permite a los espectadores pedir canciones con <code>{songRequestCommand} [canción]</code> y agregarlas automáticamente a tu Playlist de Spotify sin requerir Premium.
+                        </p>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                    {/* Botón ON / OFF Peticiones de Chat */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {spotifyToken ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255, 255, 255, 0.05)', padding: '6px 14px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10B981' }} />
+                            <span style={{ fontSize: '0.85rem', color: '#FFF', fontWeight: 700 }}>
+                                {spotifyUser?.display_name || 'Spotify Conectado'}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleLogoutSpotify}
+                                style={{ background: 'transparent', border: 'none', color: '#EF4444', fontSize: '0.78rem', cursor: 'pointer', marginLeft: '6px', textDecoration: 'underline' }}
+                            >
+                                Desconectar
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => handleLoginSpotify()}
+                                style={{
+                                    background: '#1DB954',
+                                    color: '#000',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    padding: '10px 18px',
+                                    fontSize: '0.88rem',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 0 15px rgba(29, 185, 84, 0.4)'
+                                }}
+                            >
+                                <Music size={18} /> Conectar Cuenta de Spotify
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowConfigModal(true)}
+                                title="Configurar Redirect URI o Client ID de Spotify"
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    color: '#38BDF8',
+                                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                                    borderRadius: '12px',
+                                    padding: '10px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <Radio size={18} />
+                            </button>
+                        </div>
+                    )}
+
+                    <label style={{ position: 'relative', display: 'inline-block', width: '60px', height: '32px', cursor: 'pointer', flexShrink: 0 }}>
+                        <input 
+                            type="checkbox" 
+                            checked={isSongRequestEnabled} 
+                            onChange={handleToggleState}
+                            style={{ opacity: 0, width: 0, height: 0 }}
+                        />
+                        <span style={{
+                            position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: isSongRequestEnabled ? '#10B981' : '#334155',
+                            transition: '0.3s', borderRadius: '34px',
+                            boxShadow: isSongRequestEnabled ? '0 0 12px rgba(16, 185, 129, 0.5)' : 'none'
+                        }}>
+                            <span style={{
+                                position: 'absolute', content: '""', height: '24px', width: '24px',
+                                left: isSongRequestEnabled ? '32px' : '4px', bottom: '4px',
+                                backgroundColor: 'white', transition: '0.3s', borderRadius: '50%'
+                            }}></span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            {/* ============================================================= */}
+            {/* 📋 2. CONFIGURACIÓN DE LA PLAYLIST DE SPOTIFY (FREE) */}
+            {/* ============================================================= */}
+            <div className="card" style={{ padding: '1.8rem', marginBottom: '1.8rem', border: '1px solid rgba(29, 185, 84, 0.3)', background: 'rgba(15, 23, 42, 0.85)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(29, 185, 84, 0.15)', color: '#1DB954', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <LinkIcon size={22} />
+                    </div>
+                    <div>
+                        <h3 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.15rem', fontWeight: 800 }}>
+                            1. Playlist de Spotify de Peticiones del Stream
+                        </h3>
+                        <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Pega aquí el enlace de la Playlist que creaste en tu Spotify para que el bot inserte las canciones automáticamente.
+                        </p>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
+                    <input
+                        type="text"
+                        value={playlistInput}
+                        onChange={(e) => setPlaylistInput(e.target.value)}
+                        placeholder="https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M o ID de la Playlist"
+                        className="gift-input-field"
+                        style={{ flex: 1, minWidth: '280px', marginBottom: 0 }}
+                    />
                     <button
                         type="button"
-                        onClick={() => {
-                            const nextState = !isSongRequestEnabled;
-                            setIsSongRequestEnabled(nextState);
-                            localStorage.setItem('song_request_enabled', nextState ? 'true' : 'false');
-                            window.dispatchEvent(new Event('storage'));
-                            window.dispatchEvent(new CustomEvent('sr-state-changed', { detail: { enabled: nextState } }));
-                            triggerToast(nextState ? '🟢 Peticiones de chat ACTIVADAS' : '🔴 Peticiones de chat PAUSADAS');
-                        }}
+                        onClick={handleSavePlaylist}
+                        disabled={isLoadingPlaylist}
                         style={{
+                            background: '#1DB954',
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '0 22px',
+                            fontWeight: 800,
+                            fontSize: '0.88rem',
+                            cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 18px',
-                            borderRadius: '30px',
-                            border: isSongRequestEnabled ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
-                            background: isSongRequestEnabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                            color: isSongRequestEnabled ? '#22c55e' : '#ef4444',
-                            fontWeight: 800,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            boxShadow: isSongRequestEnabled ? '0 0 14px rgba(34, 197, 94, 0.2)' : 'none'
+                            gap: '6px'
                         }}
-                        title={isSongRequestEnabled ? "Haz clic para pausar peticiones de canciones desde Twitch" : "Haz clic para reactivar peticiones de canciones desde Twitch"}
                     >
-                        <Radio size={15} />
-                        <span>{isSongRequestEnabled ? 'PETICIONES: ACTIVAS' : 'PETICIONES: PAUSADAS'}</span>
+                        {isLoadingPlaylist ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
+                        Vincular Playlist
                     </button>
+                </div>
 
+                {/* Tarjeta de Playlist Conectada */}
+                {playlistData && (
                     <div style={{
+                        background: 'rgba(29, 185, 84, 0.08)',
+                        border: '1px solid rgba(29, 185, 84, 0.25)',
+                        borderRadius: '14px',
+                        padding: '14px 18px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 16px',
-                        borderRadius: '30px',
-                        background: spotifyToken ? 'rgba(29, 185, 84, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                        border: spotifyToken ? '1px solid rgba(29, 185, 84, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                        color: spotifyToken ? '#1DB954' : '#ef4444',
-                        fontWeight: 700,
-                        fontSize: '0.85rem'
+                        justifyContent: 'space-between',
+                        gap: '14px',
+                        flexWrap: 'wrap'
                     }}>
-                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: spotifyToken ? '#1DB954' : '#ef4444', boxShadow: spotifyToken ? '0 0 10px #1DB954' : 'none' }}></span>
-                        {spotifyToken ? (spotifyUser ? ('SPOTIFY: ' + spotifyUser.display_name?.toUpperCase()) : 'SPOTIFY CONECTADO') : 'DESCONECTADO'}
-                    </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            {playlistData.images?.[0]?.url ? (
+                                <img 
+                                    src={playlistData.images[0].url} 
+                                    alt={playlistData.name} 
+                                    style={{ width: '56px', height: '56px', borderRadius: '10px', objectFit: 'cover' }}
+                                />
+                            ) : (
+                                <div style={{ width: '56px', height: '56px', borderRadius: '10px', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <ListMusic size={26} color="#94A3B8" />
+                                </div>
+                            )}
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1DB954', textTransform: 'uppercase' }}>
+                                        ✓ Playlist Conectada
+                                    </span>
+                                </div>
+                                <h4 style={{ margin: '2px 0 0', color: '#FFF', fontSize: '1.05rem', fontWeight: 800 }}>
+                                    {playlistData.name}
+                                </h4>
+                                <span style={{ fontSize: '0.82rem', color: '#94A3B8' }}>
+                                    Por {playlistData.owner?.display_name || 'Tú'} • {playlistData.tracks?.total || 0} canciones
+                                </span>
+                            </div>
+                        </div>
 
-                    {!spotifyToken ? (
-                        <button
-                            type="button"
-                            className="btn-submit"
+                        <a
+                            href={playlistData.external_urls?.spotify || `https://open.spotify.com/playlist/${playlistData.id}`}
+                            target="_blank"
+                            rel="noreferrer"
                             style={{
-                                width: 'auto',
-                                padding: '12px 24px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                color: '#FFF',
+                                borderRadius: '10px',
+                                padding: '8px 14px',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                textDecoration: 'none',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '10px',
-                                background: '#1DB954',
-                                color: '#000',
-                                fontWeight: 800,
-                                borderRadius: '10px',
-                                boxShadow: '0 4px 15px rgba(29, 185, 84, 0.35)'
+                                gap: '6px'
                             }}
-                            onClick={handleConnectSpotify}
                         >
-                            <Sparkles size={18} /> Conectar con Spotify
-                        </button>
-                    ) : (
+                            <ExternalLink size={14} /> Abrir en Spotify
+                        </a>
+                    </div>
+                )}
+
+                {/* Guía Rápida para el Creador */}
+                <div style={{ marginTop: '1.2rem', padding: '12px 16px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: '#38BDF8', fontWeight: 700, fontSize: '0.88rem' }}>
+                        <HelpCircle size={16} /> ¿Cómo reproducir en tu directo con Spotify Free?
+                    </div>
+                    <ol style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: '1.5' }}>
+                        <li>Abre tu app de Spotify en tu PC o móvil.</li>
+                        <li>Busca tu Playlist <strong>"{playlistData?.name || 'Peticiones de Twitch'}"</strong> y presiona <strong>Play</strong> para dejarla sonando.</li>
+                        <li>Cada vez que alguien pida una canción en Twitch con <code>{songRequestCommand} [canción]</code>, se sumará al final de tu playlist y sonará automáticamente cuando le toque el turno.</li>
+                    </ol>
+                </div>
+            </div>
+
+            {/* ============================================================= */}
+            {/* ⚙️ 3. AJUSTES DEL COMANDO & MENSAJE DE TWITCH */}
+            {/* ============================================================= */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem', marginBottom: '1.8rem' }}>
+                
+                {/* Comando */}
+                <div className="card" style={{ padding: '1.5rem' }}>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
+                        Comando del Chat para Peticiones
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                            type="text"
+                            value={customCommandInput}
+                            onChange={(e) => setCustomCommandInput(e.target.value)}
+                            placeholder="!sr o !pedir"
+                            className="gift-input-field"
+                            style={{ flex: 1, marginBottom: 0 }}
+                        />
                         <button
                             type="button"
-                            className="btn-submit"
+                            onClick={handleSaveCommand}
                             style={{
-                                width: 'auto',
-                                padding: '10px 18px',
-                                background: 'rgba(255,255,255,0.06)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                color: 'var(--text-muted)',
-                                borderRadius: '8px',
-                                fontSize: '0.85rem'
+                                background: '#38BDF8',
+                                color: '#000',
+                                border: 'none',
+                                borderRadius: '10px',
+                                padding: '0 16px',
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                cursor: 'pointer'
                             }}
-                            onClick={handleDisconnectSpotify}
                         >
-                            Desconectar
+                            Guardar
+                        </button>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'block', marginTop: '6px' }}>
+                        Ejemplo de uso: <code>{songRequestCommand} Michael Jackson Billie Jean</code>
+                    </span>
+                </div>
+
+                {/* Plantilla de Respuesta */}
+                <div className="card" style={{ padding: '1.5rem' }}>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
+                        Plantilla de Respuesta en Twitch
+                    </label>
+                    <input
+                        type="text"
+                        value={responseTemplate}
+                        onChange={(e) => {
+                            setResponseTemplate(e.target.value);
+                            localStorage.setItem('spotify_sr_response_template', e.target.value);
+                        }}
+                        placeholder="🎵 @{user} ¡Canción agregada! '{song}' - {artist}"
+                        className="gift-input-field"
+                        style={{ width: '100%', marginBottom: '6px' }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+                        Variables: <code>{'{user}'}</code>, <code>{'{song}'}</code>, <code>{'{artist}'}</code>
+                    </span>
+                </div>
+            </div>
+
+            {/* ============================================================= */}
+            {/* 🔍 4. BUSCADOR MANUAL DE CANCIONES */}
+            {/* ============================================================= */}
+            <div className="card" style={{ padding: '1.8rem', marginBottom: '1.8rem' }}>
+                <h3 style={{ margin: '0 0 10px', color: '#F8FAFC', fontSize: '1.15rem', fontWeight: 800 }}>
+                    Buscar y Agregar Canción Manualmente a la Playlist
+                </h3>
+                <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                        <Search size={18} color="#94A3B8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Escribe el nombre de la canción o artista..."
+                            className="gift-input-field"
+                            style={{ width: '100%', paddingLeft: '42px', marginBottom: 0 }}
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={isSearching || !spotifyToken}
+                        style={{
+                            background: '#10B981',
+                            color: '#FFF',
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '0 20px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        {isSearching ? <RefreshCw size={16} className="animate-spin" /> : <Search size={16} />} Buscar
+                    </button>
+                </form>
+
+                {/* Resultados de Búsqueda */}
+                {searchResults.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+                        {searchResults.map(track => (
+                            <div 
+                                key={track.id}
+                                style={{
+                                    background: 'rgba(15, 23, 42, 0.7)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: '10px',
+                                    padding: '10px 12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '10px'
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                                    {track.album?.images?.[2]?.url && (
+                                        <img src={track.album.images[2].url} alt={track.name} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                                    )}
+                                    <div style={{ overflow: 'hidden' }}>
+                                        <h5 style={{ margin: 0, color: '#FFF', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {track.name}
+                                        </h5>
+                                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                                            {track.artists?.map(a => a.name).join(', ')}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddTrackToPlaylist(track)}
+                                    disabled={isAddingSong}
+                                    style={{
+                                        background: 'rgba(29, 185, 84, 0.2)',
+                                        color: '#1DB954',
+                                        border: '1px solid rgba(29, 185, 84, 0.4)',
+                                        borderRadius: '8px',
+                                        padding: '6px 10px',
+                                        fontWeight: 800,
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                    }}
+                                >
+                                    + Agregar
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* ============================================================= */}
+            {/* 📜 5. HISTORIAL DE PETICIONES DEL STREAM */}
+            {/* ============================================================= */}
+            <div className="card" style={{ padding: '1.8rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '10px' }}>
+                    <div>
+                        <h3 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.2rem', fontWeight: 800 }}>
+                            Historial de Peticiones del Chat ({songQueue.length})
+                        </h3>
+                        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Canciones solicitadas en directo. Puedes quitar cualquier canción de tu Playlist y del historial con el botón "Quitar".
+                        </p>
+                    </div>
+
+                    {songQueue.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleClearAllHistory}
+                            style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                color: '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: '8px',
+                                padding: '7px 14px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <Trash2 size={14} /> Limpiar Todo el Historial
                         </button>
                     )}
                 </div>
-            </div>
 
-            {/* Main Player & Controls */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', alignItems: 'start' }}>
-                
-                {/* Left Column: Active Player & Search */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
-                    {/* Active Track Card */}
-                    <div className="card animate-slide-down" style={{ padding: '24px', background: 'linear-gradient(180deg, rgba(29, 185, 84, 0.06), rgba(15, 23, 42, 0.6))', border: '1px solid rgba(29, 185, 84, 0.25)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#1DB954', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Radio size={14} className={isPlaying ? 'animate-pulse' : ''} />
-                                {isPlaying ? 'Reproduciendo Ahora en Spotify' : 'Pausado en Spotify'}
-                            </span>
-                            {activeDevice && (
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    Dispositivo: <strong>{activeDevice}</strong>
-                                </span>
-                            )}
-                        </div>
-
-                        {currentTrack ? (
-                            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                                <div style={{ width: '110px', height: '110px', borderRadius: '14px', overflow: 'hidden', background: '#000', flexShrink: 0, boxShadow: '0 8px 25px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <img src={currentTrack.albumCover} alt={currentTrack.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {currentTrack.title}
-                                    </h3>
-                                    <span style={{ fontSize: '1rem', color: '#1DB954', fontWeight: 600 }}>
-                                        {currentTrack.artist}
-                                    </span>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        Álbum: {currentTrack.album}
-                                    </span>
-                                </div>
-                            </div>
-                        ) : (
-                            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
-                                <Music size={40} opacity={0.3} style={{ marginBottom: '8px' }} />
-                                <p style={{ margin: 0 }}>No hay ninguna canción reproduciéndose actualmente en Spotify.</p>
-                                <small>Abre Spotify en tu PC o móvil e inicia cualquier pista.</small>
-                            </div>
-                        )}
-
-                        {/* Progress Bar */}
-                        {currentTrack && (
-                            <div style={{ marginTop: '20px' }}>
-                                <div style={{ height: '6px', width: '100%', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', overflow: 'hidden' }}>
-                                    <div style={{
-                                        height: '100%',
-                                        width: (durationMs > 0 ? (progressMs / durationMs) * 100 : 0) + '%',
-                                        background: '#1DB954',
-                                        transition: 'width 1s linear'
-                                    }} />
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                                    <span>{formatTime(progressMs)}</span>
-                                    <span>{formatTime(durationMs)}</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Controls Toolbar */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <button
-                                    type="button"
-                                    onClick={handlePrevious}
-                                    style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff', padding: '10px', borderRadius: '50%', cursor: 'pointer' }}
-                                    title="Pista anterior"
-                                >
-                                    <SkipBack size={18} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handlePlayPause}
-                                    style={{ background: '#1DB954', border: 'none', color: '#000', padding: '14px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    title={isPlaying ? 'Pausar' : 'Reproducir'}
-                                >
-                                    {isPlaying ? <Pause size={20} fill="#000" /> : <Play size={20} fill="#000" style={{ marginLeft: '2px' }} />}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSkip}
-                                    style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff', padding: '10px', borderRadius: '50%', cursor: 'pointer' }}
-                                    title="Pista siguiente (Skip)"
-                                >
-                                    <SkipForward size={18} />
-                                </button>
-                            </div>
-
-                            {/* Volume Slider */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '160px' }}>
-                                <Volume2 size={16} color="var(--text-muted)" />
-                                <input 
-                                    type="range" 
-                                    min="0" 
-                                    max="100" 
-                                    value={volume} 
-                                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                                    style={{ flex: 1, accentColor: '#1DB954', cursor: 'pointer' }}
-                                />
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '30px' }}>{volume}%</span>
-                            </div>
-                        </div>
+                {songQueue.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                        <Music size={40} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
+                        <p style={{ margin: 0 }}>No hay canciones en el historial de peticiones.</p>
+                        <span style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                            Tus espectadores pueden pedir con: <code>{songRequestCommand} [canción]</code>
+                        </span>
                     </div>
-
-                    {/* Manual Search and Add to Queue */}
-                    <div className="card animate-slide-down" style={{ padding: '20px' }}>
-                        <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Search size={16} color="#1DB954" /> Añadir Canción a la Cola de Spotify
-                        </h4>
-                        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px' }}>
-                            <input 
-                                type="text"
-                                className="form-control"
-                                placeholder="Nombre de la canción, artista o link de Spotify..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                            <button
-                                type="submit"
-                                className="btn-submit"
-                                style={{ width: 'auto', padding: '0 20px', background: '#1DB954', color: '#000', fontWeight: 700, borderRadius: '8px' }}
-                                disabled={!spotifyToken || isSearching || !searchQuery.trim()}
-                            >
-                                {isSearching ? 'Buscando...' : 'Buscar'}
-                            </button>
-                        </form>
-
-                        {/* Search Results Dropdown */}
-                        {searchResults.length > 0 && (
-                            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {searchResults.map(track => (
-                                    <div 
-                                        key={track.id}
-                                        style={{
-                                            padding: '10px 14px',
-                                            borderRadius: '10px',
-                                            background: 'rgba(255,255,255,0.03)',
-                                            border: '1px solid rgba(255,255,255,0.08)',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            gap: '12px'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                                            <img src={track.album?.images[2]?.url || track.album?.images[0]?.url} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px' }} />
-                                            <div style={{ overflow: 'hidden' }}>
-                                                <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</div>
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{track.artists?.map(a => a.name).join(', ')}</div>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleAddTrackToQueue(track)}
-                                            style={{
-                                                padding: '6px 14px',
-                                                background: '#1DB954',
-                                                border: 'none',
-                                                color: '#000',
-                                                fontWeight: 700,
-                                                fontSize: '0.8rem',
-                                                borderRadius: '6px',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            + Añadir
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                </div>
-
-                {/* Right Column: Message template, OBS Overlay Info & Queue */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
-                    {/* Command Trigger Card */}
-                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(168, 85, 247, 0.4)', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(15, 23, 42, 0.6))' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Radio size={16} color="#A855F7" /> Comando de Chat para Pedir Canciones
-                            </h4>
-                            <span style={{ fontSize: '0.72rem', color: '#C084FC', fontWeight: 700, padding: '2px 8px', background: 'rgba(168, 85, 247, 0.2)', borderRadius: '12px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
-                                Actual: {songRequestCommand}
-                            </span>
-                        </div>
-                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
-                            Elige la palabra o comando con la que tus viewers pedirán canciones en el chat de Twitch:
-                        </p>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <input 
-                                type="text"
-                                className="form-control"
-                                placeholder="Ej: !sr, !cancion, !pedir, !musica..."
-                                value={customCommandInput}
-                                onChange={(e) => setCustomCommandInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        let clean = customCommandInput.trim().toLowerCase();
-                                        if (!clean.startsWith('!')) clean = '!' + clean;
-                                        if (clean.length > 1) {
-                                            setSongRequestCommand(clean);
-                                            setCustomCommandInput(clean);
-                                            localStorage.setItem('song_request_command', clean);
-                                            triggerToast(`✅ Comando cambiado a "${clean}"`);
-                                        }
-                                    }
-                                }}
-                                style={{ fontWeight: 700, color: '#A855F7', fontSize: '0.95rem' }}
-                            />
-                            <button
-                                type="button"
-                                className="btn-submit"
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {songQueue.map((item, idx) => (
+                            <div 
+                                key={item.id || idx}
                                 style={{
-                                    width: 'auto',
-                                    padding: '0 18px',
-                                    background: 'linear-gradient(135deg, #9146FF, #772CE8)',
-                                    color: '#fff',
-                                    fontWeight: 700,
-                                    borderRadius: '8px'
-                                }}
-                                onClick={() => {
-                                    let clean = customCommandInput.trim().toLowerCase();
-                                    if (!clean.startsWith('!')) clean = '!' + clean;
-                                    if (clean.length > 1) {
-                                        setSongRequestCommand(clean);
-                                        setCustomCommandInput(clean);
-                                        localStorage.setItem('song_request_command', clean);
-                                        window.dispatchEvent(new CustomEvent('sr-cmd-changed', { detail: { command: clean } }));
-                                        triggerToast(`✅ Comando cambiado a "${clean}"`);
-                                    } else {
-                                        triggerToast('⚠️ Escribe un comando válido');
-                                    }
+                                    background: 'rgba(15, 23, 42, 0.7)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: '10px',
+                                    padding: '10px 14px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '12px'
                                 }}
                             >
-                                Guardar
-                            </button>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            <span>💡 Ejemplo en chat: <strong style={{ color: '#C084FC' }}>{songRequestCommand} Bohemian Rhapsody</strong></span>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSongRequestCommand('!spotifybloqued');
-                                    setCustomCommandInput('!spotifybloqued');
-                                    localStorage.setItem('song_request_command', '!spotifybloqued');
-                                    window.dispatchEvent(new CustomEvent('sr-cmd-changed', { detail: { command: '!spotifybloqued' } }));
-                                    triggerToast('Comando restablecido a !spotifybloqued');
-                                }}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.72rem' }}
-                            >
-                                Restablecer (!spotifybloqued)
-                            </button>
-                        </div>
-                    </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 700, width: '20px' }}>
+                                        #{idx + 1}
+                                    </span>
+                                    <div>
+                                        <h4 style={{ margin: 0, color: '#F8FAFC', fontSize: '0.92rem', fontWeight: 700 }}>
+                                            {item.title}
+                                        </h4>
+                                        <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+                                            Pedido por <strong style={{ color: '#38BDF8' }}>@{item.requested_by}</strong>
+                                        </span>
+                                    </div>
+                                </div>
 
-                    {/* Message Template Card */}
-                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(29, 185, 84, 0.3)' }}>
-                        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <MessageSquare size={16} color="#1DB954" /> Mensaje de Respuesta en el Chat
-                        </h4>
-                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
-                            Personaliza el mensaje que el bot enviará al chat de Twitch al añadir una canción:
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <textarea 
-                                className="form-control"
-                                rows="2"
-                                value={responseTemplate}
-                                onChange={(e) => setResponseTemplate(e.target.value)}
-                                placeholder='@{user} ¡Canción añadida a la cola! 🎵 "{song}" - {artist}'
-                                style={{ fontSize: '0.85rem', resize: 'vertical' }}
-                            />
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                <span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }}>{'{user}'} : Usuario</span>
-                                <span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }}>{'{song}'} : Canción</span>
-                                <span style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }}>{'{artist}'} : Artista</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const def = '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}';
-                                        setResponseTemplate(def);
-                                        localStorage.setItem('spotify_sr_response_template', def);
-                                        triggerToast('Mensaje restaurado a predeterminado');
-                                    }}
-                                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', fontSize: '0.75rem', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}
-                                >
-                                    Restablecer
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn-submit"
-                                    style={{ width: 'auto', padding: '6px 16px', fontSize: '0.78rem', background: '#1DB954', color: '#000', fontWeight: 700, borderRadius: '6px' }}
-                                    onClick={() => {
-                                        localStorage.setItem('spotify_sr_response_template', responseTemplate);
-                                        triggerToast('✅ Plantilla de mensaje guardada');
-                                    }}
-                                >
-                                    Guardar Mensaje
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{
+                                        fontSize: '0.72rem',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        background: 'rgba(29, 185, 84, 0.15)',
+                                        color: '#1DB954',
+                                        fontWeight: 700
+                                    }}>
+                                        En Playlist
+                                    </span>
 
-                    {/* Widget OBS URL Card */}
-                    <div className="card animate-slide-down" style={{ padding: '20px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
-                        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <ExternalLink size={16} color="#A855F7" /> Widget para OBS Studio
-                        </h4>
-                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
-                            Añade esta URL como fuente de navegador en OBS para mostrar la canción que está sonando en directo:
-                        </p>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <input 
-                                type="text" 
-                                className="form-control" 
-                                readOnly 
-                                value={window.location.origin + '/?overlay=song_request'} 
-                                style={{ fontSize: '0.8rem', background: 'rgba(0,0,0,0.4)' }}
-                            />
-                            <button
-                                type="button"
-                                className="btn-submit"
-                                style={{ width: 'auto', padding: '0 14px', background: 'var(--primary)', color: '#fff', borderRadius: '8px', fontSize: '0.8rem' }}
-                                onClick={() => {
-                                    navigator.clipboard.writeText(window.location.origin + '/?overlay=song_request');
-                                    triggerToast('📋 Enlace de OBS copiado');
-                                }}
-                            >
-                                Copiar
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Historial / Cola de Peticiones del Chat */}
-                    <div className="card animate-slide-down" style={{ padding: '20px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                            <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)' }}>
-                                Pedidos del Chat ({songQueue.length})
-                            </h4>
-                            <button 
-                                type="button" 
-                                onClick={fetchQueue}
-                                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                            >
-                                <RefreshCw size={12} /> Refrescar
-                            </button>
-                        </div>
-
-                        {songQueue.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                Aún no hay canciones pedidas en esta sesión.
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto' }}>
-                                {songQueue.map((item, idx) => (
-                                    <div
-                                        key={item.id || idx}
+                                    {/* Botón Quitar de Playlist & Historial */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveTrack(item)}
+                                        title="Quitar canción de la Playlist de Spotify y borrarla del historial"
                                         style={{
-                                            padding: '10px 12px',
+                                            background: 'rgba(239, 68, 68, 0.12)',
+                                            color: '#EF4444',
+                                            border: '1px solid rgba(239, 68, 68, 0.3)',
                                             borderRadius: '8px',
-                                            background: 'rgba(255,255,255,0.02)',
-                                            border: '1px solid rgba(255,255,255,0.06)',
+                                            padding: '5px 10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
                                             display: 'flex',
-                                            justifyContent: 'space-between',
                                             alignItems: 'center',
-                                            gap: '10px'
+                                            gap: '4px',
+                                            transition: 'all 0.2s'
                                         }}
                                     >
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {item.title}
-                                            </div>
-                                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                                Por: <strong style={{ color: '#1DB954' }}>@{item.requested_by}</strong>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDeleteQueueItem(item.id)}
-                                            style={{ background: 'none', border: 'none', color: 'rgba(239, 68, 68, 0.7)', cursor: 'pointer', padding: '4px' }}
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                ))}
+                                        <Trash2 size={13} /> Quitar
+                                    </button>
+                                </div>
                             </div>
-                        )}
+                        ))}
                     </div>
-
-                </div>
-
+                )}
             </div>
 
+            
+            {/* ============================================================= */}
+            {/* 🔑 MODAL DE CONFIGURACIÓN SPOTIFY (REDIRECT URI & CLIENT ID) */}
+            {/* ============================================================= */}
+            {showConfigModal && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 99999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, #0f172a, #1e293b)',
+                        border: '1px solid rgba(29, 185, 84, 0.4)',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(29, 185, 84, 0.2)',
+                        borderRadius: '24px',
+                        maxWidth: '560px',
+                        width: '100%',
+                        padding: '2rem',
+                        position: 'relative'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                            <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(29, 185, 84, 0.15)', color: '#1DB954', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Music size={24} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.2rem', fontWeight: 800 }}>
+                                    Configuración de Conexión de Spotify
+                                </h3>
+                                <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                    Solución para el error "redirect_uri: Not matching configuration".
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Tu Redirect URI actual */}
+                        <div style={{ marginBottom: '1.2rem' }}>
+                            <label style={{ display: 'block', color: '#94A3B8', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>
+                                1. Tu Redirect URI exacta a agregar en Spotify Developer:
+                            </label>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={selectedRedirectUri}
+                                    style={{
+                                        flex: 1,
+                                        background: 'rgba(15, 23, 42, 0.9)',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '8px',
+                                        padding: '8px 12px',
+                                        color: '#10B981',
+                                        fontSize: '0.82rem',
+                                        fontFamily: 'monospace'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(selectedRedirectUri);
+                                        setCopiedRedirect(true);
+                                        setTimeout(() => setCopiedRedirect(false), 2000);
+                                    }}
+                                    style={{
+                                        background: copiedRedirect ? '#10B981' : 'rgba(255, 255, 255, 0.1)',
+                                        color: '#FFF',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '0 14px',
+                                        fontWeight: 700,
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    {copiedRedirect ? <Check size={14} /> : <Copy size={14} />}
+                                    {copiedRedirect ? 'Copiado' : 'Copiar'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Opciones de Redirect URIs comunes */}
+                        <div style={{ marginBottom: '1.2rem' }}>
+                            <label style={{ display: 'block', color: '#94A3B8', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>
+                                O selecciona la Redirect URI que registraste:
+                            </label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {[
+                                    currentOriginPath,
+                                    window.location.origin + '/',
+                                    'http://localhost:5173/Builder_EvilTokkii/',
+                                    'http://localhost:5173/',
+                                    'http://127.0.0.1:5173/'
+                                ].filter((v, i, a) => a.indexOf(v) === i).map(uri => (
+                                    <button
+                                        key={uri}
+                                        type="button"
+                                        onClick={() => setSelectedRedirectUri(uri)}
+                                        style={{
+                                            textAlign: 'left',
+                                            background: selectedRedirectUri === uri ? 'rgba(29, 185, 84, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                                            border: selectedRedirectUri === uri ? '1px solid #1DB954' : '1px solid rgba(255, 255, 255, 0.08)',
+                                            color: selectedRedirectUri === uri ? '#1DB954' : '#CBD5E1',
+                                            borderRadius: '8px',
+                                            padding: '8px 12px',
+                                            fontSize: '0.8rem',
+                                            cursor: 'pointer',
+                                            fontFamily: 'monospace'
+                                        }}
+                                    >
+                                        {selectedRedirectUri === uri ? '✓ ' : '• '}{uri}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Instrucciones de 3 pasos */}
+                        <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '12px', padding: '12px 14px', border: '1px solid rgba(255, 255, 255, 0.06)', marginBottom: '1.4rem' }}>
+                            <h4 style={{ margin: '0 0 6px', color: '#38BDF8', fontSize: '0.85rem', fontWeight: 700 }}>
+                                📋 ¿Cómo agregar la Redirect URI en Spotify?
+                            </h4>
+                            <ol style={{ margin: 0, paddingLeft: '1.2rem', color: '#94A3B8', fontSize: '0.78rem', lineHeight: '1.5' }}>
+                                <li>Entra a <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer" style={{ color: '#1DB954', textDecoration: 'underline' }}>developer.spotify.com/dashboard</a>.</li>
+                                <li>Abre tu App y ve a <strong>Settings (Configuración)</strong>.</li>
+                                <li>En el campo <strong>Redirect URIs</strong>, presiona <strong>Add</strong>, pega la URI de arriba y presiona <strong>Save</strong> al fondo.</li>
+                            </ol>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowConfigModal(false)}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    color: '#FFF',
+                                    borderRadius: '10px',
+                                    padding: '10px',
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cerrar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowConfigModal(false);
+                                    handleLoginSpotify(selectedRedirectUri);
+                                }}
+                                style={{
+                                    background: '#1DB954',
+                                    border: 'none',
+                                    color: '#000',
+                                    borderRadius: '10px',
+                                    padding: '10px',
+                                    fontWeight: 800,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Guardar y Conectar ➜
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* 🛑 MODAL EMERGENTE DE CONFIRMACIÓN (ESTILO BUILDER) */}
+            {/* ============================================================= */}
+            {confirmDialog.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 99999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px',
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, #0f172a, #1e293b)',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(239, 68, 68, 0.2)',
+                        borderRadius: '24px',
+                        maxWidth: '480px',
+                        width: '100%',
+                        padding: '2rem',
+                        textAlign: 'center',
+                        position: 'relative'
+                    }}>
+                        <div style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#EF4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.2rem',
+                            boxShadow: '0 0 20px rgba(239, 68, 68, 0.3)'
+                        }}>
+                            <Trash2 size={32} />
+                        </div>
+
+                        <h3 style={{ margin: '0 0 8px', color: '#F8FAFC', fontSize: '1.3rem', fontWeight: 800 }}>
+                            {confirmDialog.title}
+                        </h3>
+
+                        <p style={{ margin: '0 0 1.8rem', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                            {confirmDialog.message}
+                        </p>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <button
+                                type="button"
+                                onClick={closeConfirmModal}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    color: '#F8FAFC',
+                                    borderRadius: '12px',
+                                    padding: '12px',
+                                    fontWeight: 700,
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (confirmDialog.onConfirm) confirmDialog.onConfirm();
+                                    closeConfirmModal();
+                                }}
+                                style={{
+                                    background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+                                    border: 'none',
+                                    color: '#FFF',
+                                    borderRadius: '12px',
+                                    padding: '12px',
+                                    fontWeight: 800,
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 0 15px rgba(239, 68, 68, 0.4)',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {confirmDialog.confirmText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

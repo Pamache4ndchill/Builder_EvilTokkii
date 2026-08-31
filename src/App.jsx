@@ -825,6 +825,9 @@ function App() {
 
   const songRequestCommandRef = useRef(songRequestCommand);
   const isSongRequestEnabledRef = useRef(isSongRequestEnabled);
+  const twitchUserIdsCacheRef = useRef({});
+  const twitchClientIdCacheRef = useRef(null);
+  const ttsUserCooldownRef = useRef({});
 
   useEffect(() => {
     songRequestCommandRef.current = songRequestCommand;
@@ -1020,20 +1023,77 @@ function App() {
     localStorage.setItem('dashboard_player_enabled', isPlayerEnabledInDashboard ? 'true' : 'false');
   }, [isPlayerEnabledInDashboard]);
 
+  // Helper para obtener token válido de Spotify con auto-refresh
+  const getValidSpotifyAccessToken = async () => {
+    let token = localStorage.getItem('spotify_access_token');
+    const refreshToken = localStorage.getItem('spotify_refresh_token');
+
+    if (!token && !refreshToken) return null;
+
+    // Probar si el token sigue vivo
+    if (token) {
+      try {
+        const check = await fetch('https://api.spotify.com/v1/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (check.ok) return token;
+      } catch (e) {}
+    }
+
+    // Si falló y tenemos refresh_token, renovarlo
+    if (refreshToken) {
+      try {
+        const body = new URLSearchParams({
+          client_id: '467b4e8480964c26913cb87d276ed20c',
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+        });
+
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString()
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            localStorage.setItem('spotify_access_token', data.access_token);
+            if (data.refresh_token) {
+              localStorage.setItem('spotify_refresh_token', data.refresh_token);
+            }
+            return data.access_token;
+          }
+        }
+      } catch (e) {
+        console.error("Error refreshing Spotify token in background:", e);
+      }
+    }
+
+    return token;
+  };
+
   const handleSongRequest = async (query, requester) => {
-    // Si las peticiones están pausadas, no procesar ni responder nada
-    if (!isSongRequestEnabledRef.current) {
-      addBotLog(`[Song Request] Petición de @${requester} ignorada porque las peticiones están pausadas.`);
+    const isSREnabled = localStorage.getItem('song_request_enabled') !== 'false';
+    if (!isSREnabled) {
+      addBotLog(`[Song Request] Petición de @${requester} ignorada porque las peticiones están pausadas en el Builder.`);
       return;
     }
 
     try {
-      addBotLog(`[Spotify SR] Petición recibida de @${requester}: "${query}"`);
+      addBotLog(`[Spotify Free SR] Petición recibida de @${requester}: "${query}"`);
       
-      let spotifyToken = localStorage.getItem('spotify_access_token');
+      const spotifyToken = await getValidSpotifyAccessToken();
       if (!spotifyToken) {
         addBotLog(`[Spotify SR] ⚠️ No hay cuenta de Spotify conectada en el Builder.`);
-        enviarMensajeTwitch(`@${requester} ⚠️ El reproductor de Spotify no está conectado actualmente en el stream.`, true);
+        enviarMensajeTwitch(`@${requester} ⚠️ Spotify no está conectado actualmente en el stream.`, true);
+        return;
+      }
+
+      const playlistId = localStorage.getItem('spotify_sr_playlist_id');
+      if (!playlistId) {
+        addBotLog(`[Spotify SR] ⚠️ No hay Playlist de Spotify configurada en el Builder.`);
+        enviarMensajeTwitch(`@${requester} ⚠️ El streamer aún no ha configurado la Playlist de Spotify en el Builder.`, true);
         return;
       }
 
@@ -1064,36 +1124,35 @@ function App() {
         return;
       }
 
-      // Añadir a la cola de reproducción de Spotify
-      const queueRes = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+      // Añadir la canción a la Playlist de Spotify Free
+      const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${spotifyToken}` }
+        headers: { 
+          Authorization: `Bearer ${spotifyToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ uris: [track.uri] })
       });
 
-      // Si no hay reproductor activo, intentar iniciar reproducción directa
-      if (queueRes.status === 404 || queueRes.status === 403) {
-        await fetch(`https://api.spotify.com/v1/me/player/play`, {
-          method: 'PUT',
-          headers: { 
-            Authorization: `Bearer ${spotifyToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ uris: [track.uri] })
-        });
+      if (!addRes.ok) {
+        const errJson = await addRes.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || 'Error al agregar track a la playlist');
       }
 
-      // Guardar en Supabase para el historial y cola visual
+      // Guardar en Supabase para el historial
       const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
-      await supabase.from('song_requests').insert([{
-        title: `${track.name} - ${artistsStr}`,
-        video_id: track.id,
-        requested_by: requester,
-        status: 'pending'
-      }]);
+      if (supabase) {
+        await supabase.from('song_requests').insert([{
+          title: `${track.name} - ${artistsStr}`,
+          video_id: track.id,
+          requested_by: requester,
+          status: 'completed'
+        }]);
+      }
 
-      addBotLog(`[Spotify SR] ✅ Añadida a la cola de Spotify: "${track.name}" por @${requester}`);
+      addBotLog(`[Spotify SR] ✅ Agregada a la Playlist de Spotify: "${track.name}" por @${requester}`);
       
-      const template = localStorage.getItem('spotify_sr_response_template') || '@{user} ¡Canción añadida a la cola de Spotify! 🎵 "{song}" - {artist}';
+      const template = localStorage.getItem('spotify_sr_response_template') || '🎵 @{user} ¡Canción agregada a la Playlist del stream! "{song}" - {artist}';
       const finalMsg = template
         .replace(/{user}/gi, requester)
         .replace(/{requester}/gi, requester)
@@ -1102,11 +1161,10 @@ function App() {
         .replace(/{artist}/gi, artistsStr);
         
       enviarMensajeTwitch(finalMsg, true);
-      fetchSongs();
 
     } catch (err) {
       addBotLog(`[Spotify SR Error] ${err.message}`);
-      enviarMensajeTwitch(`@${requester} ⚠️ Error al conectar con Spotify. Intenta de nuevo.`, true);
+      enviarMensajeTwitch(`@${requester} ⚠️ Error al agregar la canción a la Playlist de Spotify. Intenta de nuevo.`, true);
     }
   };
 
@@ -1516,6 +1574,95 @@ function App() {
   const reconnectTimeoutRef = useRef(null);
   const pingIntervalRef = useRef(null);
 
+  const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
+    try {
+      const isTTSEnabled = localStorage.getItem('tts_bot_enabled') !== 'false';
+      if (!isTTSEnabled) return;
+
+      const ttsCmd = (localStorage.getItem('tts_bot_command') || '!voz').toLowerCase().trim();
+      const prefix = ttsCmd + ' ';
+      let rest = fullText.slice(prefix.length).trim();
+      if (!rest) return;
+
+      // Verificar cooldown
+      const cooldownSec = Number(localStorage.getItem('tts_cooldown')) || 10;
+      const now = Date.now();
+      const lastUsed = ttsUserCooldownRef.current[user.toLowerCase()] || 0;
+      if (now - lastUsed < cooldownSec * 1000) {
+        return; // En cooldown
+      }
+      ttsUserCooldownRef.current[user.toLowerCase()] = now;
+
+      // Cargar la voz actualmente en uso seleccionada en el Builder
+      const activeVoiceId = localStorage.getItem('tts_active_default_voice_v8') || localStorage.getItem('tts_active_default_voice_v7') || 'locutor_latino';
+      let charactersList = DEFAULT_CHARACTERS;
+      try {
+        const saved = localStorage.getItem('tts_characters_custom_v8');
+        if (saved) charactersList = JSON.parse(saved);
+      } catch (e) {}
+
+      let targetChar = charactersList.find(c => c.id === activeVoiceId) || charactersList[0] || DEFAULT_CHARACTERS[0];
+      let messageText = rest;
+
+      if (!messageText) return;
+
+      // Límite de caracteres
+      const charLimit = Number(localStorage.getItem('tts_char_limit')) || 120;
+      if (messageText.length > charLimit) {
+        messageText = messageText.slice(0, charLimit) + '...';
+      }
+
+      // Filtro de censura / palabras bloqueadas
+      const blacklistStr = localStorage.getItem('tts_blacklist') || '';
+      if (blacklistStr) {
+        const bannedWords = blacklistStr.split(',').map(w => w.trim().toLowerCase()).filter(w => w.length > 0);
+        bannedWords.forEach(banned => {
+          const reg = new RegExp(banned, 'gi');
+          messageText = messageText.replace(reg, '***');
+        });
+      }
+
+      // Reproducir en navegador
+      const vol = Number(localStorage.getItem('tts_volume')) || 0.85;
+      TTSSpeechEngine.speakText(messageText, targetChar, vol);
+
+      // Emitir a OBS Overlay vía Supabase Realtime
+      if (supabase) {
+        const channel = supabase.channel('tts_realtime_channel');
+        channel.send({
+          type: 'broadcast',
+          event: 'TTS_PLAY_EVENT',
+          payload: {
+            user,
+            text: messageText,
+            characterId: targetChar.id,
+            volume: vol
+          }
+        });
+      }
+
+      // Guardar en historial
+      try {
+        const historySaved = JSON.parse(localStorage.getItem('tts_history_log') || '[]');
+        const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const newEntry = {
+          user,
+          text: messageText,
+          characterId: targetChar.id,
+          characterName: targetChar.name,
+          avatar: targetChar.avatar,
+          time: timeStr
+        };
+        const updatedHistory = [newEntry, ...historySaved].slice(0, 50);
+        localStorage.setItem('tts_history_log', JSON.stringify(updatedHistory));
+      } catch (e) {}
+
+      addBotLog(`[TTS Voz] 🎙️ @${user} usó la voz de ${targetChar.name}: "${messageText}"`);
+    } catch (err) {
+      console.error("Error processing TTS message:", err);
+    }
+  };
+
   const connectTwitchBot = () => {
     if (!botOauth || !botUsername || !botChannel) {
       return;
@@ -1633,111 +1780,7 @@ function App() {
               console.warn("Error detecting birthday chatter:", bdayErr);
             }
 
-              const ttsUserCooldownRef = useRef({});
 
-  const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
-    try {
-      const isTTSEnabled = localStorage.getItem('tts_bot_enabled') !== 'false';
-      if (!isTTSEnabled) return;
-
-      const ttsCmd = (localStorage.getItem('tts_bot_command') || '!voz').toLowerCase().trim();
-      const prefix = ttsCmd + ' ';
-      let rest = fullText.slice(prefix.length).trim();
-      if (!rest) return;
-
-      // Verificar cooldown
-      const cooldownSec = Number(localStorage.getItem('tts_cooldown')) || 10;
-      const now = Date.now();
-      const lastUsed = ttsUserCooldownRef.current[user.toLowerCase()] || 0;
-      if (now - lastUsed < cooldownSec * 1000) {
-        return; // En cooldown
-      }
-      ttsUserCooldownRef.current[user.toLowerCase()] = now;
-
-      // Parsear personaje y mensaje
-      const parts = rest.split(/\s+/);
-      const possibleCharKey = parts[0].toLowerCase();
-
-      // Cargar lista de personajes
-      let charactersList = DEFAULT_CHARACTERS;
-      try {
-        const saved = localStorage.getItem('tts_characters_custom');
-        if (saved) charactersList = JSON.parse(saved);
-      } catch (e) {}
-
-      let targetChar = charactersList.find(c => 
-        c.enabled !== false && 
-        (c.id.toLowerCase() === possibleCharKey || (c.alias && c.alias.some(a => a.toLowerCase() === possibleCharKey)))
-      );
-
-      let messageText = '';
-      if (targetChar) {
-        messageText = parts.slice(1).join(' ').trim();
-      } else {
-        // Personaje por defecto
-        targetChar = charactersList.find(c => c.enabled !== false) || DEFAULT_CHARACTERS[0];
-        messageText = rest;
-      }
-
-      if (!messageText) return;
-
-      // Límite de caracteres
-      const charLimit = Number(localStorage.getItem('tts_char_limit')) || 120;
-      if (messageText.length > charLimit) {
-        messageText = messageText.slice(0, charLimit) + '...';
-      }
-
-      // Filtro de censura / palabras bloqueadas
-      const blacklistStr = localStorage.getItem('tts_blacklist') || '';
-      if (blacklistStr) {
-        const bannedWords = blacklistStr.split(',').map(w => w.trim().toLowerCase()).filter(w => w.length > 0);
-        bannedWords.forEach(banned => {
-          const reg = new RegExp(banned, 'gi');
-          messageText = messageText.replace(reg, '***');
-        });
-      }
-
-      // Reproducir en navegador
-      const vol = Number(localStorage.getItem('tts_volume')) || 0.85;
-      const fakeyouToken = localStorage.getItem('tts_fakeyou_token') || '';
-      TTSSpeechEngine.speakText(messageText, targetChar, vol, fakeyouToken);
-
-      // Emitir a OBS Overlay vía Supabase Realtime
-      if (supabase) {
-        const channel = supabase.channel('tts_realtime_channel');
-        channel.send({
-          type: 'broadcast',
-          event: 'TTS_PLAY_EVENT',
-          payload: {
-            user,
-            text: messageText,
-            characterId: targetChar.id,
-            volume: vol
-          }
-        });
-      }
-
-      // Guardar en historial
-      try {
-        const historySaved = JSON.parse(localStorage.getItem('tts_history_log') || '[]');
-        const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-        const newEntry = {
-          user,
-          text: messageText,
-          characterId: targetChar.id,
-          characterName: targetChar.name,
-          avatar: targetChar.avatar,
-          time: timeStr
-        };
-        const updatedHistory = [newEntry, ...historySaved].slice(0, 50);
-        localStorage.setItem('tts_history_log', JSON.stringify(updatedHistory));
-      } catch (e) {}
-
-      addBotLog(`[TTS Voz] 🎙️ @${user} usó la voz de ${targetChar.name}: "${messageText}"`);
-    } catch (err) {
-      console.error("Error processing TTS message:", err);
-    }
-  };
 
             // TTS Voice Command Parser
             const isTTSEnabled = localStorage.getItem('tts_bot_enabled') !== 'false';
@@ -1748,16 +1791,20 @@ function App() {
               handleTwitchTTSMessage(user, text, rawMessage);
             }
 
-            // Song Request Command Parsers (Control Estricto y Reactivo)
-            const currentSRState = isSongRequestEnabledRef.current;
-            const currentSRCmd = (songRequestCommandRef.current || localStorage.getItem('song_request_command') || '!spotifybloqued').toLowerCase().trim();
-            const customPrefix = currentSRCmd + ' ';
+            // Song Request Command Parsers (Control Reactivo y Multi-Comando)
+            const isSREnabled = localStorage.getItem('song_request_enabled') !== 'false';
+            const currentSRCmd = (localStorage.getItem('song_request_command') || '!sr').toLowerCase().trim();
 
-            // Si las peticiones están activas Y el mensaje empieza EXACTAMENTE con el comando configurado:
-            if (currentSRState && textLower.startsWith(customPrefix)) {
-              const query = text.trim().slice(customPrefix.length).trim();
+            // Lista de comandos válidos (el personalizado + alias comunes como !sr y !srfree)
+            const validSRCommands = Array.from(new Set([currentSRCmd, '!sr', '!srfree', '!pedir', '!cancion'])).filter(Boolean);
+            const matchedSRCmd = validSRCommands.find(cmd => textLower.startsWith(cmd + ' ') || textLower === cmd);
+
+            if (isSREnabled && matchedSRCmd) {
+              const query = text.trim().slice(matchedSRCmd.length).trim();
               if (query) {
                 handleSongRequest(query, user);
+              } else {
+                enviarMensajeTwitch(`@${user} 🎵 Uso del comando: ${matchedSRCmd} [nombre de la canción o artista]`, true);
               }
             } else if (currentSRState && (textLower === "!song" || textLower === "!currentsong")) {
               handleGetActiveSong();
@@ -1868,11 +1915,7 @@ function App() {
     addBotLog("Bot desconectado manualmente.");
   };
 
-// Cache para IDs numéricos de Twitch
-  const twitchUserIdsCacheRef = useRef({});
-
-  // Client ID dinámico cacheado
-  const twitchClientIdCacheRef = useRef(null);
+// Caches para IDs y Client ID movidos al inicio
 
   const getTwitchClientId = async (token) => {
     if (twitchClientIdCacheRef.current) return twitchClientIdCacheRef.current;
@@ -5088,6 +5131,7 @@ function App() {
 
             <TTSVoiceManager 
               supabase={supabase}
+              triggerToast={triggerToast}
             />
           </div>
         ) : view === 'view_points_wheel' ? (
