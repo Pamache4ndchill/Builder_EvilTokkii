@@ -649,7 +649,92 @@ export default function SpotifySongRequestManager({
                 </div>
             </div>
 
+                        {/* ============================================================= */}
+            {/* 🔑 CONFIGURACIÓN DE SPOTIFY CLIENT ID & CONEXIÓN */}
             {/* ============================================================= */}
+            <div className="card" style={{ padding: '1.5rem 1.8rem', marginBottom: '1.8rem', border: '1px solid rgba(56, 189, 248, 0.3)', background: 'rgba(15, 23, 42, 0.85)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ShieldCheck size={22} />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.1rem', fontWeight: 800 }}>
+                                Vinculación con tu App de Spotify Developer
+                            </h3>
+                            <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                Ingresa el Client ID de tu app de Spotify para autorizar con acceso total sin error 403.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {spotifyToken ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.15)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }} />
+                                <span style={{ fontSize: '0.82rem', color: '#10B981', fontWeight: 800 }}>
+                                    Sesión Activa: {spotifyUser?.display_name || 'Spotify'}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleLogoutSpotify}
+                                    style={{ background: 'transparent', border: 'none', color: '#EF4444', fontSize: '0.75rem', cursor: 'pointer', marginLeft: '6px', fontWeight: 700 }}
+                                >
+                                    (Desconectar)
+                                </button>
+                            </div>
+                        ) : (
+                            <span style={{ fontSize: '0.82rem', color: '#EF4444', fontWeight: 700 }}>
+                                🔴 No conectado
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'center' }}>
+                    <div>
+                        <label style={{ display: 'block', color: '#94A3B8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>
+                            Client ID de tu App en developer.spotify.com
+                        </label>
+                        <input
+                            type="text"
+                            value={clientIdInput}
+                            onChange={(e) => {
+                                setClientIdInput(e.target.value);
+                                localStorage.setItem('spotify_custom_client_id', e.target.value.trim());
+                            }}
+                            placeholder="Ej: 467b4e8480964c26913cb87d276ed20c"
+                            className="gift-input-field"
+                            style={{ width: '100%', marginBottom: 0, fontFamily: 'monospace', fontSize: '0.85rem' }}
+                        />
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => handleLoginSpotify()}
+                        style={{
+                            background: '#1DB954',
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '12px 20px',
+                            fontWeight: 800,
+                            fontSize: '0.88rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            height: '42px',
+                            marginTop: '18px',
+                            boxShadow: '0 0 15px rgba(29, 185, 84, 0.3)'
+                        }}
+                    >
+                        <Music size={16} /> {spotifyToken ? 'Reconectar Spotify' : 'Conectar Cuenta'}
+                    </button>
+                </div>
+            </div>
+
+{/* ============================================================= */}
             {/* 📋 2. CONFIGURACIÓN DE LA PLAYLIST DE SPOTIFY (FREE) */}
             {/* ============================================================= */}
             <div className="card" style={{ padding: '1.8rem', marginBottom: '1.8rem', border: '1px solid rgba(29, 185, 84, 0.3)', background: 'rgba(15, 23, 42, 0.85)' }}>
