@@ -1109,29 +1109,37 @@ function App() {
       let track = null;
       let lastSearchError = null;
 
-      // 1. Buscar por URL directa
-      if (queryClean.includes('spotify.com/track/')) {
-        const trackId = queryClean.split('track/')[1]?.split('?')[0]?.split('/')[0];
-        let res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-          headers: { Authorization: `Bearer ${spotifyToken}` }
-        });
-        if (res.status === 401) {
-          spotifyToken = await getValidSpotifyAccessToken(true);
-          if (spotifyToken) {
-            res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-              headers: { Authorization: `Bearer ${spotifyToken}` }
-            });
+      // 1. Detectar si es enlace directo o URI de Spotify (soporta intl-es, intl-en, etc.)
+      const trackIdMatch = queryClean.match(/spotify\.com\/(?:intl-[a-z]{2}\/)?track\/([a-zA-Z0-9]+)/) || 
+                            queryClean.match(/spotify:track:([a-zA-Z0-9]+)/);
+
+      if (trackIdMatch && trackIdMatch[1]) {
+        const trackId = trackIdMatch[1];
+        addBotLog(`[Spotify SR] Enlace directo detectado con ID: ${trackId}`);
+
+        // Si tenemos el ID directo, podemos usarlo directamente como URI
+        track = {
+          id: trackId,
+          uri: `spotify:track:${trackId}`,
+          name: 'Canción solicitada por enlace',
+          artists: [{ name: 'Spotify Track' }]
+        };
+
+        // Intentar obtener los metadatos reales para el nombre bonito en el chat
+        try {
+          let metaRes = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${trackId}`);
+          if (metaRes.ok) {
+            const meta = await metaRes.json();
+            if (meta.title) {
+              track.name = meta.title;
+              track.artists = [{ name: meta.author_name || 'Spotify' }];
+            }
           }
-        }
-        if (res.ok) {
-          track = await res.json();
-        } else {
-          lastSearchError = `HTTP ${res.status}`;
-        }
+        } catch (e) {}
+
       } else {
-        // 2. Buscar por texto en Spotify API
+        // 2. Buscar por texto en Spotify API y fallbacks
         const searchTerms = [queryClean];
-        // Si tiene varias palabras, agregar fallback con las primeras 2 palabras
         const words = queryClean.split(/\s+/);
         if (words.length > 2) {
           searchTerms.push(words.slice(0, 2).join(' '));
@@ -1160,10 +1168,34 @@ function App() {
               track = data.tracks.items[0];
             }
           } else {
-            lastSearchError = `HTTP ${res.status}`;
             const errBody = await res.json().catch(() => ({}));
-            addBotLog(`[Spotify Search Error] ${res.status}: ${JSON.stringify(errBody)}`);
+            lastSearchError = errBody.error?.message || `HTTP ${res.status}`;
+            addBotLog(`[Spotify Search Error] ${res.status}: ${lastSearchError}`);
           }
+        }
+
+        // Fallback de búsqueda pública si la API de search da 403
+        if (!track && lastSearchError && lastSearchError.includes('403')) {
+          try {
+            addBotLog(`[Spotify SR] Intentando buscador alternativo para: "${queryClean}"`);
+            const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(queryClean)}&entity=song&limit=1`);
+            if (itunesRes.ok) {
+              const itunesData = await itunesRes.json();
+              if (itunesData.results && itunesData.results.length > 0) {
+                const song = itunesData.results[0];
+                addBotLog(`[Spotify SR Fallback] Encontrado tema: ${song.trackName} - ${song.artistName}`);
+                // Reintentar en Spotify con el nombre exacto limpio
+                const exactTerm = `${song.trackName} ${song.artistName}`;
+                let retryRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(exactTerm)}&type=track&limit=1`, {
+                  headers: { Authorization: `Bearer ${spotifyToken}` }
+                });
+                if (retryRes.ok) {
+                  const retryData = await retryRes.json();
+                  track = retryData.tracks?.items?.[0] || null;
+                }
+              }
+            }
+          } catch (e) {}
         }
       }
 
