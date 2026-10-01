@@ -463,96 +463,147 @@ export const TTSVoiceManager = ({ supabase, triggerToast }) => {
                             return (
                                 <div 
                                     key={char.id} 
-                                    className="card" 
                                     style={{ 
-                                        padding: '1.4rem', 
-                                        borderLeft: '4px solid ' + char.color,
-                                        border: isCurrentlyActive ? '2px solid #10B981' : undefined,
-                                        borderLeftWidth: '5px',
-                                        transition: 'all 0.2s',
+                                        background: isCurrentlyActive ? 'var(--bg-card)' : 'rgba(15, 23, 42, 0.4)', 
+                                        border: isCurrentlyActive ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                        borderRadius: '14px',
+                                        padding: '1.2rem 1.4rem',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         justifyContent: 'space-between',
-                                        boxShadow: isCurrentlyActive ? '0 0 20px rgba(16, 185, 129, 0.2)' : undefined,
+                                        transition: 'all 0.2s',
+                                        opacity: isCurrentlyActive ? 1 : 0.8,
+                                        boxShadow: isCurrentlyActive ? '0 10px 30px -8px rgba(16, 185, 129, 0.2)' : 'none',
                                         position: 'relative'
                                     }}
                                 >
                                     <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                                            <div style={{
-                                                fontSize: '1.8rem',
-                                                width: '45px',
-                                                height: '45px',
-                                                borderRadius: '12px',
-                                                background: 'rgba(255, 255, 255, 0.08)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
-                                            }}>
-                                                {char.avatar}
+                                        {/* Top Bar of Card */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{
+                                                    fontSize: '1.4rem',
+                                                    width: '40px',
+                                                    height: '40px',
+                                                    borderRadius: '10px',
+                                                    background: 'rgba(255, 255, 255, 0.06)',
+                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {char.avatar}
+                                                </div>
+                                                <div>
+                                                    <span style={{
+                                                        fontSize: '1.05rem',
+                                                        fontWeight: 800,
+                                                        color: isCurrentlyActive ? '#10B981' : '#F8FAFC'
+                                                    }}>
+                                                        {char.name}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h4 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.05rem', fontWeight: 800 }}>
-                                                    {char.name}
-                                                </h4>
-                                            </div>
+
+                                            {/* Badge En Uso / Activo */}
+                                            {isCurrentlyActive ? (
+                                                <span style={{
+                                                    fontSize: '0.72rem',
+                                                    background: 'rgba(16, 185, 129, 0.15)',
+                                                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                                                    padding: '3px 8px',
+                                                    borderRadius: '6px',
+                                                    color: '#10B981',
+                                                    fontWeight: 700,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}>
+                                                    <Check size={12} /> EN USO
+                                                </span>
+                                            ) : (
+                                                <span style={{
+                                                    fontSize: '0.72rem',
+                                                    background: 'rgba(255, 255, 255, 0.05)',
+                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                    padding: '3px 8px',
+                                                    borderRadius: '6px',
+                                                    color: '#94A3B8'
+                                                }}>
+                                                    Disponible
+                                                </span>
+                                            )}
                                         </div>
 
-                                        <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: '0 0 6px' }}>
-                                            {char.description}
-                                        </p>
+                                        {/* Description */}
+                                        {char.description && (
+                                            <p style={{ margin: '0 0 10px', color: '#94A3B8', fontSize: '0.84rem', lineHeight: '1.4' }}>
+                                                {char.description}
+                                            </p>
+                                        )}
 
-                                        <p style={{ fontSize: '0.82rem', color: '#E2E8F0', fontStyle: 'italic', margin: '0 0 14px', minHeight: '36px' }}>
+                                        {/* Sample Preview Box estilo Comandos */}
+                                        <div style={{
+                                            background: 'rgba(15, 23, 42, 0.6)',
+                                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                                            borderRadius: '8px',
+                                            padding: '9px 12px',
+                                            marginBottom: '14px',
+                                            fontSize: '0.82rem',
+                                            color: '#E2E8F0',
+                                            lineHeight: '1.4',
+                                            fontStyle: 'italic'
+                                        }}>
                                             "{char.sampleText}"
-                                        </p>
+                                        </div>
                                     </div>
 
-                                    {/* 2 Botones: Escuchar y Usar esta voz */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '6px' }}>
+                                    {/* Actions Footer estilo Comandos */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '10px' }}>
                                         <button
                                             type="button"
                                             onClick={() => handleTestSample(char)}
                                             disabled={isPlayingSample === char.id}
                                             style={{
-                                                background: isPlayingSample === char.id ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                                                border: '1px solid ' + (isPlayingSample === char.id ? '#10B981' : 'rgba(255, 255, 255, 0.15)'),
-                                                color: isPlayingSample === char.id ? '#10B981' : '#F8FAFC',
-                                                borderRadius: '10px',
-                                                padding: '9px 8px',
-                                                fontWeight: 700,
-                                                fontSize: '0.82rem',
-                                                cursor: 'pointer',
+                                                background: isPlayingSample === char.id ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.1)',
+                                                color: '#10B981',
+                                                border: '1px solid rgba(16, 185, 129, 0.25)',
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                justifyContent: 'center',
                                                 gap: '5px',
-                                                transition: 'all 0.2s'
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s'
                                             }}
+                                            title="Escuchar muestra de audio"
                                         >
-                                            <Play size={13} fill="currentColor" /> {isPlayingSample === char.id ? 'Cargando...' : 'Escuchar'}
+                                            <Play size={12} fill="currentColor" /> {isPlayingSample === char.id ? 'Cargando...' : 'Escuchar'}
                                         </button>
 
                                         <button
                                             type="button"
                                             onClick={() => handleSelectVoiceInUse(char)}
                                             style={{
-                                                background: isCurrentlyActive ? 'linear-gradient(135deg, #10B981, #059669)' : 'rgba(255, 255, 255, 0.05)',
+                                                background: isCurrentlyActive ? 'linear-gradient(135deg, #10B981, #059669)' : 'rgba(255, 255, 255, 0.06)',
+                                                color: isCurrentlyActive ? '#FFFFFF' : '#CBD5E1',
                                                 border: isCurrentlyActive ? '1px solid #10B981' : '1px solid rgba(255, 255, 255, 0.12)',
-                                                color: isCurrentlyActive ? '#FFF' : '#CBD5E1',
-                                                borderRadius: '10px',
-                                                padding: '9px 8px',
-                                                fontWeight: 800,
-                                                fontSize: '0.82rem',
-                                                cursor: 'pointer',
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 700,
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                justifyContent: 'center',
                                                 gap: '5px',
+                                                cursor: 'pointer',
                                                 boxShadow: isCurrentlyActive ? '0 0 12px rgba(16, 185, 129, 0.3)' : 'none',
-                                                transition: 'all 0.2s'
+                                                transition: 'all 0.15s'
                                             }}
                                         >
-                                            {isCurrentlyActive ? <Check size={14} /> : <Sparkles size={13} />}
+                                            {isCurrentlyActive ? <Check size={13} /> : <Sparkles size={12} />}
                                             {isCurrentlyActive ? 'En Uso' : 'Usar esta voz'}
                                         </button>
                                     </div>

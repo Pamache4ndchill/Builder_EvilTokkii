@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-    Play, Square, Send, Smile, Megaphone, Plus, Trash2, Edit3, Settings, 
+import { Play, Square, Send, Smile, Megaphone, Plus, Trash2, Edit3, Settings, 
     Wifi, WifiOff, MessageSquare, Clock, CheckCircle2, 
-    AlertCircle, Sparkles, RefreshCw, ChevronDown, ChevronUp, Terminal, ShieldCheck
-} from 'lucide-react';
+    AlertCircle, Sparkles, RefreshCw, ChevronDown, ChevronUp, Terminal, ShieldCheck, ToggleRight, ToggleLeft } from 'lucide-react';
 
 const TWITCH_CLIENT_ID = 'crp2lmk3jqaqxwymxixn38nf3xxn2b';
 const DEFAULT_CHANNEL = 'eviltokkii';
@@ -637,64 +635,123 @@ export default function ScheduledMessagesManager({
                                     <div
                                         key={msg.id}
                                         style={{
-                                            padding: '16px 18px',
-                                            borderRadius: '12px',
-                                            background: msg.active ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.01)',
-                                            border: msg.active ? '1px solid rgba(145, 70, 255, 0.3)' : '1px solid rgba(255, 255, 255, 0.06)',
+                                            background: msg.active ? 'var(--bg-card)' : 'rgba(15, 23, 42, 0.4)',
+                                            border: msg.active ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                            borderRadius: '14px',
+                                            padding: '1.2rem 1.4rem',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            gap: '12px',
-                                            opacity: msg.active ? 1 : 0.6
+                                            justifyContent: 'space-between',
+                                            transition: 'all 0.2s',
+                                            opacity: msg.active ? 1 : 0.65,
+                                            boxShadow: msg.active ? '0 10px 30px -8px rgba(16, 185, 129, 0.15)' : 'none',
+                                            position: 'relative',
+                                            marginBottom: '10px'
                                         }}
                                     >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                                            <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.5, wordBreak: 'break-word', fontWeight: 500 }}>
-                                                {msg.text}
-                                            </p>
+                                        <div>
+                                            {/* Top Bar */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <span style={{
+                                                        fontSize: '0.75rem',
+                                                        background: 'rgba(16, 185, 129, 0.15)',
+                                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '6px',
+                                                        color: '#10B981',
+                                                        fontWeight: 700,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <Clock size={12} /> Cada {msg.intervalMinutes} min
+                                                    </span>
 
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                                    <span style={{
+                                                        fontSize: '0.75rem',
+                                                        background: 'rgba(56, 189, 248, 0.12)',
+                                                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '6px',
+                                                        color: '#38BDF8',
+                                                        fontWeight: 600,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <MessageSquare size={12} /> Mín. {msg.minChatMessages || 0} chats
+                                                    </span>
+                                                </div>
+
+                                                {/* Switch On/Off Toggle */}
                                                 <button
                                                     type="button"
                                                     onClick={() => {
                                                         handleToggleMessage(msg.id);
-                                                        triggerToast(msg.active ? '⏸️ Temporizador pausado' : '▶️ Temporizador global lanzado');
+                                                        triggerToast(msg.active ? '⏸️ Temporizador pausado' : '🟢 Temporizador activado');
                                                     }}
-                                                    title={msg.active ? "Pausar temporizador" : "Lanzar temporizador en stream"}
+                                                    title={msg.active ? 'Pausar mensaje' : 'Activar mensaje'}
                                                     style={{
-                                                        padding: '5px 12px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 800,
-                                                        borderRadius: '20px',
-                                                        border: msg.active ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)',
+                                                        background: 'transparent',
+                                                        border: 'none',
                                                         cursor: 'pointer',
-                                                        background: msg.active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.06)',
-                                                        color: msg.active ? '#22c55e' : 'var(--text-muted)',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        gap: '4px'
+                                                        padding: 0
                                                     }}
                                                 >
-                                                    {msg.active ? '🟢 EN CURSO' : '▶️ LANZAR'}
+                                                    {msg.active ? (
+                                                        <ToggleRight size={28} color="#10B981" />
+                                                    ) : (
+                                                        <ToggleLeft size={28} color="#64748B" />
+                                                    )}
                                                 </button>
+                                            </div>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => sendChatMessage(msg.text, true)}
-                                                    disabled={!isBotConnected}
-                                                    title="Enviar prueba al chat ahora"
-                                                    style={{
-                                                        padding: '6px',
-                                                        borderRadius: '8px',
-                                                        background: 'rgba(56, 189, 248, 0.15)',
-                                                        border: '1px solid rgba(56, 189, 248, 0.3)',
-                                                        color: '#38bdf8',
-                                                        cursor: isBotConnected ? 'pointer' : 'not-allowed',
-                                                        opacity: isBotConnected ? 1 : 0.5
-                                                    }}
-                                                >
-                                                    <Send size={14} />
-                                                </button>
+                                            {/* Preview Box estilo Comandos */}
+                                            <div style={{
+                                                background: 'rgba(15, 23, 42, 0.6)',
+                                                border: '1px solid rgba(255, 255, 255, 0.06)',
+                                                borderRadius: '8px',
+                                                padding: '10px 12px',
+                                                marginBottom: '12px',
+                                                fontSize: '0.85rem',
+                                                color: '#E2E8F0',
+                                                lineHeight: '1.45',
+                                                wordBreak: 'break-word'
+                                            }}>
+                                                "{msg.text}"
+                                            </div>
+                                        </div>
 
+                                        {/* Actions Footer estilo Comandos */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '10px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => sendChatMessage(msg.text, true)}
+                                                disabled={!isBotConnected}
+                                                style={{
+                                                    background: 'rgba(16, 185, 129, 0.1)',
+                                                    color: '#10B981',
+                                                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                                                    padding: '5px 12px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '0.78rem',
+                                                    fontWeight: 600,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    cursor: isBotConnected ? 'pointer' : 'not-allowed',
+                                                    opacity: isBotConnected ? 1 : 0.5
+                                                }}
+                                                title="Enviar prueba al chat ahora"
+                                            >
+                                                <Send size={12} />
+                                                Probar en Chat
+                                            </button>
+
+                                            <div style={{ display: 'flex', gap: '6px' }}>
                                                 <button
                                                     type="button"
                                                     onClick={() => {
@@ -707,44 +764,47 @@ export default function ScheduledMessagesManager({
                                                         });
                                                         setIsModalOpen(true);
                                                     }}
-                                                    title="Editar mensaje"
                                                     style={{
-                                                        padding: '6px',
-                                                        borderRadius: '8px',
                                                         background: 'rgba(255, 255, 255, 0.05)',
+                                                        color: '#CBD5E1',
                                                         border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                        color: 'var(--text-muted)',
+                                                        padding: '5px 10px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 600,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
                                                         cursor: 'pointer'
                                                     }}
+                                                    title="Editar mensaje"
                                                 >
-                                                    <Edit3 size={14} />
+                                                    <Edit3 size={12} />
+                                                    Editar
                                                 </button>
 
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDeleteMessage(msg.id)}
-                                                    title="Eliminar mensaje"
                                                     style={{
-                                                        padding: '6px',
-                                                        borderRadius: '8px',
                                                         background: 'rgba(239, 68, 68, 0.1)',
+                                                        color: '#EF4444',
                                                         border: '1px solid rgba(239, 68, 68, 0.2)',
-                                                        color: '#ef4444',
+                                                        padding: '5px 10px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 600,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
                                                         cursor: 'pointer'
                                                     }}
+                                                    title="Eliminar mensaje"
                                                 >
-                                                    <Trash2 size={14} />
+                                                    <Trash2 size={12} />
+                                                    Eliminar
                                                 </button>
                                             </div>
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
-                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <Clock size={13} color="var(--primary)" /> Cada <strong>{msg.intervalMinutes} min</strong>
-                                            </span>
-                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <MessageSquare size={13} color="#38bdf8" /> Requiere <strong>{msg.minChatMessages || 0} msgs de chat</strong>
-                                            </span>
                                         </div>
                                     </div>
                                 ))}

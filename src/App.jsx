@@ -31,9 +31,14 @@ import { HISTORY_QUESTIONS } from './data/HistoryQuestions';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
+
+export const SUPABASE_WEB_URL = import.meta.env.VITE_SUPABASE_WEB_URL || "https://jdikrnfzepqmulguepnc.supabase.co";
+export const SUPABASE_WEB_ANON_KEY = import.meta.env.VITE_SUPABASE_WEB_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkaWtybmZ6ZXBxbXVsZ3VlcG5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MTgwNjQsImV4cCI6MjEwNjM5NDA2NH0.AlqTPUYLPwKpFQxYkGb4X4W7LQIH39SXvIoxAt9uf_c";
+
 export const CLOUDFLARE_R2_BASE_URL = import.meta.env.VITE_R2_BASE_URL || "https://pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/public";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabaseWeb = createClient(SUPABASE_WEB_URL, SUPABASE_WEB_ANON_KEY);
 
 // Global Temporary Cache for mocking Cloudflare R2 Uploads visually before backend integration
 window.__R2_MOCK_CACHE__ = window.__R2_MOCK_CACHE__ || {};
@@ -41,6 +46,26 @@ window.__R2_MOCK_CACHE__ = window.__R2_MOCK_CACHE__ || {};
 const getDisplayUrl = (url) => {
   if (!url) return '';
   return window.__R2_MOCK_CACHE__[url] || url;
+};
+
+export const resolveGameImage = (url) => {
+  if (!url) return '';
+  if (window.__R2_MOCK_CACHE__ && window.__R2_MOCK_CACHE__[url]) {
+    return window.__R2_MOCK_CACHE__[url];
+  }
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('http://') || 
+    trimmed.startsWith('https://') || 
+    trimmed.startsWith('data:') || 
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/') || trimmed.startsWith('Imagenes/')) {
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  }
+  return `${CLOUDFLARE_R2_BASE_URL}/${trimmed}`;
 };
 
 function getDbdPerkImageUrl(apiPath) {
@@ -2669,7 +2694,7 @@ function App() {
     setIsLoadingLibrary(true);
     try {
       const { data: news } = await supabase.from('news_articles').select('*').order('created_at', { ascending: false });
-      const { data: content } = await supabase.from('content_items').select('*').order('created_at', { ascending: false });
+      const { data: content } = await supabaseWeb.from('content_items').select('*').order('created_at', { ascending: false });
       const { data: redemptions } = await supabase.from('twitch_redemptions').select('*').order('created_at', { ascending: false });
       
       if (news) setSavedNews(news);
@@ -2685,7 +2710,7 @@ function App() {
   const fetchMostStreamed = async (isSilent = false) => {
     if (!isSilent) setIsLoadingMostStreamed(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseWeb
         .from('most_streamed')
         .select('*')
         .order('order_index', { ascending: true });
@@ -2737,7 +2762,7 @@ function App() {
   const handleDeleteMostStreamedItem = async (id, title) => {
     if (!window.confirm(`¿Estás seguro de que deseas eliminar "${title || 'este juego'}" de la lista?`)) return;
     try {
-      const { error } = await supabase
+      const { error } = await supabaseWeb
         .from('most_streamed')
         .delete()
         .eq('id', id);
@@ -2755,7 +2780,7 @@ function App() {
   const handleAddMostStreamedItem = async () => {
     try {
       const newOrder = mostStreamed.length + 1;
-      const { data, error } = await supabase
+      const { data, error } = await supabaseWeb
         .from('most_streamed')
         .insert([{
           title: 'Nuevo Juego',
@@ -2792,7 +2817,7 @@ function App() {
       if (item.description !== undefined) {
           payload.description = item.description;
       }
-      const { error } = await supabase
+      const { error } = await supabaseWeb
         .from('most_streamed')
         .upsert(payload);
       
@@ -2818,6 +2843,8 @@ function App() {
       fetchUserReports();
     } else if (view === 'view_minijuegos') {
       fetchMinigamesFromSupabase();
+    } else if (view === 'view_most_streamed') {
+      fetchMostStreamed();
     }
   }, [view]);
 
@@ -2825,13 +2852,13 @@ function App() {
     setIsLoadingParticipations(true);
     
     // 1. Cargar la lista de eventos
-    const { data: eventsData, error: eventsError } = await supabase
+    const { data: eventsData, error: eventsError } = await supabaseWeb
       .from('content_items')
       .select('id, titulo, tipo, estado, created_at')
       .order('created_at', { ascending: false });
 
     // 2. Cargar la lista de participaciones
-    const { data: partData, error: partError } = await supabase
+    const { data: partData, error: partError } = await supabaseWeb
       .from('participations')
       .select('*')
       .order('created_at', { ascending: false });
@@ -2848,7 +2875,7 @@ function App() {
 
   const handleDeleteParticipation = async (id, nombre) => {
     if (window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${nombre}" de este evento? Esta acción no se puede deshacer.`)) {
-      const { error } = await supabase.from('participations').delete().eq('id', id);
+      const { error } = await supabaseWeb.from('participations').delete().eq('id', id);
       if (!error) {
         setParticipations(prev => prev.filter(p => p.id !== id));
         alert('Participante eliminado con éxito.');
@@ -2968,7 +2995,7 @@ function App() {
       return;
     }
 
-    const { data: itemData, error } = await supabase.from('content_items').select('*').eq('id', id).single();
+    const { data: itemData, error } = await supabaseWeb.from('content_items').select('*').eq('id', id).single();
     if (error) {
       alert("Error cargando la información de Supabase: " + error.message);
       return;
@@ -3055,7 +3082,7 @@ function App() {
           alert("Error al eliminar noticia: " + error.message);
         }
       } else {
-        const { error } = await supabase.from('content_items').delete().eq('id', id);
+        const { error } = await supabaseWeb.from('content_items').delete().eq('id', id);
         if (!error) {
           setLibraryItems(prev => prev.filter(item => item.id !== id));
           triggerToast("Registro eliminado correctamente.");
@@ -3088,7 +3115,7 @@ function App() {
 
     if (editingItemId) {
       console.log(`Actualizando ${tipoItem} en Supabase en tiempo real...`);
-      const { error } = await supabase
+      const { error } = await supabaseWeb
         .from('content_items')
         .update(payload)
         .eq('id', editingItemId);
@@ -3102,7 +3129,7 @@ function App() {
       triggerToast(`¡${tipoItem === 'evento' ? 'Evento' : 'Sorteo'} actualizado exitosamente!`, 'center');
     } else {
       console.log(`Guardando nuevo ${tipoItem} en Supabase...`);
-      const { error } = await supabase
+      const { error } = await supabaseWeb
         .from('content_items')
         .insert([payload]);
 
@@ -5069,10 +5096,13 @@ function App() {
                       }}>
                         {item.image_url ? (
                           <img 
-                            src={item.image_url.startsWith('http') ? getDisplayUrl(item.image_url) : `${CLOUDFLARE_R2_BASE_URL}/${item.image_url}`} 
+                            src={resolveGameImage(item.image_url)} 
                             alt={item.title} 
                             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
-                            onError={(e) => { e.target.style.display = 'none'; }} 
+                            onError={(e) => { 
+                              e.target.onerror = null;
+                              e.target.src = '/Imagenes/minijuego_games.png'; 
+                            }} 
                           />
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', padding: '10px', textAlign: 'center' }}>

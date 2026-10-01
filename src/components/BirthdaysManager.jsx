@@ -574,181 +574,194 @@ export default function BirthdaysManager({ supabase, triggerToast, enviarMensaje
                         return (
                             <div 
                                 key={item.id}
-                                className="card animate-slide-down"
                                 style={{
-                                    padding: '14px 20px',
-                                    display: 'grid',
-                                    gridTemplateColumns: 'minmax(210px, 230px) 1fr auto',
-                                    alignItems: 'center',
-                                    gap: '16px',
-                                    border: isToday 
-                                        ? '1px solid rgba(236, 72, 153, 0.5)' 
-                                        : !isCardActive 
-                                            ? '1px solid rgba(255,255,255,0.04)' 
-                                            : '1px solid rgba(255,255,255,0.08)',
                                     background: isToday 
-                                        ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)' 
-                                        : !isCardActive
-                                            ? 'rgba(0,0,0,0.2)'
-                                            : 'var(--bg-card)',
-                                    opacity: isCardActive ? 1 : 0.6
+                                        ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%)' 
+                                        : isCardActive ? 'var(--bg-card)' : 'rgba(15, 23, 42, 0.4)',
+                                    border: isToday 
+                                        ? '1px solid rgba(236, 72, 153, 0.45)' 
+                                        : isCardActive ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: '14px',
+                                    padding: '1.2rem 1.4rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    gap: '12px',
+                                    transition: 'all 0.2s',
+                                    opacity: isCardActive ? 1 : 0.65,
+                                    boxShadow: isToday 
+                                        ? '0 10px 30px -8px rgba(236, 72, 153, 0.25)' 
+                                        : isCardActive ? '0 10px 30px -8px rgba(16, 185, 129, 0.15)' : 'none',
+                                    position: 'relative',
+                                    marginBottom: '10px'
                                 }}
                             >
-                                {/* 1. Izquierda: Fecha y Nombre de usuario */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-                                    {/* Date Circle Badge */}
-                                    <div style={{
-                                        width: '48px',
-                                        height: '48px',
-                                        borderRadius: '12px',
-                                        background: isToday ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255, 255, 255, 0.06)',
-                                        border: isToday ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#fff',
-                                        boxShadow: isToday ? '0 4px 14px rgba(236, 72, 153, 0.4)' : 'none',
-                                        flexShrink: 0
-                                    }}>
-                                        <span style={{ fontSize: '1.1rem', fontWeight: 800, lineHeight: 1 }}>{item.day}</span>
-                                        <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700 }}>
-                                            {monthLabel.substring(0, 3)}
-                                        </span>
-                                    </div>
-
-                                    {/* Username & Status */}
-                                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                            <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                @{item.username}
-                                            </h4>
-                                            {isToday && (
-                                                <span style={{
-                                                    fontSize: '0.65rem',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '20px',
-                                                    background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
-                                                    color: '#fff',
-                                                    fontWeight: 800,
-                                                    boxShadow: '0 2px 8px rgba(236, 72, 153, 0.4)',
-                                                    whiteSpace: 'nowrap'
-                                                }}>
-                                                    ¡ES HOY! 🎂
+                                <div>
+                                    {/* Top Bar estilo Comandos */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            {/* Date Badge */}
+                                            <div style={{
+                                                width: '38px',
+                                                height: '38px',
+                                                borderRadius: '10px',
+                                                background: isToday ? 'linear-gradient(135deg, #EC4899, #F43F5E)' : 'rgba(255, 255, 255, 0.06)',
+                                                border: isToday ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#fff',
+                                                flexShrink: 0,
+                                                boxShadow: isToday ? '0 4px 12px rgba(236, 72, 153, 0.4)' : 'none'
+                                            }}>
+                                                <span style={{ fontSize: '1rem', fontWeight: 800, lineHeight: 1 }}>{item.day}</span>
+                                                <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', opacity: 0.8, fontWeight: 700 }}>
+                                                    {String(monthLabel).substring(0, 3)}
                                                 </span>
-                                            )}
-                                        </div>
-                                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
-                                            Fecha: {item.day} de {monthLabel}
-                                        </span>
-                                    </div>
-                                </div>
+                                            </div>
 
-                                {/* 2. Centro: Cuadro del mensaje autoajustable y uniforme */}
-                                <div style={{
-                                    background: 'rgba(0, 0, 0, 0.3)',
-                                    borderRadius: '10px',
-                                    padding: '10px 14px',
-                                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                                    minWidth: 0,
-                                    wordBreak: 'break-word',
-                                    overflowWrap: 'anywhere'
-                                }}>
-                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px', fontWeight: 600 }}>
-                                        MENSAJE PARA EL CHAT:
-                                    </span>
-                                    <p style={{
-                                        margin: 0,
-                                        fontSize: '0.84rem',
-                                        color: 'var(--text-main)',
-                                        lineHeight: 1.45,
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{
+                                                        fontSize: '1.05rem',
+                                                        fontWeight: 800,
+                                                        color: isToday ? '#EC4899' : isCardActive ? '#10B981' : '#94A3B8'
+                                                    }}>
+                                                        @{item.username}
+                                                    </span>
+                                                    {isToday && (
+                                                        <span style={{
+                                                            fontSize: '0.68rem',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '6px',
+                                                            background: 'linear-gradient(135deg, #EC4899, #F43F5E)',
+                                                            color: '#fff',
+                                                            fontWeight: 800,
+                                                            boxShadow: '0 2px 8px rgba(236, 72, 153, 0.4)'
+                                                        }}>
+                                                            ¡ES HOY! 🎂
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+                                                    {item.day} de {monthLabel}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Switch Toggle */}
+                                        <button
+                                            type="button"
+                                            title={isCardActive ? 'Pausar felicitaciones' : 'Activar felicitaciones'}
+                                            onClick={() => handleToggleActive(item.id)}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                padding: 0
+                                            }}
+                                        >
+                                            {isCardActive ? (
+                                                <ToggleRight size={28} color={isToday ? '#EC4899' : '#10B981'} />
+                                            ) : (
+                                                <ToggleLeft size={28} color="#64748B" />
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    {/* Preview Box estilo Comandos */}
+                                    <div style={{
+                                        background: 'rgba(15, 23, 42, 0.6)',
+                                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                                        borderRadius: '8px',
+                                        padding: '9px 12px',
+                                        fontSize: '0.82rem',
+                                        color: '#E2E8F0',
+                                        lineHeight: '1.45',
                                         fontStyle: 'italic',
-                                        wordBreak: 'break-word',
-                                        overflowWrap: 'anywhere'
+                                        wordBreak: 'break-word'
                                     }}>
                                         "{item.message || DEFAULT_MESSAGE_TEMPLATE}"
-                                    </p>
+                                    </div>
                                 </div>
 
-                                {/* 3. Derecha: Botones de acciones fijos y alineados */}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                                    {/* Test Chat Button */}
+                                {/* Actions Footer estilo Comandos */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '10px' }}>
                                     <button
                                         type="button"
-                                        title="Probar envío en chat"
                                         onClick={() => handleTestSendMessage(item)}
                                         style={{
-                                            padding: '6px 12px',
-                                            borderRadius: '8px',
-                                            background: 'rgba(145, 70, 255, 0.15)',
-                                            border: '1px solid rgba(145, 70, 255, 0.35)',
-                                            color: '#A855F7',
+                                            background: isToday ? 'rgba(236, 72, 153, 0.15)' : 'rgba(16, 185, 129, 0.1)',
+                                            color: isToday ? '#EC4899' : '#10B981',
+                                            border: isToday ? '1px solid rgba(236, 72, 153, 0.3)' : '1px solid rgba(16, 185, 129, 0.25)',
+                                            padding: '5px 12px',
+                                            borderRadius: '6px',
                                             fontSize: '0.78rem',
-                                            fontWeight: 700,
-                                            cursor: 'pointer',
+                                            fontWeight: 600,
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '6px'
-                                        }}
-                                    >
-                                        <Send size={12} /> Probar en Chat
-                                    </button>
-
-                                    {/* Edit Button */}
-                                    <button
-                                        type="button"
-                                        title="Editar"
-                                        onClick={() => handleEdit(item)}
-                                        style={{
-                                            padding: '6px 10px',
-                                            borderRadius: '8px',
-                                            background: 'rgba(255, 255, 255, 0.04)',
-                                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                                            color: 'var(--text-muted)',
+                                            gap: '5px',
                                             cursor: 'pointer'
                                         }}
+                                        title="Probar felicitación en el chat"
                                     >
-                                        <Edit2 size={14} />
+                                        <Send size={12} />
+                                        Probar en Chat
                                     </button>
 
-                                    {/* Active/Inactive Toggle */}
-                                    <button
-                                        type="button"
-                                        title={isCardActive ? 'Desactivar' : 'Activar'}
-                                        onClick={() => handleToggleActive(item.id)}
-                                        style={{
-                                            padding: '6px 10px',
-                                            borderRadius: '8px',
-                                            background: isCardActive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.04)',
-                                            border: isCardActive ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
-                                            color: isCardActive ? '#10B981' : 'var(--text-muted)',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        {isCardActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEdit(item)}
+                                            style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                color: '#CBD5E1',
+                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                padding: '5px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                cursor: 'pointer'
+                                            }}
+                                            title="Editar cumpleaños"
+                                        >
+                                            <Edit2 size={12} />
+                                            Editar
+                                        </button>
 
-                                    {/* Delete Button */}
-                                    <button
-                                        type="button"
-                                        title="Eliminar"
-                                        onClick={() => handleDelete(item.id, item.username)}
-                                        style={{
-                                            padding: '6px 10px',
-                                            borderRadius: '8px',
-                                            background: 'rgba(239, 68, 68, 0.1)',
-                                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                                            color: '#EF4444',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(item.id, item.username)}
+                                            style={{
+                                                background: 'rgba(239, 68, 68, 0.1)',
+                                                color: '#EF4444',
+                                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                padding: '5px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                cursor: 'pointer'
+                                            }}
+                                            title="Eliminar cumpleaños"
+                                        >
+                                            <Trash2 size={12} />
+                                            Eliminar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );
                     })}
-                </div>
+                    </div>
             )}
 
             {/* Modal Emergente para Registrar / Editar Cumpleaños */}
