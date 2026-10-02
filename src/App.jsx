@@ -35,7 +35,7 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_p
 export const SUPABASE_WEB_URL = import.meta.env.VITE_SUPABASE_WEB_URL || "https://jdikrnfzepqmulguepnc.supabase.co";
 export const SUPABASE_WEB_ANON_KEY = import.meta.env.VITE_SUPABASE_WEB_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkaWtybmZ6ZXBxbXVsZ3VlcG5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MTgwNjQsImV4cCI6MjEwNjM5NDA2NH0.AlqTPUYLPwKpFQxYkGb4X4W7LQIH39SXvIoxAt9uf_c";
 
-export const CLOUDFLARE_R2_BASE_URL = import.meta.env.VITE_R2_BASE_URL || "https://pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/public";
+export const CLOUDFLARE_R2_BASE_URL = import.meta.env.VITE_R2_BASE_URL || "https://pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export const supabaseWeb = createClient(SUPABASE_WEB_URL, SUPABASE_WEB_ANON_KEY);
@@ -53,7 +53,10 @@ export const resolveGameImage = (url) => {
   if (window.__R2_MOCK_CACHE__ && window.__R2_MOCK_CACHE__[url]) {
     return window.__R2_MOCK_CACHE__[url];
   }
-  const trimmed = url.trim();
+  let trimmed = url.trim();
+  if (trimmed.includes('pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/public/')) {
+    trimmed = trimmed.replace('pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/public/', 'pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev/');
+  }
   if (
     trimmed.startsWith('http://') || 
     trimmed.startsWith('https://') || 
