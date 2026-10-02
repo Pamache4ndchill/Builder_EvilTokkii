@@ -2812,11 +2812,9 @@ function App() {
           id: item.id,
           title: item.title, 
           image_url: item.image_url || '',
-          updated_at: new Date().toISOString() 
+          description: item.description !== undefined ? item.description : '',
+          order_index: item.order_index
       };
-      if (item.description !== undefined) {
-          payload.description = item.description;
-      }
       const { error } = await supabaseWeb
         .from('most_streamed')
         .upsert(payload);
