@@ -299,7 +299,7 @@ const CloudflareImageGenerator = () => {
     
     try {
       // 1. Pedir presigned URL a la Edge Function
-      const { data, error } = await supabase.functions.invoke('clever-api', {
+      const { data, error } = await supabaseWeb.functions.invoke('clever-api', {
         body: { fileName: selectedFile.name, fileType: selectedFile.type }
       });
       if (error || !data) throw new Error(error ? error.message : "Error contactando Edge Function");
@@ -2734,7 +2734,7 @@ function App() {
       triggerToast("⏳ Subiendo imagen a Cloudflare R2...");
       
       // 1. Pedir presigned URL a la Edge Function
-      const { data, error } = await supabase.functions.invoke('clever-api', {
+      const { data, error } = await supabaseWeb.functions.invoke('clever-api', {
         body: { fileName: file.name, fileType: file.type }
       });
       if (error || !data) throw new Error(error ? error.message : "Error contactando Edge Function");
@@ -2901,7 +2901,7 @@ function App() {
     console.log(`Iniciando subida real de ${file.name} a R2 vía Edge Function...`);
 
     try {
-      const { data, error } = await supabase.functions.invoke('clever-api', {
+      const { data, error } = await supabaseWeb.functions.invoke('clever-api', {
         body: { fileName: file.name, fileType: file.type }
       });
 
