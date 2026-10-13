@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX } from 'lucide-react';
+import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
@@ -1038,8 +1038,16 @@ function App() {
       })
       .subscribe();
 
+    const twitchChannel = supabase
+      .channel('twitch_redemptions_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'twitch_redemptions' }, () => {
+        fetchLibraryItems();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(twitchChannel);
     };
   }, []);
 
@@ -1714,6 +1722,9 @@ function App() {
   const isManuallyDisconnectedRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
   const pingIntervalRef = useRef(null);
+  const eventSubWsRef = useRef(null);
+  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X3']);
+  const [eventSubStatus, setEventSubStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'missing_scope'
 
   const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
     try {
@@ -1842,11 +1853,15 @@ function App() {
         addBotLog("¡Conectado al WebSocket de Twitch!");
         
         const formattedOauth = botOauth.startsWith('oauth:') ? botOauth : 'oauth:' + botOauth;
+        ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
         ws.send(`PASS ${formattedOauth}`);
         ws.send(`NICK ${(botUsername || 'EmiliaMaria_exe').toLowerCase().trim()}`);
         ws.send(`JOIN #${botChannel.toLowerCase().trim()}`);
         setIsBotConnected(true);
         addBotLog(`Autenticación enviada para @${botUsername} en el canal #${botChannel}`);
+
+        // Iniciar detector de canjes en vivo EventSub WebSocket
+        connectTwitchEventSub();
 
         // Keep-alive heartbeat every 4 minutes
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -2051,18 +2066,25 @@ function App() {
       wsRef.current.close();
       wsRef.current = null;
     }
+    if (eventSubWsRef.current) {
+      eventSubWsRef.current.close();
+      eventSubWsRef.current = null;
+    }
     clearAllIntervals();
     setIsBotConnected(false);
-    addBotLog("Bot desconectado manualmente.");
+    setEventSubStatus('disconnected');
+    addBotLog("Bot y Detector de Canjes desconectados manualmente.");
   };
 
 // Caches para IDs y Client ID movidos al inicio
 
   const getTwitchClientId = async (token) => {
+    const clean = (token || '').replace(/^oauth:/i, '').trim();
+    if (!clean) return 'gp762nuuoqcoxypju8c569th9wz7q5';
     if (twitchClientIdCacheRef.current) return twitchClientIdCacheRef.current;
     try {
       const res = await fetch('https://id.twitch.tv/oauth2/validate', {
-        headers: { 'Authorization': `OAuth ${token}` }
+        headers: { 'Authorization': `OAuth ${clean}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -2074,7 +2096,7 @@ function App() {
     } catch (e) {
       console.warn("Could not validate token client ID:", e);
     }
-    return 'q6batx0epp6085zfzqqb5sf3htzkbt'; // Fallback a TMI client ID oficial
+    return 'gp762nuuoqcoxypju8c569th9wz7q5'; // TwitchTokenGenerator Client ID oficial
   };
 
   const getTwitchUserId = async (username, token) => {
@@ -2102,6 +2124,320 @@ function App() {
       console.warn("Could not fetch user ID for", cleanUser, e);
     }
     return null;
+  };
+
+  // Normalizador de nombres de canjes (GoodTokkii Pack X1 y GoodTokkii Pack X3)
+  const normalizeRewardName = (name) => {
+    if (!name) return '';
+    const clean = String(name).trim();
+    if (/goodtokkii\s*pack\s*x?1/i.test(clean)) return 'GoodTokkii Pack X1';
+    if (/goodtokkii\s*pack\s*x?3/i.test(clean)) return 'GoodTokkii Pack X3';
+    if (/goodtokkii\s*pack\s*x?2/i.test(clean)) return 'GoodTokkii Pack X2';
+    return clean;
+  };
+
+  // Detector de Canjes de Puntos de Canal en Tiempo Real (Twitch EventSub WebSocket)
+  const connectTwitchEventSub = async () => {
+    const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
+    const botToken = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+    const rawToken = broadcasterToken || botToken;
+    if (!rawToken) {
+      setEventSubStatus('disconnected');
+      return;
+    }
+
+    if (eventSubWsRef.current && eventSubWsRef.current.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      if (eventSubWsRef.current) {
+        try { eventSubWsRef.current.close(); } catch(e) {}
+      }
+
+      setEventSubStatus('connecting');
+      addBotLog("🔌 Conectando a Twitch EventSub WebSocket (Detector de Canjes)...");
+
+      const esWs = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
+      eventSubWsRef.current = esWs;
+
+      esWs.onopen = () => {
+        console.log("Twitch EventSub WebSocket conectado.");
+      };
+
+      esWs.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const msgType = data.metadata?.message_type;
+
+          if (msgType === 'session_welcome') {
+            const sessionId = data.payload?.session?.id;
+            const clientId = await getTwitchClientId(rawToken);
+            const broadcasterId = '1131620140'; // eviltokkii
+
+            console.log("Suscribiendo EventSub session:", sessionId, "clientId:", clientId, "broadcasterId:", broadcasterId);
+
+            // Suscribir al evento de canjes de puntos de canal (GoodTokkii Pack X1, X3, etc.)
+            const subRes = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${rawToken}`,
+                'Client-Id': clientId,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                type: 'channel.channel_points_custom_reward_redemption.add',
+                version: '1',
+                condition: { broadcaster_user_id: broadcasterId },
+                transport: {
+                  method: 'websocket',
+                  session_id: sessionId
+                }
+              })
+            });
+
+            if (subRes.ok || subRes.status === 202) {
+              setEventSubStatus('connected');
+              addBotLog("🟢 ¡Detector de Canjes de Twitch (EventSub) ACTIVO! Escuchando GoodTokkii Pack X1 y X3 en tiempo real.");
+            } else {
+              const errData = await subRes.json().catch(() => ({}));
+              console.warn("EventSub subscription response error:", subRes.status, errData);
+              if (subRes.status === 403 || subRes.status === 401 || errData.message?.includes('scope')) {
+                setEventSubStatus('missing_scope');
+                addBotLog("⚠️ EventSub: Twitch requiere que este token pertenezca al canal (@eviltokkii) y tenga el permiso 'channel:read:redemptions'.");
+              } else {
+                setEventSubStatus('disconnected');
+                addBotLog(`⚠️ EventSub error (${subRes.status}): ${errData.message || 'Fallo de suscripción'}`);
+              }
+            }
+          } else if (msgType === 'notification') {
+            const subType = data.metadata?.subscription_type;
+            if (subType === 'channel.channel_points_custom_reward_redemption.add') {
+              const ev = data.payload?.event;
+              if (ev) {
+                const rawTitle = ev.reward?.title || '';
+                const rewardTitle = normalizeRewardName(rawTitle);
+                const currentConfigured = configuredRewardsRef.current || ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+                const isTracked = currentConfigured.some(c => normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase());
+                if (!isTracked) {
+                  return; // Ignorar canjes no configurados en el Builder
+                }
+                const viewerName = ev.user_name || ev.user_login || 'Espectador';
+                const redeemedAt = ev.redeemed_at || new Date().toISOString();
+
+                console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
+                addBotLog(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}"`);
+
+                try {
+                  const { error: insErr } = await supabase
+                    .from('twitch_redemptions')
+                    .insert([{
+                      reward_name: rewardTitle,
+                      username: viewerName,
+                      created_at: redeemedAt
+                    }]);
+
+                  if (!insErr) {
+                    fetchLibraryItems();
+                    triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"!`);
+                  } else {
+                    console.error("Error insertando canje en Supabase:", insErr);
+                  }
+                } catch (insEx) {
+                  console.error("Excepción al guardar canje:", insEx);
+                }
+              }
+            }
+          }
+        } catch (parseErr) {
+          console.warn("Error parsing EventSub data:", parseErr);
+        }
+      };
+
+      esWs.onclose = () => {
+        setEventSubStatus('disconnected');
+        const isBotEnabled = localStorage.getItem('twitch_bot_enabled') !== 'false';
+        if (isBotEnabled && !isManuallyDisconnectedRef.current) {
+          setTimeout(() => {
+            connectTwitchEventSub();
+          }, 8000);
+        }
+      };
+
+      esWs.onerror = (e) => {
+        console.warn("EventSub WebSocket error:", e);
+      };
+    } catch (err) {
+      console.error("Error al inicializar EventSub:", err);
+      setEventSubStatus('disconnected');
+    }
+  };
+
+  // Validar token de streamer/canjes contra Twitch API
+  const validateBroadcasterToken = async (tok) => {
+    const raw = (tok !== undefined ? tok : broadcasterTokenInput || '').replace(/^oauth:/i, '').trim();
+    if (!raw) {
+      setBroadcasterTokenValidation(null);
+      return;
+    }
+    setIsTestingToken(true);
+    try {
+      const res = await fetch('https://id.twitch.tv/oauth2/validate', {
+        headers: { 'Authorization': `OAuth ${raw}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const hasRedemptions = (data.scopes || []).includes('channel:read:redemptions') || (data.scopes || []).includes('channel:manage:redemptions');
+        const isBroadcaster = (data.login || '').toLowerCase() === 'eviltokkii';
+        setBroadcasterTokenValidation({
+          valid: true,
+          login: data.login,
+          userId: data.user_id,
+          scopes: data.scopes || [],
+          hasRedemptions,
+          isBroadcaster,
+          hasChat: (data.scopes || []).includes('chat:read') && (data.scopes || []).includes('chat:edit'),
+          hasAnnounce: (data.scopes || []).includes('moderator:manage:announcements')
+        });
+      } else {
+        setBroadcasterTokenValidation({ valid: false, scopes: [] });
+      }
+    } catch (e) {
+      setBroadcasterTokenValidation({ valid: false, scopes: [] });
+    } finally {
+      setIsTestingToken(false);
+    }
+  };
+
+  // Guardar token y reconectar
+  const handleSaveBroadcasterToken = async () => {
+    let clean = (broadcasterTokenInput || '').trim();
+    if (!clean) {
+      triggerToast('⚠️ Por favor ingresa un token válido');
+      return;
+    }
+    if (!clean.startsWith('oauth:')) {
+      clean = 'oauth:' + clean;
+    }
+    localStorage.setItem('twitch_broadcaster_oauth', clean);
+    // Si el usuario también quiere usarlo para el bot chat:
+    if (broadcasterTokenValidation?.hasChat) {
+      localStorage.setItem('twitch_bot_oauth', clean);
+      if (broadcasterTokenValidation?.login) {
+        localStorage.setItem('twitch_bot_username', broadcasterTokenValidation.login);
+      }
+    }
+    triggerToast('✅ Token guardado. Conectando detector en tiempo real...');
+    setShowTwitchTokenModal(false);
+    
+    // Reconectar EventSub con el nuevo token
+    if (eventSubWsRef.current) {
+      try { eventSubWsRef.current.close(); } catch(e) {}
+    }
+    connectTwitchEventSub();
+    
+    // Sincronizar canjes anteriores
+    syncTwitchCustomRewards();
+  };
+
+  // Sincronizar canjes previos de Twitch vía Helix API
+  const syncTwitchCustomRewards = async () => {
+    const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
+    const botToken = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+    const rawToken = broadcasterToken || botToken;
+    if (!rawToken) {
+      triggerToast('⚠️ Conecta un Token con permiso de canjes primero.');
+      return;
+    }
+
+    setIsSyncingTwitch(true);
+    try {
+      triggerToast('🔄 Consultando canjes en Twitch...');
+      const clientId = await getTwitchClientId(rawToken);
+      const broadcasterId = '1131620140'; // eviltokkii
+
+      // 1. Obtener los custom rewards del canal
+      const rewardsRes = await fetch(`https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=${broadcasterId}&only_manageable_rewards=false`, {
+        headers: {
+          'Authorization': `Bearer ${rawToken}`,
+          'Client-Id': clientId
+        }
+      });
+
+      if (!rewardsRes.ok) {
+        const err = await rewardsRes.json().catch(() => ({}));
+        console.warn("Could not fetch rewards:", rewardsRes.status, err);
+        if (rewardsRes.status === 403 || rewardsRes.status === 401) {
+          triggerToast('⚠️ El token no tiene autorización para consultar canjes de @eviltokkii.');
+        } else {
+          triggerToast(`⚠️ Error al consultar canjes (${rewardsRes.status})`);
+        }
+        return;
+      }
+
+      const rewardsData = await rewardsRes.json();
+      const rewards = rewardsData.data || [];
+      console.log("Rewards de Twitch obtenidos:", rewards.map(r => r.title));
+
+      // Solo sincronizar reclamos de los canjes que están configurados en el Builder
+      const activeConfigured = configuredRewardsRef.current || DEFAULT_TWITCH_REWARDS;
+      const targetRewards = rewards.filter(r => 
+        activeConfigured.some(c => normalizeRewardName(c).toLowerCase() === normalizeRewardName(r.title).toLowerCase())
+      );
+
+      let imported = 0;
+      for (const r of targetRewards) {
+        const normTitle = normalizeRewardName(r.title);
+        // Consultar tanto canjes en cola (UNFULFILLED) como completados/auto-aprobados (FULFILLED)
+        for (const stat of ['UNFULFILLED', 'FULFILLED']) {
+          try {
+            const redRes = await fetch(`https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions?broadcaster_id=${broadcasterId}&reward_id=${r.id}&status=${stat}&first=50&sort=NEWEST`, {
+              headers: {
+                'Authorization': `Bearer ${rawToken}`,
+                'Client-Id': clientId
+              }
+            });
+            if (redRes.ok) {
+              const redData = await redRes.json();
+              const list = redData.data || [];
+              for (const item of list) {
+                const uName = item.user_name || item.user_login;
+                // Verificar si ya existe en Supabase
+                const { data: existing } = await supabase
+                  .from('twitch_redemptions')
+                  .select('id')
+                  .in('reward_name', [normTitle, r.title])
+                  .eq('username', uName)
+                  .limit(1);
+
+                if (!existing || existing.length === 0) {
+                  await supabase.from('twitch_redemptions').insert([{
+                    reward_name: normTitle,
+                    username: uName,
+                    created_at: item.redeemed_at || new Date().toISOString()
+                  }]);
+                  imported++;
+                }
+              }
+            }
+          } catch (innerErr) {
+            console.warn(`Error consultando canjes (${stat}) de ${r.title}:`, innerErr);
+          }
+        }
+      }
+
+      fetchLibraryItems();
+      if (imported > 0) {
+        triggerToast(`🎉 ¡Éxito! Se sincronizaron ${imported} canjes de Twitch.`);
+      } else {
+        triggerToast('✅ Conexión con Twitch correcta. No hay canjes pendientes nuevos.');
+      }
+    } catch (e) {
+      console.error("Error sincronizando con Twitch Helix:", e);
+      triggerToast('⚠️ Error al sincronizar: ' + e.message);
+    } finally {
+      setIsSyncingTwitch(false);
+    }
   };
 
   // Twitch Helix Official Announcement Sender Dinámico
@@ -2369,9 +2705,36 @@ function App() {
   const [isLoadingParticipations, setIsLoadingParticipations] = useState(false);
 
   // Twitch Redemptions State
+  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+  const [configuredRewards, setConfiguredRewards] = useState(() => {
+    try {
+      localStorage.removeItem('twitch_configured_rewards'); // Limpiar caché anterior con canjes no deseados
+      const saved = localStorage.getItem('twitch_configured_rewards_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return [...new Set([...DEFAULT_TWITCH_REWARDS, ...parsed])];
+      }
+    } catch(e) {}
+    return DEFAULT_TWITCH_REWARDS;
+  });
+
+  useEffect(() => {
+    configuredRewardsRef.current = configuredRewards;
+  }, [configuredRewards]);
   const [twitchList, setTwitchList] = useState([]);
   const [selectedRewardName, setSelectedRewardName] = useState(null);
   const [isLoadingTwitch, setIsLoadingTwitch] = useState(false);
+  const [showAddRedemptionModal, setShowAddRedemptionModal] = useState(false);
+  const [showNewRewardModal, setShowNewRewardModal] = useState(false);
+  const [newRewardInput, setNewRewardInput] = useState('');
+  const [manualRewardName, setManualRewardName] = useState('GoodTokkii Pack X1');
+  const [manualUsername, setManualUsername] = useState('');
+  const [isSubmittingManualRedemption, setIsSubmittingManualRedemption] = useState(false);
+  const [showTwitchTokenModal, setShowTwitchTokenModal] = useState(false);
+  const [broadcasterTokenInput, setBroadcasterTokenInput] = useState(() => localStorage.getItem('twitch_broadcaster_oauth') || localStorage.getItem('twitch_bot_oauth') || '');
+  const [isTestingToken, setIsTestingToken] = useState(false);
+  const [broadcasterTokenValidation, setBroadcasterTokenValidation] = useState(null);
+  const [isSyncingTwitch, setIsSyncingTwitch] = useState(false);
 
   // Most Streamed Games State
   const [mostStreamed, setMostStreamed] = useState([]);
@@ -2536,6 +2899,23 @@ function App() {
       addBotLog("Bot en estado DESACTIVADO. Pulsa 'Activar Bot' en la casilla de Credenciales para conectarlo.");
     }
   }, []);
+
+  // Conectar EventSub en tiempo real de forma autónoma al iniciar la aplicación si hay credenciales
+  useEffect(() => {
+    const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
+    const botToken = (localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+    if (broadcasterToken || botToken) {
+      connectTwitchEventSub();
+    }
+  }, []);
+
+  // Al abrir la vista de canjes, verificar conexión y sincronizar de Twitch
+  useEffect(() => {
+    if (view === 'view_twitch') {
+      connectTwitchEventSub();
+      syncTwitchCustomRewards();
+    }
+  }, [view]);
 
   // Validar sesión y username al cargar
   useEffect(() => {
@@ -3933,8 +4313,9 @@ function App() {
           </div>
         </aside>
       ) : ['create', 'create_content_item', 'view_participations', 'view_twitch'].includes(view) && (() => {
+        const dynamicRewards = configuredRewards;
         const activeList = view === 'view_participations' ? eventsList : 
-                           view === 'view_twitch' ? [...new Set((twitchList || []).map(t => t.reward_name))].map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
+                           view === 'view_twitch' ? dynamicRewards.map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
                            view === 'view_scheduled_messages' ? scheduledMessages :
                            view === 'view_commands' ? chatCommands :
@@ -4221,7 +4602,11 @@ function App() {
                       </div>
                       <div className="news-item-date" style={{ textTransform: 'capitalize', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div>
-                          {view === 'view_twitch' ? 'Categoría Twitch' : 
+                          {view === 'view_twitch' ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#A855F7', fontWeight: 600 }}>
+                              <Gift size={12} /> {(twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(item.id)).length} reclamos
+                            </span>
+                          ) : 
                            view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
                            view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
                            (item.tipo || 'Objeto')} 
@@ -4871,25 +5256,226 @@ function App() {
             </div>
           </div>
         ) : view === 'view_twitch' ? (
-          <div className="builder-view">
-            <div className="builder-header animate-slide-down">
+          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
+            <div className="builder-header animate-slide-down" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
               <button className="btn-back" onClick={() => { setView('home'); setSelectedRewardName(null); setExpandedDates({}); }}>
                 <ChevronLeft size={18} /> Volver
               </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                Recompensas de Twitch
+              
+              <h1 className="header-title" style={{ fontSize: '1.8rem', margin: 0, textAlign: 'center', flex: 1 }}>
+                Inscripciones por Canje de Twitch
               </h1>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {/* EventSub Status Pill */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  background: eventSubStatus === 'connected' ? 'rgba(34, 197, 94, 0.15)' : eventSubStatus === 'missing_scope' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                  border: eventSubStatus === 'connected' ? '1px solid rgba(34, 197, 94, 0.4)' : eventSubStatus === 'missing_scope' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(148, 163, 184, 0.3)',
+                  color: eventSubStatus === 'connected' ? '#22c55e' : eventSubStatus === 'missing_scope' ? '#f59e0b' : '#94a3b8'
+                }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: eventSubStatus === 'connected' ? '#22c55e' : eventSubStatus === 'missing_scope' ? '#f59e0b' : '#94a3b8' }}></span>
+                  {eventSubStatus === 'connected' ? 'Detector de Canjes Activo' : eventSubStatus === 'missing_scope' ? 'Falta Token de @eviltokkii' : 'EventSub Desconectado'}
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-add"
+                  onClick={() => {
+                    const current = localStorage.getItem('twitch_broadcaster_oauth') || localStorage.getItem('twitch_bot_oauth') || '';
+                    setBroadcasterTokenInput(current);
+                    validateBroadcasterToken(current);
+                    setShowTwitchTokenModal(true);
+                  }}
+                  style={{ padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#C084FC', background: 'rgba(168, 85, 247, 0.1)' }}
+                  title="Configurar Token con permiso channel:read:redemptions de @eviltokkii"
+                >
+                  <Key size={15} /> Vincular Token Streamer
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-add"
+                  onClick={syncTwitchCustomRewards}
+                  disabled={isSyncingTwitch}
+                  style={{ padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  title="Sincronizar canjes pendientes directamente desde la API de Twitch"
+                >
+                  <RefreshCw size={15} className={isSyncingTwitch ? 'animate-spin' : ''} /> {isSyncingTwitch ? 'Sincronizando...' : 'Sincronizar Twitch'}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-add"
+                  onClick={() => setShowNewRewardModal(true)}
+                  style={{ padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#C084FC' }}
+                  title="Añadir una nueva categoría de canje al Builder"
+                >
+                  <Plus size={15} /> Añadir Categoría
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-submit"
+                  onClick={() => setShowAddRedemptionModal(true)}
+                  style={{ width: 'auto', padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #A855F7, #7C3AED)', color: '#fff', fontWeight: 700 }}
+                >
+                  <Plus size={16} /> Añadir Reclamo / Prueba
+                </button>
+              </div>
             </div>
 
-            <div className="card animate-slide-down" style={{ minHeight: '60vh' }}>
+            {/* Sub-header info banner if scope is missing or not connected */}
+            {eventSubStatus !== 'connected' && (
+              <div className="card animate-slide-down" style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '14px 20px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <AlertCircle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.88rem', color: '#f8fafc' }}>
+                    Twitch requiere que los canjes de puntos de canal (<strong>GoodTokkii Pack X1 y X3</strong>) sean autorizados por la cuenta de <strong>@eviltokkii</strong> con el permiso <code>channel:read:redemptions</code>.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = localStorage.getItem('twitch_broadcaster_oauth') || localStorage.getItem('twitch_bot_oauth') || '';
+                    setBroadcasterTokenInput(current);
+                    validateBroadcasterToken(current);
+                    setShowTwitchTokenModal(true);
+                  }}
+                  style={{ color: '#fff', background: '#9146FF', padding: '8px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Key size={14} /> Vincular Token de @eviltokkii
+                </button>
+              </div>
+            )}
+
+            <div className="card animate-slide-down" style={{ minHeight: '60vh', padding: '24px' }}>
               {!selectedRewardName ? (
-                <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
-                  <LayoutTemplate size={48} opacity={0.3} style={{ marginBottom: '10px' }} />
-                  <br />
-                  Selecciona una categoría de canje a la izquierda para ver quiénes lo han reclamado.
+                <div>
+                  <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '24px' }}>
+                    <h2 style={{ color: 'var(--text-main)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                      <Gift size={22} color="#A855F7" /> Canjes Oficiales Configurados
+                    </h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '6px', margin: 0 }}>
+                      Selecciona cualquiera de tus canjes para consultar la lista de viewers que lo reclamaron, ordenados por fecha y listos para copiar con 1 click.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+                    {configuredRewards.map(rewardName => {
+                      const claims = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName));
+                      const isDefault = DEFAULT_TWITCH_REWARDS.includes(rewardName);
+
+                      return (
+                        <div 
+                          key={rewardName}
+                          onClick={() => setSelectedRewardName(rewardName)}
+                          style={{
+                            background: 'var(--bg-card-hover)',
+                            border: '1px solid rgba(168, 85, 247, 0.3)',
+                            borderRadius: '14px',
+                            padding: '20px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '14px',
+                            transition: 'all 0.2s ease',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = '#A855F7'}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)'}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A855F7' }}>
+                                <Gift size={22} />
+                              </div>
+                              <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                                  {rewardName}
+                                </h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                                  {isDefault && (
+                                    <span style={{ fontSize: '0.72rem', color: '#A855F7', fontWeight: 600 }}>
+                                      Canje Vinculado
+                                    </span>
+                                  )}
+                                  {rewardName === 'GoodTokkii Pack X1' && (
+                                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                      ✨ 3,000 pts
+                                    </span>
+                                  )}
+                                  {rewardName === 'GoodTokkii Pack X3' && (
+                                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                      ✨ 5,000 pts
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {!DEFAULT_TWITCH_REWARDS.includes(rewardName) && (
+                                <button
+                                  type="button"
+                                  title="Eliminar esta categoría del Builder"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm(`¿Quitar la categoría "${rewardName}" del menú? Los reclamos ya registrados seguirán guardados.`)) {
+                                      const updated = configuredRewards.filter(r => r !== rewardName);
+                                      setConfiguredRewards(updated);
+                                      localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated));
+                                    }
+                                  }}
+                                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                              <span style={{
+                                padding: '4px 10px',
+                                borderRadius: '20px',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                background: claims.length > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                color: claims.length > 0 ? '#C084FC' : 'var(--text-muted)'
+                              }}>
+                                {claims.length} {claims.length === 1 ? 'Reclamo' : 'Reclamos'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                              {claims.length > 0 ? `Último: ${new Date(claims[0].created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : 'Sin reclamos registrados'}
+                            </span>
+                            <span style={{ color: '#A855F7', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              Ver Lista →
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.4)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <HelpCircle size={28} color="#A855F7" style={{ flexShrink: 0 }} />
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                      <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '2px' }}>¿Cómo funciona la sincronización con Twitch?</strong>
+                      Cuando tus espectadores canjean <strong>GoodTokkii Pack X1</strong> o <strong>GoodTokkii Pack X3</strong> con puntos de canal en Twitch, el detector recibe el evento en vivo y lo registra automáticamente.
+                    </div>
+                  </div>
                 </div>
               ) : (() => {
-                  const claimsForReward = twitchList.filter(t => t.reward_name === selectedRewardName);
+                  const claimsForReward = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(selectedRewardName));
                   
                   // Agrupar por día
                   const groupedByDay = claimsForReward.reduce((acc, claim) => {
@@ -4901,91 +5487,480 @@ function App() {
 
                   const sortedDays = Object.keys(groupedByDay).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
+                  const copyAllUsers = () => {
+                    if (claimsForReward.length === 0) return;
+                    const list = claimsForReward.map(c => c.username).join('\n');
+                    navigator.clipboard.writeText(list);
+                    triggerToast(`📋 ¡${claimsForReward.length} usuarios copiados al portapapeles!`);
+                  };
+
                   return (
                     <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>
-                        <h2 style={{ color: '#A855F7', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                          <LayoutTemplate size={24} />
-                          Canje: "{selectedRewardName}"
-                        </h2>
-                        <span style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#A855F7', padding: '5px 12px', borderRadius: '20px', fontWeight: 'bold' }}>
-                          {claimsForReward.length} Reclamos
-                        </span>
+                      {/* Top Bar for Selected Reward */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <button 
+                            type="button" 
+                            className="btn-back" 
+                            onClick={() => setSelectedRewardName(null)}
+                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                          >
+                            <ChevronLeft size={16} /> Todas las categorías
+                          </button>
+                          <h2 style={{ color: '#A855F7', display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.3rem' }}>
+                            <Gift size={24} />
+                            Canje: "{selectedRewardName}"
+                          </h2>
+                          <span style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#A855F7', padding: '4px 12px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                            {claimsForReward.length} {claimsForReward.length === 1 ? 'Reclamo' : 'Reclamos'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          {claimsForReward.length > 0 && (
+                            <button 
+                              className="btn-add" 
+                              onClick={copyAllUsers}
+                              style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(168, 85, 247, 0.2)', color: '#C084FC', border: '1px solid rgba(168, 85, 247, 0.4)' }}
+                            >
+                              <Copy size={15} /> Copiar TODOS ({claimsForReward.length})
+                            </button>
+                          )}
+                          <button
+                            className="btn-submit"
+                            onClick={() => {
+                              setManualRewardName(selectedRewardName);
+                              setShowAddRedemptionModal(true);
+                            }}
+                            style={{ width: 'auto', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <Plus size={15} /> Añadir Usuario
+                          </button>
+                        </div>
                       </div>
                       
-                      <div style={{ display: 'grid', gap: '20px' }}>
-                        {sortedDays.map(day => (
-                          <div key={day} style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden', background: 'rgba(15, 23, 42, 0.3)' }}>
-                            {/* Header del día */}
-                            <div 
-                              style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center', 
-                                padding: '12px 20px', 
-                                background: 'var(--bg-card-hover)', 
-                                cursor: 'pointer',
-                                borderBottom: expandedDates[day] ? '1px solid var(--border-color)' : 'none'
-                              }}
-                              onClick={() => setExpandedDates(prev => ({ ...prev, [day]: !prev[day] }))}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                {expandedDates[day] ? <ChevronUp size={18} color="#A855F7" /> : <ChevronDown size={18} color="#A855F7" />}
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>{day}</span>
-                                <span style={{ fontSize: '0.8rem', background: '#A855F7', color: 'white', padding: '2px 8px', borderRadius: '10px' }}>{groupedByDay[day].length}</span>
-                              </div>
-                              
-                              <button 
-                                className="btn-add" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const list = groupedByDay[day].map(c => c.username).join('\n');
-                                  navigator.clipboard.writeText(list);
-                                  setShowToast(true);
-                                  setTimeout(() => setShowToast(false), 2000);
+                      {claimsForReward.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
+                          <Gift size={48} opacity={0.3} color="#A855F7" style={{ marginBottom: '14px' }} />
+                          <h3 style={{ color: 'var(--text-main)', fontSize: '1.2rem', marginBottom: '8px' }}>
+                            Aún no hay reclamos para "{selectedRewardName}"
+                          </h3>
+                          <p style={{ maxWidth: '500px', margin: '0 auto 20px auto', fontSize: '0.88rem' }}>
+                            En cuanto un espectador canjee esta recompensa en tu stream de Twitch con puntos de canal, aparecerá automáticamente aquí.
+                          </p>
+                          <button
+                            type="button"
+                            className="btn-submit"
+                            onClick={async () => {
+                              const testUser = `Viewer_Prueba_${Math.floor(Math.random() * 900 + 100)}`;
+                              const { error } = await supabase.from('twitch_redemptions').insert([{
+                                reward_name: selectedRewardName,
+                                username: testUser,
+                                created_at: new Date().toISOString()
+                              }]);
+                              if (!error) {
+                                fetchLibraryItems();
+                                triggerToast(`🧪 Canje de prueba registrado para @${testUser}`);
+                              }
+                            }}
+                            style={{ width: 'auto', padding: '8px 20px', borderRadius: '8px', fontSize: '0.85rem', margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <Sparkles size={16} /> Crear Reclamo de Prueba
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gap: '20px' }}>
+                          {sortedDays.map(day => (
+                            <div key={day} style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden', background: 'rgba(15, 23, 42, 0.3)' }}>
+                              {/* Header del día */}
+                              <div 
+                                style={{ 
+                                  display: 'flex', 
+                                  justifyContent: 'space-between', 
+                                  alignItems: 'center', 
+                                  padding: '12px 20px', 
+                                  background: 'var(--bg-card-hover)', 
+                                  cursor: 'pointer',
+                                  borderBottom: expandedDates[day] !== false ? '1px solid var(--border-color)' : 'none'
                                 }}
-                                style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                onClick={() => setExpandedDates(prev => ({ ...prev, [day]: prev[day] === false ? true : false }))}
                               >
-                                <Copy size={14} /> Copiar Usuarios
-                              </button>
-                            </div>
-
-                            {/* Lista de usuarios (si está expandido) */}
-                            {expandedDates[day] && (
-                              <div style={{ display: 'grid', gap: '8px', padding: '15px' }} className="animate-slide-down">
-                                {groupedByDay[day].map(claim => (
-                                  <div key={claim.id} style={{ background: 'var(--bg-card)', padding: '10px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '3px solid #A855F7' }}>
-                                    <div>
-                                      <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <Users size={14} color="#A855F7" /> {claim.username}
-                                      </strong>
-                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        A las {new Date(claim.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                                      </span>
-                                    </div>
-                                    
-                                    <button 
-                                      className="btn-delete-news"
-                                      style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.05)' }}
-                                      onClick={() => showConfirm(`¿Eliminar reclamo de ${claim.username}?`, async () => {
-                                        const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
-                                        if(!error) fetchLibraryItems();
-                                        closeConfirm();
-                                      })}
-                                    >
-                                      <Trash2 size={14} /> Eliminar
-                                    </button>
-                                  </div>
-                                ))}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  {expandedDates[day] === false ? <ChevronDown size={18} color="#A855F7" /> : <ChevronUp size={18} color="#A855F7" />}
+                                  <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>{day}</span>
+                                  <span style={{ fontSize: '0.8rem', background: '#A855F7', color: 'white', padding: '2px 8px', borderRadius: '10px' }}>{groupedByDay[day].length}</span>
+                                </div>
+                                
+                                <button 
+                                  className="btn-add" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const list = groupedByDay[day].map(c => c.username).join('\n');
+                                    navigator.clipboard.writeText(list);
+                                    triggerToast(`📋 ¡${groupedByDay[day].length} usuarios de ${day} copiados!`);
+                                  }}
+                                  style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                  <Copy size={14} /> Copiar ({groupedByDay[day].length})
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+
+                              {/* Lista de usuarios */}
+                              {expandedDates[day] !== false && (
+                                <div style={{ display: 'grid', gap: '8px', padding: '15px' }} className="animate-slide-down">
+                                  {groupedByDay[day].map(claim => (
+                                    <div key={claim.id} style={{ background: 'var(--bg-card)', padding: '10px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '3px solid #A855F7' }}>
+                                      <div>
+                                        <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <Users size={14} color="#A855F7" /> {claim.username}
+                                        </strong>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                          A las {new Date(claim.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      
+                                      <button 
+                                        className="btn-delete-news"
+                                        style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.05)' }}
+                                        onClick={() => showConfirm(`¿Eliminar reclamo de ${claim.username}?`, async () => {
+                                          const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
+                                          if(!error) fetchLibraryItems();
+                                          closeConfirm();
+                                        })}
+                                      >
+                                        <Trash2 size={14} /> Eliminar
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   );
               })()}
             </div>
+
+            {/* Modal para añadir reclamo manual o de prueba */}
+            {showAddRedemptionModal && (
+              <div className="modal-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                <div className="card animate-slide-down" style={{ width: '90%', maxWidth: '440px', padding: '24px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowAddRedemptionModal(false)}
+                    style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    <X size={20} />
+                  </button>
+
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Plus size={18} color="#A855F7" /> Registrar Reclamo
+                  </h3>
+
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!manualUsername.trim()) return;
+                    setIsSubmittingManualRedemption(true);
+                    try {
+                      const { error } = await supabase.from('twitch_redemptions').insert([{
+                        reward_name: manualRewardName,
+                        username: manualUsername.trim().replace(/^@/, ''),
+                        created_at: new Date().toISOString()
+                      }]);
+                      if (!error) {
+                        triggerToast(`✅ Reclamo añadido para @${manualUsername.trim()}`);
+                        fetchLibraryItems();
+                        setManualUsername('');
+                        setShowAddRedemptionModal(false);
+                      } else {
+                        alert("Error guardando: " + error.message);
+                      }
+                    } catch (err) {
+                      alert("Error: " + err.message);
+                    } finally {
+                      setIsSubmittingManualRedemption(false);
+                    }
+                  }}>
+                    <div className="form-group" style={{ marginBottom: '14px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem' }}>Tipo de Canje:</label>
+                      <select 
+                        className="form-control"
+                        value={manualRewardName}
+                        onChange={(e) => setManualRewardName(e.target.value)}
+                        required
+                      >
+                        {configuredRewards.map(rn => (
+                          <option key={rn} value={rn}>{rn}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '20px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem' }}>Nombre de Usuario (Twitch):</label>
+                      <input 
+                        type="text"
+                        className="form-control"
+                        placeholder="Ej: TokkiiViewer"
+                        value={manualUsername}
+                        onChange={(e) => setManualUsername(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        type="button"
+                        className="btn-add"
+                        onClick={() => setShowAddRedemptionModal(false)}
+                        style={{ flex: 1, padding: '10px' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-submit"
+                        disabled={isSubmittingManualRedemption || !manualUsername.trim()}
+                        style={{ flex: 1, padding: '10px', background: '#A855F7', color: '#fff' }}
+                      >
+                        {isSubmittingManualRedemption ? 'Guardando...' : 'Guardar Reclamo'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Modal para añadir nueva categoría/canje personalizado */}
+            {showNewRewardModal && (
+              <div className="modal-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(3px)' }}>
+                <div className="card animate-slide-down" style={{ width: '90%', maxWidth: '460px', padding: '24px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNewRewardModal(false)}
+                    style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    <X size={20} />
+                  </button>
+
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="#A855F7" /> Añadir Categoría de Canje
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.5 }}>
+                    Escribe el nombre de la recompensa de Twitch para crear su tarjeta en el Builder y listar a sus reclamadores.
+                  </p>
+
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const trimmed = newRewardInput.trim();
+                    if (!trimmed) return;
+                    const normalized = normalizeRewardName(trimmed);
+                    if (!configuredRewards.includes(normalized)) {
+                      const updated = [...configuredRewards, normalized];
+                      setConfiguredRewards(updated);
+                      localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated));
+                    }
+                    setNewRewardInput('');
+                    setShowNewRewardModal(false);
+                  }}>
+                    <div className="form-group" style={{ marginBottom: '20px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem' }}>Nombre del Canje:</label>
+                      <input 
+                        type="text"
+                        className="form-control"
+                        placeholder="Ej: GoodTokkii Pack X5, Cofre Especial, etc."
+                        value={newRewardInput}
+                        onChange={(e) => setNewRewardInput(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        type="button"
+                        className="btn-add"
+                        onClick={() => setShowNewRewardModal(false)}
+                        style={{ flex: 1, padding: '10px' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-submit"
+                        disabled={!newRewardInput.trim()}
+                        style={{ flex: 1, padding: '10px', background: '#A855F7', color: '#fff', fontWeight: 600 }}
+                      >
+                        Añadir Canje
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Modal para vincular Token de Canjes (Broadcaster @eviltokkii) */}
+            {showTwitchTokenModal && (
+              <div className="modal-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+                <div className="card animate-slide-down" style={{ width: '90%', maxWidth: '540px', padding: '28px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowTwitchTokenModal(false)}
+                    style={{ position: 'absolute', top: '18px', right: '18px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    <X size={20} />
+                  </button>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'linear-gradient(135deg, #9146FF, #772CE8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(145, 70, 255, 0.4)' }}>
+                      <Key size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                        Vincular Token de Canjes de Twitch
+                      </h3>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Para GoodTokkii Pack X1 (3000 pts) y GoodTokkii Pack X3 (5000 pts)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(145, 70, 255, 0.1)', border: '1px solid rgba(145, 70, 255, 0.3)', borderRadius: '10px', padding: '14px', marginBottom: '18px', fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+                    <strong style={{ color: '#C084FC', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <AlertCircle size={15} /> Requisito de Twitch:
+                    </strong>
+                    Twitch <strong>solo permite</strong> leer los canjes de puntos de canal si el token es generado con la cuenta del streamer dueño del canal (<strong>@eviltokkii</strong>) con el permiso <code>channel:read:redemptions</code>.
+                  </div>
+
+                  {/* Paso 1: Enlace generador */}
+                  <div style={{ marginBottom: '18px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                      Paso 1: Genera el Token con los permisos necesarios
+                    </label>
+                    <a
+                      href="https://twitchtokengenerator.com/?scope=chat:read+chat:edit+moderator:manage:announcements+channel:read:redemptions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background: 'linear-gradient(135deg, #9146FF, #772CE8)',
+                        color: '#fff',
+                        padding: '11px 16px',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        textDecoration: 'none',
+                        boxShadow: '0 4px 14px rgba(145, 70, 255, 0.3)'
+                      }}
+                    >
+                      <ExternalLink size={16} /> Abrir TwitchTokenGenerator para @eviltokkii
+                    </a>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginTop: '5px' }}>
+                      * Asegúrate de estar logueado en Twitch como <strong>eviltokkii</strong> en tu navegador antes de autorizar.
+                    </span>
+                  </div>
+
+                  {/* Paso 2: Pegar Token */}
+                  <div style={{ marginBottom: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                        Paso 2: Pega el ACCESS TOKEN generado
+                      </label>
+                      {broadcasterTokenInput && (
+                        <button
+                          type="button"
+                          onClick={() => validateBroadcasterToken(broadcasterTokenInput)}
+                          style={{ background: 'none', border: 'none', color: '#A855F7', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
+                        >
+                          <RefreshCw size={12} /> {isTestingToken ? 'Comprobando...' : 'Re-verificar'}
+                        </button>
+                      )}
+                    </div>
+                    <input 
+                      type="password"
+                      className="form-control"
+                      placeholder="oauth:xxxxxxxxxxxxxxxxxxxx o xxxxxxxxxxxxxxxxxxxx"
+                      value={broadcasterTokenInput}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        setBroadcasterTokenInput(val);
+                        validateBroadcasterToken(val);
+                      }}
+                      style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  {/* Tarjeta de Diagnóstico / Validación */}
+                  {broadcasterTokenValidation && (
+                    <div style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px', marginBottom: '20px' }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Diagnóstico del Token:</span>
+                        <span style={{ color: broadcasterTokenValidation.valid ? '#22c55e' : '#ef4444' }}>
+                          {broadcasterTokenValidation.valid ? '✅ Token Válido' : '❌ Token Inválido o Expirado'}
+                        </span>
+                      </div>
+
+                      {broadcasterTokenValidation.valid && (
+                        <div style={{ display: 'grid', gap: '6px', fontSize: '0.78rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Cuenta autorizada:</span>
+                            <strong style={{ color: broadcasterTokenValidation.isBroadcaster ? '#22c55e' : '#f59e0b' }}>
+                              @{broadcasterTokenValidation.login} {broadcasterTokenValidation.isBroadcaster ? '(Streamer Propietario ✅)' : '(Moderador / Bot ⚠️)'}
+                            </strong>
+                          </div>
+
+                          {!broadcasterTokenValidation.isBroadcaster && (
+                            <div style={{ color: '#f59e0b', fontSize: '0.74rem', background: 'rgba(245, 158, 11, 0.1)', padding: '6px 8px', borderRadius: '6px', margin: '4px 0' }}>
+                              ⚠️ Este token pertenece a <strong>@{broadcasterTokenValidation.login}</strong>. Para recibir los canjes de puntos de canal, el token debe pertenecer a <strong>@eviltokkii</strong>.
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Permiso channel:read:redemptions:</span>
+                            <strong style={{ color: broadcasterTokenValidation.hasRedemptions ? '#22c55e' : '#ef4444' }}>
+                              {broadcasterTokenValidation.hasRedemptions ? '✅ ACTIVO' : '❌ FALTA ESTE PERMISO'}
+                            </strong>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Permiso Chat / Anuncios:</span>
+                            <span style={{ color: broadcasterTokenValidation.hasChat ? '#22c55e' : 'var(--text-muted)' }}>
+                              {broadcasterTokenValidation.hasChat ? '✅ Listo para chat' : 'No incluido'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Botones de acción */}
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      className="btn-add"
+                      onClick={() => setShowTwitchTokenModal(false)}
+                      style={{ flex: 1, padding: '10px' }}
+                    >
+                      Cerrar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-submit"
+                      onClick={handleSaveBroadcasterToken}
+                      disabled={!broadcasterTokenInput.trim()}
+                      style={{ flex: 1.4, padding: '10px', background: 'linear-gradient(135deg, #A855F7, #7C3AED)', color: '#fff', fontWeight: 800 }}
+                    >
+                      Guardar y Conectar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : view === 'view_most_streamed' ? (
           <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -6310,6 +7285,8 @@ function App() {
               enviarMensajeTwitch={enviarMensajeTwitch}
               botLogs={botLogs}
               setBotLogs={setBotLogs}
+              eventSubStatus={eventSubStatus}
+              connectTwitchEventSub={connectTwitchEventSub}
             />
           </div>
         ) : view === 'view_birthdays' ? (

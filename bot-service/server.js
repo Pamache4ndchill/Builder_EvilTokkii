@@ -20,6 +20,7 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_bJGAVsHsVrSu2KA
 const BOT_CHANNEL = (process.env.BOT_CHANNEL || 'eviltokkii').toLowerCase().trim();
 const BOT_USERNAME = (process.env.BOT_USERNAME || 'EmiliaMaria_exe').trim();
 const BOT_OAUTH = (process.env.BOT_OAUTH || '').trim();
+const BROADCASTER_OAUTH = (process.env.BROADCASTER_OAUTH || process.env.BOT_OAUTH || '').trim();
 
 const TWITCH_CLIENT_ID = 'gp762nuuoqcoxypju8c569th9wz7q5';
 const BROADCASTER_ID = '1131620140'; // eviltokkii
@@ -245,6 +246,7 @@ function connectTwitchIrc() {
             isConnected = true;
 
             const formattedOauth = BOT_OAUTH.startsWith('oauth:') ? BOT_OAUTH : 'oauth:' + BOT_OAUTH;
+            ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
             ws.send(`PASS ${formattedOauth}`);
             ws.send(`NICK ${BOT_USERNAME.toLowerCase()}`);
             ws.send(`JOIN #${BOT_CHANNEL.toLowerCase()}`);
@@ -340,9 +342,109 @@ const server = http.createServer((req, res) => {
     }));
 });
 
+// ==============================================================================
+// 6. DETECTOR DE CANJES DE PUNTOS EN VIVO 24/7 (TWITCH EVENTSUB)
+// ==============================================================================
+let eventSubWs = null;
+
+function connectTwitchEventSub() {
+    const rawToken = (BROADCASTER_OAUTH || BOT_OAUTH).replace(/^oauth:/i, '').trim();
+    if (!rawToken) {
+        console.warn('⚠️ [EventSub] Ni BROADCASTER_OAUTH ni BOT_OAUTH están configurados.');
+        return;
+    }
+
+    try {
+        console.log('🔌 [EventSub 24/7] Conectando a Twitch EventSub WebSocket...');
+        eventSubWs = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
+
+        eventSubWs.on('open', () => {
+            console.log('✨ [EventSub 24/7] WebSocket conectado.');
+        });
+
+        eventSubWs.on('message', async (data) => {
+            try {
+                const msg = JSON.parse(data.toString());
+                const msgType = msg.metadata?.message_type;
+
+                if (msgType === 'session_welcome') {
+                    const sessionId = msg.payload?.session?.id;
+                    console.log(`✨ [EventSub 24/7] Sesión iniciada: ${sessionId}. Suscribiendo a Canjes de Puntos...`);
+
+                    const subRes = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${rawToken}`,
+                            'Client-Id': TWITCH_CLIENT_ID,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            type: 'channel.channel_points_custom_reward_redemption.add',
+                            version: '1',
+                            condition: { broadcaster_user_id: BROADCASTER_ID },
+                            transport: {
+                                method: 'websocket',
+                                session_id: sessionId
+                            }
+                        })
+                    });
+
+                    if (subRes.ok || subRes.status === 202) {
+                        console.log('🟢 [EventSub 24/7] ¡Suscripción ACTIVA! Escuchando GoodTokkii Pack x1, x2 y más.');
+                    } else {
+                        const err = await subRes.json().catch(() => ({}));
+                        console.warn(`⚠️ [EventSub 24/7] Error de suscripción (${subRes.status}):`, err.message || err);
+                    }
+                } else if (msgType === 'notification') {
+                    if (msg.metadata?.subscription_type === 'channel.channel_points_custom_reward_redemption.add') {
+                        const ev = msg.payload?.event;
+                        if (ev) {
+                            const rewardTitle = ev.reward?.title || 'Canje';
+                            const viewer = ev.user_name || ev.user_login || 'Espectador';
+                            const redeemedAt = ev.redeemed_at || new Date().toISOString();
+
+                            console.log(`🎁 [EventSub 24/7] ¡Canje recibido! @${viewer} canjeó "${rewardTitle}"`);
+
+                            const { error: insErr } = await supabase
+                                .from('twitch_redemptions')
+                                .insert([{
+                                    reward_name: rewardTitle,
+                                    username: viewer,
+                                    created_at: redeemedAt
+                                }]);
+
+                            if (!insErr) {
+                                console.log(`✅ [EventSub 24/7] Canje guardado en Supabase exitosamente.`);
+                            } else {
+                                console.error('❌ [EventSub 24/7] Error guardando canje en Supabase:', insErr.message);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[EventSub 24/7] Error procesando mensaje:', e.message);
+            }
+        });
+
+        eventSubWs.on('close', () => {
+            console.warn('⚠️ [EventSub 24/7] Conexión cerrada. Reconectando en 10 segundos...');
+            setTimeout(connectTwitchEventSub, 10000);
+        });
+
+        eventSubWs.on('error', (err) => {
+            console.error('[EventSub 24/7] Error en WebSocket:', err.message);
+        });
+
+    } catch (e) {
+        console.error('Error al iniciar EventSub 24/7:', e.message);
+        setTimeout(connectTwitchEventSub, 10000);
+    }
+}
+
 server.listen(PORT, () => {
     console.log(`🚀 Servidor Healthcheck 24/7 corriendo en puerto ${PORT}`);
     loadDataFromSupabase();
     setupRealtimeListeners();
     connectTwitchIrc();
+    connectTwitchEventSub();
 });

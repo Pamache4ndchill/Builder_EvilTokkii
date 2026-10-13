@@ -34,25 +34,54 @@ export default function BotCredentialsManager({
     disconnectTwitchBot, 
     enviarMensajeTwitch,
     botLogs,
-    setBotLogs
+    setBotLogs,
+    eventSubStatus,
+    connectTwitchEventSub
 }) {
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => {
-    localStorage.setItem('twitch_bot_username', DEFAULT_USERNAME);
-    return DEFAULT_USERNAME;
-  });
+        return localStorage.getItem('twitch_bot_username') || DEFAULT_USERNAME;
+    });
     const [botOauth, setBotOauth] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_oauth') || '';
-    if (!saved || saved !== 'eqwqvqkwf6onasha2qzupnzxlardxd') {
-      localStorage.setItem('twitch_bot_oauth', 'eqwqvqkwf6onasha2qzupnzxlardxd');
-      return 'eqwqvqkwf6onasha2qzupnzxlardxd';
-    }
-    return saved;
-  });
+        return localStorage.getItem('twitch_bot_oauth') || 'eqwqvqkwf6onasha2qzupnzxlardxd';
+    });
     const [showPassword, setShowPassword] = useState(false);
     const [testMessage, setTestMessage] = useState('¡Hola chat! Soy EmiliaMaria_exe y estoy lista para acompañar el stream 🤖💜');
     const [isSaving, setIsSaving] = useState(false);
     const [selectedColor, setSelectedColor] = useState(() => localStorage.getItem('twitch_bot_color') || 'HotPink');
+    const [tokenValidation, setTokenValidation] = useState(null); // { valid: bool, scopes: [], login: '' }
+
+    // Validar token y scopes en tiempo real
+    useEffect(() => {
+        const validateToken = async () => {
+            const raw = (botOauth || '').replace(/^oauth:/i, '').trim();
+            if (!raw) {
+                setTokenValidation(null);
+                return;
+            }
+            try {
+                const res = await fetch('https://id.twitch.tv/oauth2/validate', {
+                    headers: { 'Authorization': `OAuth ${raw}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setTokenValidation({
+                        valid: true,
+                        scopes: data.scopes || [],
+                        login: data.login,
+                        hasChat: (data.scopes || []).includes('chat:read') && (data.scopes || []).includes('chat:edit'),
+                        hasAnnounce: (data.scopes || []).includes('moderator:manage:announcements'),
+                        hasRedemptions: (data.scopes || []).includes('channel:read:redemptions') || (data.scopes || []).includes('channel:manage:redemptions')
+                    });
+                } else {
+                    setTokenValidation({ valid: false, scopes: [] });
+                }
+            } catch (e) {
+                setTokenValidation({ valid: false, scopes: [] });
+            }
+        };
+        validateToken();
+    }, [botOauth]);
 
     const handleApplyColor = (colorName) => {
         const col = colorName || selectedColor;
@@ -309,12 +338,12 @@ export default function BotCredentialsManager({
                                         Token OAuth de Twitch Chat:
                                     </label>
                                     <a
-                                        href="https://twitchtokengenerator.com/"
+                                        href="https://twitchtokengenerator.com/?scope=chat:read+chat:edit+moderator:manage:announcements+channel:read:redemptions"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         style={{ color: '#9146FF', fontSize: '0.75rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
                                     >
-                                        <ExternalLink size={12} /> Generar Token en twitchtokengenerator.com
+                                        <ExternalLink size={12} /> Generar Token (con Permisos de Canjes y Chat)
                                     </a>
                                 </div>
                                 <div style={{ position: 'relative' }}>
@@ -336,8 +365,30 @@ export default function BotCredentialsManager({
                                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                     </button>
                                 </div>
-                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
-                                    Inicia sesión en twitchtokengenerator.com con la cuenta de <strong>{botUsername || 'EmiliaMaria_exe'}</strong> para obtener este código.
+
+                                {/* Scopes validation badges */}
+                                {tokenValidation && tokenValidation.valid && (
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                        <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '12px', background: tokenValidation.hasChat ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: tokenValidation.hasChat ? '#22c55e' : '#ef4444', border: tokenValidation.hasChat ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                            {tokenValidation.hasChat ? '💬 Chat: OK' : '💬 Falta chat:read/edit'}
+                                        </span>
+                                        <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '12px', background: tokenValidation.hasAnnounce ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: tokenValidation.hasAnnounce ? '#22c55e' : '#f59e0b', border: tokenValidation.hasAnnounce ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)' }}>
+                                            {tokenValidation.hasAnnounce ? '📢 Anuncios /announce: OK' : '📢 Sin permisos /announce'}
+                                        </span>
+                                        <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '12px', background: tokenValidation.hasRedemptions ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: tokenValidation.hasRedemptions ? '#22c55e' : '#ef4444', border: tokenValidation.hasRedemptions ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                            {tokenValidation.hasRedemptions ? '🎁 Canjes (Pack x1/x2): OK' : '🎁 Falta channel:read:redemptions'}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {tokenValidation && tokenValidation.valid && !tokenValidation.hasRedemptions && (
+                                    <div style={{ marginTop: '6px', fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                                        ⚠️ Tu token actual no incluye <strong>channel:read:redemptions</strong>. Pulsa el enlace superior para generar un token con todos los permisos marcados y recibir los canjes en tiempo real.
+                                    </div>
+                                )}
+
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                                    Inicia sesión en twitchtokengenerator.com con la cuenta de <strong>{botUsername || 'EmiliaMaria_exe'}</strong> (o la cuenta del canal) para obtener este código.
                                 </span>
                             </div>
 

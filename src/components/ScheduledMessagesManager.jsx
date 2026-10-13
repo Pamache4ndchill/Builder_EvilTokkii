@@ -191,17 +191,11 @@ export default function ScheduledMessagesManager({
     // Configuración del bot
     const [botChannel, setBotChannel] = useState(() => localStorage.getItem('twitch_bot_channel') || DEFAULT_CHANNEL);
     const [botUsername, setBotUsername] = useState(() => {
-    localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
-    return 'EmiliaMaria_exe';
-  });
+        return localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe';
+    });
     const [botOauth, setBotOauth] = useState(() => {
-    const saved = localStorage.getItem('twitch_bot_oauth') || '';
-    if (!saved || saved !== 'eqwqvqkwf6onasha2qzupnzxlardxd') {
-      localStorage.setItem('twitch_bot_oauth', 'eqwqvqkwf6onasha2qzupnzxlardxd');
-      return 'eqwqvqkwf6onasha2qzupnzxlardxd';
-    }
-    return saved;
-  });
+        return localStorage.getItem('twitch_bot_oauth') || 'eqwqvqkwf6onasha2qzupnzxlardxd';
+    });
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 
     // Estado del bot y WebSocket
