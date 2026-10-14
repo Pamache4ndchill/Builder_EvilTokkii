@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X } from 'lucide-react';
+import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X, Loader2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { deliverPackForRedemption, getLocalStatusMap, setLocalClaimStatus } from './services/tcgBridgeService';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
 import TierlistsManager from './components/TierlistsManager';
@@ -1723,7 +1724,7 @@ function App() {
   const reconnectTimeoutRef = useRef(null);
   const pingIntervalRef = useRef(null);
   const eventSubWsRef = useRef(null);
-  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X3']);
+  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5']);
   const [eventSubStatus, setEventSubStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'missing_scope'
 
   const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
@@ -2126,12 +2127,13 @@ function App() {
     return null;
   };
 
-  // Normalizador de nombres de canjes (GoodTokkii Pack X1 y GoodTokkii Pack X3)
+  // Normalizador de nombres de canjes (GoodTokkii Pack X1, X3, X5)
   const normalizeRewardName = (name) => {
     if (!name) return '';
     const clean = String(name).trim();
     if (/goodtokkii\s*pack\s*x?1/i.test(clean)) return 'GoodTokkii Pack X1';
     if (/goodtokkii\s*pack\s*x?3/i.test(clean)) return 'GoodTokkii Pack X3';
+    if (/goodtokkii\s*pack\s*x?5/i.test(clean)) return 'GoodTokkii Pack X5';
     if (/goodtokkii\s*pack\s*x?2/i.test(clean)) return 'GoodTokkii Pack X2';
     return clean;
   };
@@ -2177,7 +2179,7 @@ function App() {
 
             console.log("Suscribiendo EventSub session:", sessionId, "clientId:", clientId, "broadcasterId:", broadcasterId);
 
-            // Suscribir al evento de canjes de puntos de canal (GoodTokkii Pack X1, X3, etc.)
+            // Suscribir al evento de canjes de puntos de canal (GoodTokkii Pack X1, X3, X5, etc.)
             const subRes = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
               method: 'POST',
               headers: {
@@ -2198,7 +2200,7 @@ function App() {
 
             if (subRes.ok || subRes.status === 202) {
               setEventSubStatus('connected');
-              addBotLog("🟢 ¡Detector de Canjes de Twitch (EventSub) ACTIVO! Escuchando GoodTokkii Pack X1 y X3 en tiempo real.");
+              addBotLog("🟢 ¡Detector de Canjes de Twitch (EventSub) ACTIVO! Escuchando canjes en tiempo real.");
             } else {
               const errData = await subRes.json().catch(() => ({}));
               console.warn("EventSub subscription response error:", subRes.status, errData);
@@ -2217,7 +2219,7 @@ function App() {
               if (ev) {
                 const rawTitle = ev.reward?.title || '';
                 const rewardTitle = normalizeRewardName(rawTitle);
-                const currentConfigured = configuredRewardsRef.current || ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+                const currentConfigured = configuredRewardsRef.current || ['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'];
                 const isTracked = currentConfigured.some(c => normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase());
                 if (!isTracked) {
                   return; // Ignorar canjes no configurados en el Builder
@@ -2228,21 +2230,52 @@ function App() {
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
                 addBotLog(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}"`);
 
+                // Intentar entregar sobre automáticamente en TCG
+                let initialStatus = 'pendiente';
                 try {
-                  const { error: insErr } = await supabase
+                  const delivery = await deliverPackForRedemption(viewerName, rewardTitle);
+                  if (delivery && delivery.isPack) {
+                    if (delivery.delivered) {
+                      initialStatus = 'entregado';
+                      addBotLog(`🎉 [TCG Automático]: ¡Sobre (${delivery.packType}) entregado a @${viewerName}!`);
+                    } else {
+                      addBotLog(`⚠️ [TCG Automático]: @${viewerName} pendiente: ${delivery.message}`);
+                    }
+                  }
+                } catch (delivErr) {
+                  console.warn("Error en auto-entrega TCG:", delivErr);
+                }
+
+                try {
+                  const { data: insData, error: insErr } = await supabase
                     .from('twitch_redemptions')
                     .insert([{
                       reward_name: rewardTitle,
                       username: viewerName,
-                      created_at: redeemedAt
-                    }]);
+                      created_at: redeemedAt,
+                      status: initialStatus
+                    }])
+                    .select();
 
-                  if (!insErr) {
-                    fetchLibraryItems();
-                    triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"!`);
-                  } else {
-                    console.error("Error insertando canje en Supabase:", insErr);
+                  let savedId = insData?.[0]?.id;
+                  if (insErr) {
+                    const { data: fbData } = await supabase
+                      .from('twitch_redemptions')
+                      .insert([{
+                        reward_name: rewardTitle,
+                        username: viewerName,
+                        created_at: redeemedAt
+                      }])
+                      .select();
+                    savedId = fbData?.[0]?.id;
                   }
+
+                  if (savedId) {
+                    setLocalClaimStatus(savedId, initialStatus);
+                  }
+
+                  fetchLibraryItems();
+                  triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
                 } catch (insEx) {
                   console.error("Excepción al guardar canje:", insEx);
                 }
@@ -2705,7 +2738,7 @@ function App() {
   const [isLoadingParticipations, setIsLoadingParticipations] = useState(false);
 
   // Twitch Redemptions State
-  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'];
   const [configuredRewards, setConfiguredRewards] = useState(() => {
     try {
       localStorage.removeItem('twitch_configured_rewards'); // Limpiar caché anterior con canjes no deseados
@@ -2717,6 +2750,32 @@ function App() {
     } catch(e) {}
     return DEFAULT_TWITCH_REWARDS;
   });
+
+  const [deliveringClaimId, setDeliveringClaimId] = useState(null);
+
+  const handleDeliverClaimPack = async (claim) => {
+    if (!claim || !claim.username) return;
+    setDeliveringClaimId(claim.id);
+    try {
+      const rewardToDeliver = claim.reward_name || selectedRewardName || 'GoodTokkii Pack X3';
+      const result = await deliverPackForRedemption(claim.username, rewardToDeliver);
+      if (result.delivered) {
+        setLocalClaimStatus(claim.id, 'entregado');
+        try {
+          await supabase.from('twitch_redemptions').update({ status: 'entregado' }).eq('id', claim.id);
+        } catch (e) {}
+        setTwitchList(prev => prev.map(c => c.id === claim.id ? { ...c, status: 'entregado' } : c));
+        triggerToast(`🎉 ¡Sobre (${result.packType}) acreditado con éxito a @${claim.username}!`);
+      } else {
+        triggerToast(`⚠️ ${result.message}`);
+      }
+    } catch (err) {
+      console.error("Error al procesar entrega de sobre:", err);
+      triggerToast(`❌ Error al conectar con TCG: ${err.message}`);
+    } finally {
+      setDeliveringClaimId(null);
+    }
+  };
 
   useEffect(() => {
     configuredRewardsRef.current = configuredRewards;
@@ -3082,7 +3141,14 @@ function App() {
       
       if (news) setSavedNews(news);
       if (content) setLibraryItems(content);
-      if (redemptions) setTwitchList(redemptions);
+      if (redemptions) {
+        const localStatus = getLocalStatusMap();
+        const mergedRedemptions = redemptions.map(r => ({
+          ...r,
+          status: r.status || localStatus[r.id] || 'pendiente'
+        }));
+        setTwitchList(mergedRedemptions);
+      }
     } catch (err) {
       console.error("Error fetching library:", err);
     } finally {
@@ -5409,12 +5475,17 @@ function App() {
                                   )}
                                   {rewardName === 'GoodTokkii Pack X1' && (
                                     <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                      ✨ 3,000 pts
+                                      ✨ 3,000 pts (1 Carta)
                                     </span>
                                   )}
                                   {rewardName === 'GoodTokkii Pack X3' && (
                                     <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                      ✨ 5,000 pts
+                                      ✨ 5,000 pts (3 Cartas)
+                                    </span>
+                                  )}
+                                  {rewardName === 'GoodTokkii Pack X5' && (
+                                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                      ✨ 10,000 pts (5 Cartas)
                                     </span>
                                   )}
                                 </div>
@@ -5553,15 +5624,37 @@ function App() {
                             className="btn-submit"
                             onClick={async () => {
                               const testUser = `Viewer_Prueba_${Math.floor(Math.random() * 900 + 100)}`;
-                              const { error } = await supabase.from('twitch_redemptions').insert([{
+                              let initialStatus = 'pendiente';
+                              try {
+                                const delivery = await deliverPackForRedemption(testUser, selectedRewardName);
+                                if (delivery && delivery.delivered) {
+                                  initialStatus = 'entregado';
+                                }
+                              } catch (dErr) {}
+
+                              const { data: insData, error } = await supabase.from('twitch_redemptions').insert([{
                                 reward_name: selectedRewardName,
                                 username: testUser,
-                                created_at: new Date().toISOString()
-                              }]);
-                              if (!error) {
-                                fetchLibraryItems();
-                                triggerToast(`🧪 Canje de prueba registrado para @${testUser}`);
+                                created_at: new Date().toISOString(),
+                                status: initialStatus
+                              }]).select();
+
+                              let savedId = insData?.[0]?.id;
+                              if (error) {
+                                const { data: fbData } = await supabase.from('twitch_redemptions').insert([{
+                                  reward_name: selectedRewardName,
+                                  username: testUser,
+                                  created_at: new Date().toISOString()
+                                }]).select();
+                                savedId = fbData?.[0]?.id;
                               }
+
+                              if (savedId) {
+                                setLocalClaimStatus(savedId, initialStatus);
+                              }
+
+                              fetchLibraryItems();
+                              triggerToast(`🧪 Canje de prueba registrado para @${testUser} (${initialStatus})`);
                             }}
                             style={{ width: 'auto', padding: '8px 20px', borderRadius: '8px', fontSize: '0.85rem', margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                           >
@@ -5605,33 +5698,103 @@ function App() {
                                 </button>
                               </div>
 
-                              {/* Lista de usuarios */}
+                              {/* Lista de usuarios con botones Entregado / Pendiente y Eliminar */}
                               {expandedDates[day] !== false && (
                                 <div style={{ display: 'grid', gap: '8px', padding: '15px' }} className="animate-slide-down">
-                                  {groupedByDay[day].map(claim => (
-                                    <div key={claim.id} style={{ background: 'var(--bg-card)', padding: '10px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '3px solid #A855F7' }}>
-                                      <div>
-                                        <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                          <Users size={14} color="#A855F7" /> {claim.username}
-                                        </strong>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                          A las {new Date(claim.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                      </div>
-                                      
-                                      <button 
-                                        className="btn-delete-news"
-                                        style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.05)' }}
-                                        onClick={() => showConfirm(`¿Eliminar reclamo de ${claim.username}?`, async () => {
-                                          const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
-                                          if(!error) fetchLibraryItems();
-                                          closeConfirm();
-                                        })}
+                                  {groupedByDay[day].map(claim => {
+                                    const isDelivered = claim.status === 'entregado';
+                                    const isDelivering = deliveringClaimId === claim.id;
+
+                                    return (
+                                      <div 
+                                        key={claim.id} 
+                                        style={{ 
+                                          background: 'var(--bg-card)', 
+                                          padding: '10px 15px', 
+                                          borderRadius: '8px', 
+                                          display: 'flex', 
+                                          justifyContent: 'space-between', 
+                                          alignItems: 'center', 
+                                          borderLeft: isDelivered ? '3px solid #22c55e' : '3px solid #eab308' 
+                                        }}
                                       >
-                                        <Trash2 size={14} /> Eliminar
-                                      </button>
-                                    </div>
-                                  ))}
+                                        <div>
+                                          <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', color: 'var(--text-main)' }}>
+                                            <Users size={14} color={isDelivered ? "#22c55e" : "#eab308"} /> {claim.username}
+                                          </strong>
+                                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                            A las {new Date(claim.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                          </span>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          {/* Botón de Estado / Entrega */}
+                                          {isDelivered ? (
+                                            <span 
+                                              title="Sobre entregado con éxito al usuario en el TCG."
+                                              style={{
+                                                padding: '6px 12px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 700,
+                                                borderRadius: '6px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                background: 'rgba(34, 197, 94, 0.15)',
+                                                color: '#22c55e',
+                                                border: '1px solid rgba(34, 197, 94, 0.4)',
+                                                cursor: 'default',
+                                                userSelect: 'none'
+                                              }}
+                                            >
+                                              <CheckCircle2 size={13} />
+                                              Entregado
+                                            </span>
+                                          ) : (
+                                            <button 
+                                              type="button"
+                                              onClick={() => handleDeliverClaimPack(claim)}
+                                              disabled={isDelivering}
+                                              title="El usuario no se ha registrado aún en el TCG de cartas. Clic aquí para verificar si ya inició sesión y entregar el sobre."
+                                              style={{
+                                                padding: '6px 12px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 700,
+                                                borderRadius: '6px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                background: 'rgba(234, 179, 8, 0.15)',
+                                                color: '#eab308',
+                                                border: '1px solid rgba(234, 179, 8, 0.4)',
+                                                cursor: isDelivering ? 'wait' : 'pointer'
+                                              }}
+                                            >
+                                              {isDelivering ? (
+                                                <Loader2 size={13} className="animate-spin" />
+                                              ) : (
+                                                <AlertCircle size={13} />
+                                              )}
+                                              {isDelivering ? 'Verificando...' : 'Pendiente'}
+                                            </button>
+                                          )}
+
+                                          {/* Botón de Eliminar */}
+                                          <button 
+                                            className="btn-delete-news"
+                                            style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.08)' }}
+                                            onClick={() => showConfirm(`¿Eliminar reclamo de ${claim.username}?`, async () => {
+                                              const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
+                                              if(!error) fetchLibraryItems();
+                                              closeConfirm();
+                                            })}
+                                          >
+                                            <Trash2 size={14} /> Eliminar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -5664,19 +5827,45 @@ function App() {
                     if (!manualUsername.trim()) return;
                     setIsSubmittingManualRedemption(true);
                     try {
-                      const { error } = await supabase.from('twitch_redemptions').insert([{
-                        reward_name: manualRewardName,
-                        username: manualUsername.trim().replace(/^@/, ''),
-                        created_at: new Date().toISOString()
-                      }]);
-                      if (!error) {
-                        triggerToast(`✅ Reclamo añadido para @${manualUsername.trim()}`);
-                        fetchLibraryItems();
-                        setManualUsername('');
-                        setShowAddRedemptionModal(false);
-                      } else {
-                        alert("Error guardando: " + error.message);
+                      const cleanUser = manualUsername.trim().replace(/^@/, '');
+                      let initialStatus = 'pendiente';
+                      try {
+                        const delivery = await deliverPackForRedemption(cleanUser, manualRewardName);
+                        if (delivery && delivery.delivered) {
+                          initialStatus = 'entregado';
+                        }
+                      } catch (dErr) {
+                        console.warn("No se pudo auto-entregar:", dErr);
                       }
+
+                      const { data: insData, error } = await supabase.from('twitch_redemptions').insert([{
+                        reward_name: manualRewardName,
+                        username: cleanUser,
+                        created_at: new Date().toISOString(),
+                        status: initialStatus
+                      }]).select();
+
+                      let savedId = insData?.[0]?.id;
+                      if (error) {
+                        const { data: fbData } = await supabase.from('twitch_redemptions').insert([{
+                          reward_name: manualRewardName,
+                          username: cleanUser,
+                          created_at: new Date().toISOString()
+                        }]).select();
+                        savedId = fbData?.[0]?.id;
+                      }
+
+                      if (savedId) {
+                        setLocalClaimStatus(savedId, initialStatus);
+                      }
+
+                      triggerToast(initialStatus === 'entregado'
+                        ? `🎉 ¡Reclamo añadido y sobre entregado en TCG a @${cleanUser}!`
+                        : `⚠️ Reclamo añadido para @${cleanUser} (Pendiente: no registrado aún en TCG)`
+                      );
+                      fetchLibraryItems();
+                      setManualUsername('');
+                      setShowAddRedemptionModal(false);
                     } catch (err) {
                       alert("Error: " + err.message);
                     } finally {
