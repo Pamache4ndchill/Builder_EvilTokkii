@@ -1042,7 +1042,7 @@ function App() {
     const twitchChannel = supabase
       .channel('twitch_redemptions_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'twitch_redemptions' }, () => {
-        fetchLibraryItems();
+        fetchLibraryItems(true);
       })
       .subscribe();
 
@@ -3132,7 +3132,62 @@ function App() {
     }
   }, [view, tipoItem]);
 
-  const fetchLibraryItems = async () => {
+  // Claves y TTL para Caché Local Inteligente (Ahorro de Egress de Supabase)
+  const BUILDER_LIBRARY_CACHE_KEY = 'tokkii_builder_library_cache_v1';
+  const BUILDER_LIBRARY_CACHE_TIME_KEY = 'tokkii_builder_library_cache_time_v1';
+  const BUILDER_STREAMED_CACHE_KEY = 'tokkii_builder_streamed_cache_v1';
+  const BUILDER_STREAMED_CACHE_TIME_KEY = 'tokkii_builder_streamed_cache_time_v1';
+  const BUILDER_CACHE_TTL = 20 * 60 * 1000; // 20 minutos de caché local
+
+  const invalidateLibraryCache = () => {
+    try {
+      localStorage.removeItem(BUILDER_LIBRARY_CACHE_KEY);
+      localStorage.removeItem(BUILDER_LIBRARY_CACHE_TIME_KEY);
+      console.log("🧹 [Builder Cache] Caché de librería invalidado");
+    } catch (e) {
+      console.warn("Error invalidando caché de librería:", e);
+    }
+  };
+
+  const invalidateStreamedCache = () => {
+    try {
+      localStorage.removeItem(BUILDER_STREAMED_CACHE_KEY);
+      localStorage.removeItem(BUILDER_STREAMED_CACHE_TIME_KEY);
+      console.log("🧹 [Builder Cache] Caché de most_streamed invalidado");
+    } catch (e) {
+      console.warn("Error invalidando caché most_streamed:", e);
+    }
+  };
+
+  const fetchLibraryItems = async (forceRefresh = false) => {
+    // 1. Revisar caché local si no se fuerza la recarga
+    if (!forceRefresh) {
+      try {
+        const cachedRaw = localStorage.getItem(BUILDER_LIBRARY_CACHE_KEY);
+        const cachedTime = localStorage.getItem(BUILDER_LIBRARY_CACHE_TIME_KEY);
+        const age = Date.now() - Number(cachedTime || 0);
+
+        if (cachedRaw && age < BUILDER_CACHE_TTL) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached.news && cached.content && cached.redemptions) {
+            setSavedNews(cached.news);
+            setLibraryItems(cached.content);
+            const localStatus = getLocalStatusMap();
+            const mergedRedemptions = cached.redemptions.map(r => ({
+              ...r,
+              status: r.status || localStatus[r.id] || 'pendiente'
+            }));
+            setTwitchList(mergedRedemptions);
+            setIsLoadingLibrary(false);
+            console.log("⚡ [Builder Cache] Librería cargada desde localStorage (0 consumo Supabase)");
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Error leyendo caché de librería:", e);
+      }
+    }
+
     setIsLoadingLibrary(true);
     try {
       const { data: news } = await supabase.from('news_articles').select('*').order('created_at', { ascending: false });
@@ -3149,6 +3204,20 @@ function App() {
         }));
         setTwitchList(mergedRedemptions);
       }
+
+      // Guardar en caché local
+      if (news || content || redemptions) {
+        try {
+          localStorage.setItem(BUILDER_LIBRARY_CACHE_KEY, JSON.stringify({
+            news: news || [],
+            content: content || [],
+            redemptions: redemptions || []
+          }));
+          localStorage.setItem(BUILDER_LIBRARY_CACHE_TIME_KEY, String(Date.now()));
+        } catch (e) {
+          console.warn("Error guardando en caché de librería:", e);
+        }
+      }
     } catch (err) {
       console.error("Error fetching library:", err);
     } finally {
@@ -3156,14 +3225,42 @@ function App() {
     }
   };
 
-  const fetchMostStreamed = async (isSilent = false) => {
+  const fetchMostStreamed = async (isSilent = false, forceRefresh = false) => {
+    if (!forceRefresh) {
+      try {
+        const cachedRaw = localStorage.getItem(BUILDER_STREAMED_CACHE_KEY);
+        const cachedTime = localStorage.getItem(BUILDER_STREAMED_CACHE_TIME_KEY);
+        const age = Date.now() - Number(cachedTime || 0);
+
+        if (cachedRaw && age < BUILDER_CACHE_TTL) {
+          const cached = JSON.parse(cachedRaw);
+          if (Array.isArray(cached)) {
+            setMostStreamed(cached);
+            if (!isSilent) setIsLoadingMostStreamed(false);
+            console.log("⚡ [Builder Cache] Most Streamed cargado desde localStorage (0 consumo Supabase)");
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Error leyendo caché most_streamed:", e);
+      }
+    }
+
     if (!isSilent) setIsLoadingMostStreamed(true);
     try {
       const { data, error } = await supabaseWeb
         .from('most_streamed')
         .select('*')
         .order('order_index', { ascending: true });
-      if (data) setMostStreamed(data);
+      if (data) {
+        setMostStreamed(data);
+        try {
+          localStorage.setItem(BUILDER_STREAMED_CACHE_KEY, JSON.stringify(data));
+          localStorage.setItem(BUILDER_STREAMED_CACHE_TIME_KEY, String(Date.now()));
+        } catch (e) {
+          console.warn("Error guardando en caché most_streamed:", e);
+        }
+      }
     } catch (err) {
       console.error("Error fetching most streamed:", err);
     } finally {
@@ -3219,6 +3316,7 @@ function App() {
       if (error) throw error;
 
       setMostStreamed(prev => prev.filter(i => i.id !== id));
+      invalidateStreamedCache();
       triggerToast("🗑️ Juego eliminado correctamente");
     } catch (err) {
       console.error("Error deleting game:", err);
@@ -3242,10 +3340,11 @@ function App() {
 
       if (error) throw error;
 
+      invalidateStreamedCache();
       if (data) {
         setMostStreamed(prev => [...prev, data]);
       } else {
-        fetchMostStreamed();
+        fetchMostStreamed(false, true);
       }
       triggerToast("✨ Nueva casilla de juego añadida");
     } catch (err) {
@@ -3270,10 +3369,11 @@ function App() {
       
       if (error) throw error;
       
+      invalidateStreamedCache();
       triggerToast(`¡"${item.title}" actualizado correctamente!`);
       
       // Sincronización silenciosa en segundo plano
-      await fetchMostStreamed(true);
+      await fetchMostStreamed(true, true);
       
     } catch (err) {
       console.error("Error al guardar juego:", err);
@@ -3501,6 +3601,7 @@ function App() {
         const { error } = await supabase.from('news_articles').delete().in('id', ids);
         if (!error) {
           setSavedNews(prev => prev.filter(item => !ids.includes(item.id)));
+          invalidateLibraryCache();
           setNewsMonthFilter('all');
           if (editingItemId && ids.includes(editingItemId)) {
             setEditingItemId(null);
@@ -3525,6 +3626,7 @@ function App() {
         const { error } = await supabase.from('news_articles').delete().eq('id', id);
         if (!error) {
           setSavedNews(prev => prev.filter(item => item.id !== id));
+          invalidateLibraryCache();
           triggerToast("Noticia eliminada correctamente.");
         } else {
           alert("Error al eliminar noticia: " + error.message);
@@ -3533,6 +3635,7 @@ function App() {
         const { error } = await supabaseWeb.from('content_items').delete().eq('id', id);
         if (!error) {
           setLibraryItems(prev => prev.filter(item => item.id !== id));
+          invalidateLibraryCache();
           triggerToast("Registro eliminado correctamente.");
         } else {
           alert("Error al eliminar: " + error.message);
@@ -3591,8 +3694,9 @@ function App() {
       resetItemForm(tipoItem);
     }
 
-    // Refresh Sidebar
-    fetchLibraryItems();
+    // Invalida caché y refresca datos frescos
+    invalidateLibraryCache();
+    fetchLibraryItems(true);
     setIsSubmitting(false);
     
     // Permanece en la vista actual para fluidez
@@ -3638,7 +3742,8 @@ function App() {
       setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] });
     }
 
-    fetchLibraryItems(); // Refrescar librería
+    invalidateLibraryCache();
+    fetchLibraryItems(true); // Refrescar librería fresca
     setIsSubmitting(false);
     
     // Reset Form & stay in current view for fluidity
