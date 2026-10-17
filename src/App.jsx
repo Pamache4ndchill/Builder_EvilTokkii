@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X, Loader2 } from 'lucide-react';
+import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X, Loader2, Upload } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { deliverPackForRedemption, getLocalStatusMap, setLocalClaimStatus } from './services/tcgBridgeService';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
@@ -33,8 +33,8 @@ import { HISTORY_QUESTIONS } from './data/HistoryQuestions';
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://hddzijixsigsqsmabtej.supabase.co";
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_bJGAVsHsVrSu2KAhbEC7DA_DpYnxDAp";
 
-export const SUPABASE_WEB_URL = import.meta.env.VITE_SUPABASE_WEB_URL || "https://jdikrnfzepqmulguepnc.supabase.co";
-export const SUPABASE_WEB_ANON_KEY = import.meta.env.VITE_SUPABASE_WEB_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkaWtybmZ6ZXBxbXVsZ3VlcG5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MTgwNjQsImV4cCI6MjEwNjM5NDA2NH0.AlqTPUYLPwKpFQxYkGb4X4W7LQIH39SXvIoxAt9uf_c";
+export const SUPABASE_WEB_URL = import.meta.env.VITE_SUPABASE_WEB_URL || "https://przzwhwkiqjsjimfnmgy.supabase.co";
+export const SUPABASE_WEB_ANON_KEY = import.meta.env.VITE_SUPABASE_WEB_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByenp3aHdraXFqc2ppbWZubWd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4NDYyODMsImV4cCI6MjEwNjQyMjI4M30.Z3SYD3Yp9r3mfI7cHlnRK5Z8HbRkOttQmBsTz2H1OTQ";
 
 export const CLOUDFLARE_R2_BASE_URL = import.meta.env.VITE_R2_BASE_URL || "https://pub-0bf9a87cec964ff49bfd058873c948c3.r2.dev";
 
@@ -303,7 +303,7 @@ const CloudflareImageGenerator = () => {
     
     try {
       // 1. Pedir presigned URL a la Edge Function
-      const { data, error } = await supabaseWeb.functions.invoke('clever-api', {
+      const { data, error } = await supabase.functions.invoke('clever-api', {
         body: { fileName: selectedFile.name, fileType: selectedFile.type }
       });
       if (error || !data) throw new Error(error ? error.message : "Error contactando Edge Function");
@@ -3183,7 +3183,7 @@ function App() {
       triggerToast("⏳ Subiendo imagen a Cloudflare R2...");
       
       // 1. Pedir presigned URL a la Edge Function
-      const { data, error } = await supabaseWeb.functions.invoke('clever-api', {
+      const { data, error } = await supabase.functions.invoke('clever-api', {
         body: { fileName: file.name, fileType: file.type }
       });
       if (error || !data) throw new Error(error ? error.message : "Error contactando Edge Function");
@@ -3348,7 +3348,7 @@ function App() {
     console.log(`Iniciando subida real de ${file.name} a R2 vía Edge Function...`);
 
     try {
-      const { data, error } = await supabaseWeb.functions.invoke('clever-api', {
+      const { data, error } = await supabase.functions.invoke('clever-api', {
         body: { fileName: file.name, fileType: file.type }
       });
 
@@ -3369,6 +3369,7 @@ function App() {
 
       if (typeContext === 'evento' || typeContext === 'sorteo') {
         setItemData(prev => ({ ...prev, imagen: finalUrl }));
+        triggerToast("✅ Imagen subida a Cloudflare R2 con éxito.", "center");
       } else if (typeContext === 'noticia_header') {
         setNewsData(prev => ({ ...prev, header_image_url: finalUrl }));
       } else if (typeContext === 'noticia_block' && blockId) {
@@ -5126,9 +5127,60 @@ function App() {
                     Al superar esta fecha y hora, el elemento se marcará automáticamente como terminado.
                   </small>
                 </div>
-                 <div className="form-group">
-                  <label className="form-label">Imagen principal (Pega el enlace de R2)</label>
-                  <input type="url" name="imagen" className="form-control" placeholder={`${CLOUDFLARE_R2_BASE_URL}/imagen.png`} value={itemData.imagen} onChange={handleItemChange} required />
+                <div className="form-group">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>
+                      Imagen principal (Cloudflare R2)
+                    </label>
+                    <label
+                      className="btn-submit"
+                      style={{
+                        width: 'auto',
+                        padding: '6px 14px',
+                        fontSize: '0.8rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: isUploadingImage ? 'not-allowed' : 'pointer',
+                        background: 'rgba(236,72,153,0.18)',
+                        border: '1px solid rgba(236,72,153,0.45)',
+                        color: 'var(--primary)',
+                        margin: 0,
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {isUploadingImage ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin" /> Subiendo a R2...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={15} /> Subir Imagen a R2
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, tipoItem)}
+                        style={{ display: 'none' }}
+                        disabled={isUploadingImage}
+                      />
+                    </label>
+                  </div>
+                  <input 
+                    type="url" 
+                    name="imagen" 
+                    className="form-control" 
+                    placeholder={`${CLOUDFLARE_R2_BASE_URL}/imagen.png o sube un archivo...`} 
+                    value={itemData.imagen} 
+                    onChange={handleItemChange} 
+                    required 
+                  />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                    Sube una imagen desde tu equipo para guardarla automáticamente en tu bucket R2 o pega la URL directamente.
+                  </small>
                   <AdvancedImagePreview imageUrl={itemData.imagen} />
                 </div>
                 <div className="form-group">
