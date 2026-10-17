@@ -1724,6 +1724,7 @@ function App() {
   const reconnectTimeoutRef = useRef(null);
   const pingIntervalRef = useRef(null);
   const eventSubWsRef = useRef(null);
+  const seenTwitchRedemptionIdsRef = useRef(new Set());
   const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5']);
   const [eventSubStatus, setEventSubStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'missing_scope'
 
@@ -2146,6 +2147,31 @@ function App() {
     return String(name).trim();
   };
 
+  // Deduplicar lista de canjes (evita duplicados si existen en base de datos o cachés)
+  const deduplicateRedemptions = (list) => {
+    if (!Array.isArray(list)) return [];
+    const result = [];
+    for (const item of list) {
+      const itemTime = new Date(item.created_at).getTime();
+      const existingIdx = result.findIndex(r => {
+        const sameUser = (r.username || '').toLowerCase() === (item.username || '').toLowerCase();
+        const sameReward = normalizeRewardName(r.reward_name).toLowerCase() === normalizeRewardName(item.reward_name).toLowerCase();
+        const timeDiff = Math.abs(new Date(r.created_at).getTime() - itemTime);
+        return sameUser && sameReward && timeDiff <= 15000;
+      });
+
+      if (existingIdx === -1) {
+        result.push(item);
+      } else {
+        // Si uno está entregado y el otro pendiente, preferir siempre el entregado
+        if (item.status === 'entregado' && result[existingIdx].status !== 'entregado') {
+          result[existingIdx] = item;
+        }
+      }
+    }
+    return result;
+  };
+
   // Detector de Canjes de Puntos de Canal en Tiempo Real (Twitch EventSub WebSocket)
   const connectTwitchEventSub = async () => {
     const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
@@ -2233,10 +2259,25 @@ function App() {
             if (subType === 'channel.channel_points_custom_reward_redemption.add') {
               const ev = data.payload?.event;
               if (ev) {
+                // Deduplicar eventos repetidos de Twitch EventSub
+                if (ev.id) {
+                  if (seenTwitchRedemptionIdsRef.current.has(ev.id)) return;
+                  seenTwitchRedemptionIdsRef.current.add(ev.id);
+                }
+
                 const rawTitle = ev.reward?.title || '';
                 const rewardTitle = normalizeRewardName(rawTitle);
                 const viewerName = ev.user_name || ev.user_login || 'Espectador';
                 const redeemedAt = ev.redeemed_at || new Date().toISOString();
+                const targetTime = new Date(redeemedAt).getTime();
+
+                // Verificar si ya existe en la lista de canjes cargada (mismo viewer, premio y timestamp dentro de 15s)
+                const alreadyExists = (twitchListRef.current || []).some(c => {
+                  const sameUser = (c.username || '').toLowerCase() === viewerName.toLowerCase();
+                  const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === rewardTitle.toLowerCase();
+                  return sameUser && sameReward && Math.abs(new Date(c.created_at).getTime() - targetTime) <= 15000;
+                });
+                if (alreadyExists) return;
 
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
                 addBotLog(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}"`);
@@ -2270,29 +2311,16 @@ function App() {
                 }
 
                 try {
-                  const { data: insData, error: insErr } = await supabase
+                  const { data: insData } = await supabase
                     .from('twitch_redemptions')
                     .insert([{
                       reward_name: rewardTitle,
                       username: viewerName,
-                      created_at: redeemedAt,
-                      status: initialStatus
+                      created_at: redeemedAt
                     }])
                     .select();
 
-                  let savedId = insData?.[0]?.id;
-                  if (insErr) {
-                    const { data: fbData } = await supabase
-                      .from('twitch_redemptions')
-                      .insert([{
-                        reward_name: rewardTitle,
-                        username: viewerName,
-                        created_at: redeemedAt
-                      }])
-                      .select();
-                    savedId = fbData?.[0]?.id;
-                  }
-
+                  const savedId = insData?.[0]?.id;
                   if (savedId) {
                     setLocalClaimStatus(savedId, initialStatus);
                   }
@@ -2459,7 +2487,15 @@ function App() {
         targetRewards = rewards;
       }
 
+      // Pre-cargar canjes existentes de Supabase para evitar duplicados
+      const { data: dbExisting } = await supabase
+        .from('twitch_redemptions')
+        .select('id, username, reward_name, created_at');
+
+      const knownClaims = [...(dbExisting || [])];
+      const seenTwitchIds = new Set();
       let imported = 0;
+
       for (const r of targetRewards) {
         const normTitle = normalizeRewardName(r.title);
 
@@ -2488,18 +2524,25 @@ function App() {
               const redData = await redRes.json();
               const list = redData.data || [];
               for (const item of list) {
+                // Deduplicar si ya procesamos este ID de canje de Twitch en esta corrida
+                if (item.id) {
+                  if (seenTwitchIds.has(item.id)) continue;
+                  seenTwitchIds.add(item.id);
+                }
+
                 const uName = item.user_name || item.user_login;
                 const redeemedAt = item.redeemed_at || new Date().toISOString();
+                const targetTime = new Date(redeemedAt).getTime();
 
-                // Verificar si este canje exacto ya existe en Supabase (por username y fecha exacta)
-                const { data: existing } = await supabase
-                  .from('twitch_redemptions')
-                  .select('id')
-                  .eq('username', uName)
-                  .eq('created_at', redeemedAt)
-                  .limit(1);
+                // Verificar si ya existe en Supabase o en memoria (mismo usuario, recompensa y timestamp dentro de 15s)
+                const alreadyExists = knownClaims.some(c => {
+                  const sameUser = (c.username || '').toLowerCase() === (uName || '').toLowerCase();
+                  const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === normTitle.toLowerCase();
+                  const diff = Math.abs(new Date(c.created_at).getTime() - targetTime);
+                  return sameUser && sameReward && diff <= 15000;
+                });
 
-                if (!existing || existing.length === 0) {
+                if (!alreadyExists) {
                   let initialStatus = 'pendiente';
                   try {
                     const delivery = await deliverPackForRedemption(uName, normTitle);
@@ -2511,12 +2554,12 @@ function App() {
                   const { data: insData } = await supabase.from('twitch_redemptions').insert([{
                     reward_name: normTitle,
                     username: uName,
-                    created_at: redeemedAt,
-                    status: initialStatus
+                    created_at: redeemedAt
                   }]).select();
 
                   if (insData?.[0]?.id) {
                     setLocalClaimStatus(insData[0].id, initialStatus);
+                    knownClaims.push(insData[0]);
                   }
                   imported++;
                 }
@@ -2851,6 +2894,10 @@ function App() {
     configuredRewardsRef.current = configuredRewards;
   }, [configuredRewards]);
   const [twitchList, setTwitchList] = useState([]);
+  const twitchListRef = useRef([]);
+  useEffect(() => {
+    twitchListRef.current = twitchList;
+  }, [twitchList]);
   const [selectedRewardName, setSelectedRewardName] = useState(null);
   const [isLoadingTwitch, setIsLoadingTwitch] = useState(false);
   const [showAddRedemptionModal, setShowAddRedemptionModal] = useState(false);
@@ -3205,8 +3252,8 @@ function App() {
   }, [view, tipoItem]);
 
   // Claves y TTL para Caché Local Inteligente (Ahorro de Egress de Supabase)
-  const BUILDER_LIBRARY_CACHE_KEY = 'tokkii_builder_library_cache_v1';
-  const BUILDER_LIBRARY_CACHE_TIME_KEY = 'tokkii_builder_library_cache_time_v1';
+  const BUILDER_LIBRARY_CACHE_KEY = 'tokkii_builder_library_cache_v2';
+  const BUILDER_LIBRARY_CACHE_TIME_KEY = 'tokkii_builder_library_cache_time_v2';
   const BUILDER_STREAMED_CACHE_KEY = 'tokkii_builder_streamed_cache_v1';
   const BUILDER_STREAMED_CACHE_TIME_KEY = 'tokkii_builder_streamed_cache_time_v1';
   const BUILDER_CACHE_TTL = 20 * 60 * 1000; // 20 minutos de caché local
@@ -3249,7 +3296,7 @@ function App() {
               ...r,
               status: r.status || localStatus[r.id] || 'pendiente'
             }));
-            setTwitchList(mergedRedemptions);
+            setTwitchList(deduplicateRedemptions(mergedRedemptions));
             setIsLoadingLibrary(false);
             console.log("⚡ [Builder Cache] Librería cargada desde localStorage (0 consumo Supabase)");
             return;
@@ -3274,7 +3321,7 @@ function App() {
           ...r,
           status: r.status || localStatus[r.id] || 'pendiente'
         }));
-        setTwitchList(mergedRedemptions);
+        setTwitchList(deduplicateRedemptions(mergedRedemptions));
       }
 
       // Guardar en caché local
@@ -5675,7 +5722,7 @@ function App() {
                       ])];
 
                       return allRewardsList.map(rewardName => {
-                        const claims = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName));
+                        const claims = deduplicateRedemptions((twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName)));
                         const isDefault = DEFAULT_TWITCH_REWARDS.includes(rewardName);
 
                         return (
@@ -5787,7 +5834,7 @@ function App() {
                   </div>
                 </div>
               ) : (() => {
-                  const claimsForReward = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(selectedRewardName));
+                  const claimsForReward = deduplicateRedemptions((twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(selectedRewardName)));
                   
                   // Agrupar por día
                   const groupedByDay = claimsForReward.reduce((acc, claim) => {
@@ -5873,28 +5920,19 @@ function App() {
                                 }
                               } catch (dErr) {}
 
-                              const { data: insData, error } = await supabase.from('twitch_redemptions').insert([{
+                              const { data: insData } = await supabase.from('twitch_redemptions').insert([{
                                 reward_name: selectedRewardName,
                                 username: testUser,
-                                created_at: new Date().toISOString(),
-                                status: initialStatus
+                                created_at: new Date().toISOString()
                               }]).select();
 
-                              let savedId = insData?.[0]?.id;
-                              if (error) {
-                                const { data: fbData } = await supabase.from('twitch_redemptions').insert([{
-                                  reward_name: selectedRewardName,
-                                  username: testUser,
-                                  created_at: new Date().toISOString()
-                                }]).select();
-                                savedId = fbData?.[0]?.id;
-                              }
-
+                              const savedId = insData?.[0]?.id;
                               if (savedId) {
                                 setLocalClaimStatus(savedId, initialStatus);
                               }
 
-                              fetchLibraryItems();
+                              invalidateLibraryCache();
+                              fetchLibraryItems(true);
                               triggerToast(`🧪 Canje de prueba registrado para @${testUser} (${initialStatus})`);
                             }}
                             style={{ width: 'auto', padding: '8px 20px', borderRadius: '8px', fontSize: '0.85rem', margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -6079,23 +6117,13 @@ function App() {
                         console.warn("No se pudo auto-entregar:", dErr);
                       }
 
-                      const { data: insData, error } = await supabase.from('twitch_redemptions').insert([{
+                      const { data: insData } = await supabase.from('twitch_redemptions').insert([{
                         reward_name: manualRewardName,
                         username: cleanUser,
-                        created_at: new Date().toISOString(),
-                        status: initialStatus
+                        created_at: new Date().toISOString()
                       }]).select();
 
-                      let savedId = insData?.[0]?.id;
-                      if (error) {
-                        const { data: fbData } = await supabase.from('twitch_redemptions').insert([{
-                          reward_name: manualRewardName,
-                          username: cleanUser,
-                          created_at: new Date().toISOString()
-                        }]).select();
-                        savedId = fbData?.[0]?.id;
-                      }
-
+                      const savedId = insData?.[0]?.id;
                       if (savedId) {
                         setLocalClaimStatus(savedId, initialStatus);
                       }
@@ -6104,7 +6132,8 @@ function App() {
                         ? `🎉 ¡Reclamo añadido y sobre entregado en TCG a @${cleanUser}!`
                         : `⚠️ Reclamo añadido para @${cleanUser} (Pendiente: no registrado aún en TCG)`
                       );
-                      fetchLibraryItems();
+                      invalidateLibraryCache();
+                      fetchLibraryItems(true);
                       setManualUsername('');
                       setShowAddRedemptionModal(false);
                     } catch (err) {
