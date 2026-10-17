@@ -5965,9 +5965,31 @@ function App() {
                           </button>
                           <button
                             type="button"
-                            className="btn-delete-news"
                             onClick={() => handleDeleteCategory(selectedRewardName)}
-                            style={{ width: 'auto', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                            style={{
+                              position: 'static',
+                              width: 'auto',
+                              padding: '8px 14px',
+                              fontSize: '0.85rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              color: '#EF4444',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                              e.currentTarget.style.borderColor = '#EF4444';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+                            }}
                             title="Eliminar este canje de la lista de categorías del Builder"
                           >
                             <Trash2 size={15} /> Eliminar Canje
