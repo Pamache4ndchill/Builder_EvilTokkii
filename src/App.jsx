@@ -2128,21 +2128,24 @@ function App() {
     return null;
   };
 
-  // Normalizador flexible y robusto de nombres de canjes (GoodTokkii Pack X1, X3, X5)
+  // Normalizador flexible y robusto de nombres de canjes (GoodTokkii Pack X1, X2, X3, X5)
   const normalizeRewardName = (name) => {
     if (!name) return '';
     const clean = String(name).trim().toLowerCase();
-    if (clean.includes('x5') || clean.includes('x 5') || clean.includes('pack 5') || clean.includes('pack_5') || clean.includes('5 carta') || clean.includes('5 cartas') || clean.includes('cinco cartas')) {
-      return 'GoodTokkii Pack X5';
-    }
-    if (clean.includes('x3') || clean.includes('x 3') || clean.includes('pack 3') || clean.includes('pack_3') || clean.includes('3 carta') || clean.includes('3 cartas') || clean.includes('tres cartas')) {
-      return 'GoodTokkii Pack X3';
-    }
-    if (clean.includes('x2') || clean.includes('x 2') || clean.includes('pack 2') || clean.includes('2 carta')) {
-      return 'GoodTokkii Pack X2';
-    }
-    if (clean.includes('x1') || clean.includes('x 1') || clean.includes('pack 1') || clean.includes('pack_1') || clean.includes('1 carta') || clean.includes('una carta') || (/goodtokkii\s*pack/i.test(clean) && !clean.includes('3') && !clean.includes('5'))) {
-      return 'GoodTokkii Pack X1';
+    const isPackRelated = clean.includes('pack') || clean.includes('sobre') || clean.includes('carta') || clean.includes('goodtokkii') || clean.includes('tokkii');
+    if (isPackRelated) {
+      if (clean.includes('x5') || clean.includes('x 5') || clean.includes('pack 5') || clean.includes('pack_5') || clean.includes('5 carta') || clean.includes('5 cartas') || clean.includes('cinco cartas')) {
+        return 'GoodTokkii Pack X5';
+      }
+      if (clean.includes('x3') || clean.includes('x 3') || clean.includes('pack 3') || clean.includes('pack_3') || clean.includes('3 carta') || clean.includes('3 cartas') || clean.includes('tres cartas')) {
+        return 'GoodTokkii Pack X3';
+      }
+      if (clean.includes('x2') || clean.includes('x 2') || clean.includes('pack 2') || clean.includes('pack_2') || clean.includes('2 carta') || clean.includes('2 cartas') || clean.includes('dos cartas')) {
+        return 'GoodTokkii Pack X2';
+      }
+      if (clean.includes('x1') || clean.includes('x 1') || clean.includes('pack 1') || clean.includes('pack_1') || clean.includes('1 carta') || clean.includes('una carta') || (/goodtokkii\s*pack/i.test(clean))) {
+        return 'GoodTokkii Pack X1';
+      }
     }
     return String(name).trim();
   };
@@ -2279,12 +2282,15 @@ function App() {
                 });
                 if (alreadyExists) return;
 
-                // Verificar si la recompensa es de cartas o configurada manualmente en el Builder
-                const activeConfigured = configuredRewardsRef.current || DEFAULT_TWITCH_REWARDS;
-                const isCardOrConfigured = DEFAULT_TWITCH_REWARDS.some(d => d.toLowerCase() === rewardTitle.toLowerCase()) ||
-                  activeConfigured.some(c => c.toLowerCase() === rewardTitle.toLowerCase());
-                if (!isCardOrConfigured) {
-                  return; // Ignorar canjes que no correspondan a cartas o categorías autorizadas
+                // Verificar si la recompensa coincide con alguna categoría configurada en el Builder
+                const activeConfigured = configuredRewardsRef.current || [];
+                const isConfiguredReward = activeConfigured.some(c => {
+                  const cleanC = c.trim().toLowerCase();
+                  return cleanC === rawTitle.trim().toLowerCase() ||
+                    normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase();
+                });
+                if (!isConfiguredReward) {
+                  return; // Ignorar canjes que no correspondan a categorías agregadas en el Builder
                 }
 
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
@@ -2471,11 +2477,15 @@ function App() {
       const rewards = rewardsData.data || [];
       console.log("Rewards de Twitch obtenidos:", rewards.map(r => r.title));
 
-      // Sincronizar reclamos de todos los canjes que sean sobres O que estén en las categorías configuradas
-      const activeConfigured = configuredRewardsRef.current || DEFAULT_TWITCH_REWARDS;
+      // Sincronizar reclamos de todos los canjes que coincidan con las categorías configuradas
+      const activeConfigured = configuredRewardsRef.current || [];
       let targetRewards = rewards.filter(r => {
-        const norm = normalizeRewardName(r.title);
-        return DEFAULT_TWITCH_REWARDS.includes(norm) || activeConfigured.some(c => normalizeRewardName(c).toLowerCase() === norm.toLowerCase());
+        const rawTitle = (r.title || '').trim().toLowerCase();
+        const norm = normalizeRewardName(r.title).toLowerCase();
+        return activeConfigured.some(c => {
+          const cleanC = c.trim().toLowerCase();
+          return cleanC === rawTitle || normalizeRewardName(c).toLowerCase() === norm;
+        });
       });
 
       // Pre-cargar canjes existentes de Supabase para evitar duplicados
@@ -2838,7 +2848,7 @@ function App() {
       const saved = localStorage.getItem('twitch_configured_rewards_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return [...new Set([...DEFAULT_TWITCH_REWARDS, ...parsed])];
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch(e) {}
     return DEFAULT_TWITCH_REWARDS;
@@ -2868,6 +2878,45 @@ function App() {
     } finally {
       setDeliveringClaimId(null);
     }
+  };
+
+  // Eliminar una categoría de canjes (sea oficial o personalizada)
+  const handleDeleteCategory = (rewardName) => {
+    if (!rewardName) return;
+    showConfirm(`¿Eliminar la categoría "${rewardName}" del Builder? Los reclamos registrados de esta categoría también serán eliminados.`, async () => {
+      closeConfirm();
+      const updated = configuredRewards.filter(r => r.toLowerCase() !== rewardName.toLowerCase());
+      setConfiguredRewards(updated);
+      configuredRewardsRef.current = updated;
+      try {
+        localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
+      } catch(e) {}
+
+      if (selectedRewardName && selectedRewardName.toLowerCase() === rewardName.toLowerCase()) {
+        setSelectedRewardName(null);
+      }
+
+      // Eliminar reclamos asociados en Supabase y localmente
+      try {
+        await supabase.from('twitch_redemptions').delete().ilike('reward_name', rewardName);
+        setTwitchList(prev => prev.filter(c => normalizeRewardName(c.reward_name).toLowerCase() !== normalizeRewardName(rewardName).toLowerCase()));
+        invalidateLibraryCache();
+        fetchLibraryItems(true);
+      } catch(e) {}
+
+      triggerToast(`🗑️ Categoría "${rewardName}" eliminada del Builder.`);
+    });
+  };
+
+  // Restaurar categorías de cartas oficiales por defecto
+  const handleRestoreDefaultRewards = () => {
+    const defaults = ['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3'];
+    setConfiguredRewards(defaults);
+    configuredRewardsRef.current = defaults;
+    try {
+      localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(defaults));
+    } catch(e) {}
+    triggerToast('✨ Canjes de cartas por defecto restaurados (Pack X1, X2 y X3).');
   };
 
   useEffect(() => {
@@ -5683,25 +5732,67 @@ function App() {
             <div className="card animate-slide-down" style={{ minHeight: '60vh', padding: '24px' }}>
               {!selectedRewardName ? (
                 <div>
-                  <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '24px' }}>
-                    <h2 style={{ color: 'var(--text-main)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                      <Gift size={22} color="#A855F7" /> Canjes Oficiales Configurados
-                    </h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '6px', margin: 0 }}>
-                      Selecciona cualquiera de tus canjes para consultar la lista de viewers que lo reclamaron, ordenados por fecha y listos para copiar con 1 click.
-                    </p>
+                  <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                    <div>
+                      <h2 style={{ color: 'var(--text-main)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                        <Gift size={22} color="#A855F7" /> Canjes Oficiales Configurados
+                      </h2>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '6px', margin: 0 }}>
+                        Selecciona cualquiera de tus canjes para consultar la lista de viewers que lo reclamaron, ordenados por fecha y listos para copiar con 1 click.
+                      </p>
+                    </div>
+                    {configuredRewards.length < 3 && (
+                      <button
+                        type="button"
+                        className="btn-add"
+                        onClick={handleRestoreDefaultRewards}
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        title="Restaurar las categorías oficiales de cartas (Packs X1, X2 y X3)"
+                      >
+                        <RefreshCw size={13} /> Restaurar Packs de Cartas
+                      </button>
+                    )}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '30px' }}>
                     {(() => {
-                      const allRewardsList = [...new Set([
-                        ...DEFAULT_TWITCH_REWARDS,
-                        ...configuredRewards
-                      ])];
+                      const allRewardsList = configuredRewards;
+
+                      if (allRewardsList.length === 0) {
+                        return (
+                          <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: 'var(--bg-card)', borderRadius: '14px', border: '1px dashed rgba(168, 85, 247, 0.4)', gridColumn: '1 / -1' }}>
+                            <Gift size={48} color="#A855F7" style={{ opacity: 0.4, marginBottom: '14px' }} />
+                            <h3 style={{ color: 'var(--text-main)', fontSize: '1.2rem', marginBottom: '8px' }}>
+                              No hay canjes configurados
+                            </h3>
+                            <p style={{ maxWidth: '460px', margin: '0 auto 20px auto', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                              Puedes añadir un nuevo canje con el mismo nombre que tengas en Twitch o restaurar los canjes oficiales de cartas del TCG.
+                            </p>
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                className="btn-add"
+                                onClick={handleRestoreDefaultRewards}
+                                style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                              >
+                                <RefreshCw size={15} /> Restaurar Packs de Cartas
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-submit"
+                                onClick={() => setShowNewRewardModal(true)}
+                                style={{ padding: '8px 18px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                              >
+                                <Plus size={15} /> Añadir Canje
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return allRewardsList.map(rewardName => {
                         const claims = deduplicateRedemptions((twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName)));
-                        const isDefault = DEFAULT_TWITCH_REWARDS.includes(rewardName);
+                        const isDefault = ['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'].includes(rewardName);
 
                         return (
                           <div 
@@ -5762,25 +5853,19 @@ function App() {
                                 </div>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {!DEFAULT_TWITCH_REWARDS.includes(rewardName) && (
-                                  <button
-                                    type="button"
-                                    title="Eliminar esta categoría del Builder"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (window.confirm(`¿Quitar la categoría "${rewardName}" del menú? Los reclamos ya registrados seguirán guardados.`)) {
-                                        const updated = configuredRewards.filter(r => r !== rewardName);
-                                        setConfiguredRewards(updated);
-                                        localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
-                                      }
-                                    }}
-                                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
-                                    onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-                                    onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  title={`Eliminar categoría "${rewardName}" del Builder`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCategory(rewardName);
+                                  }}
+                                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
                                 <span style={{
                                   padding: '4px 10px',
                                   borderRadius: '20px',
@@ -5877,6 +5962,15 @@ function App() {
                             style={{ width: 'auto', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
                           >
                             <Plus size={15} /> Añadir Usuario
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-delete-news"
+                            onClick={() => handleDeleteCategory(selectedRewardName)}
+                            style={{ width: 'auto', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                            title="Eliminar este canje de la lista de categorías del Builder"
+                          >
+                            <Trash2 size={15} /> Eliminar Canje
                           </button>
                         </div>
                       </div>
@@ -6207,29 +6301,76 @@ function App() {
                   <h3 style={{ margin: '0 0 10px 0', fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Sparkles size={18} color="#A855F7" /> Añadir Categoría de Canje
                   </h3>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.5 }}>
-                    Escribe el nombre de la recompensa de Twitch para crear su tarjeta en el Builder y listar a sus reclamadores.
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
+                    Escribe el nombre de la recompensa de Twitch <strong>exactamente como se llama en Twitch</strong> para crear su tarjeta en el Builder y registrar sus canjes automáticamente.
                   </p>
 
-                  <form onSubmit={(e) => {
+                  {/* Sugerencias Rápidas */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
+                      Sugerencias de packs oficiales:
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'].map(packName => {
+                        const isAdded = configuredRewards.some(c => c.toLowerCase() === packName.toLowerCase());
+                        return (
+                          <button
+                            key={packName}
+                            type="button"
+                            disabled={isAdded}
+                            onClick={() => setNewRewardInput(packName)}
+                            style={{
+                              fontSize: '0.75rem',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid ' + (isAdded ? 'rgba(255,255,255,0.08)' : 'rgba(168, 85, 247, 0.4)'),
+                              background: isAdded ? 'rgba(255,255,255,0.04)' : 'rgba(168, 85, 247, 0.15)',
+                              color: isAdded ? 'var(--text-muted)' : '#C084FC',
+                              cursor: isAdded ? 'not-allowed' : 'pointer',
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            {packName} {isAdded ? '✓ (Añadido)' : '+'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <form onSubmit={async (e) => {
                     e.preventDefault();
                     const trimmed = newRewardInput.trim();
                     if (!trimmed) return;
                     const normalized = normalizeRewardName(trimmed);
-                    if (!configuredRewards.includes(normalized)) {
+                    const alreadyExists = configuredRewards.some(c => c.toLowerCase() === normalized.toLowerCase() || c.toLowerCase() === trimmed.toLowerCase());
+                    if (!alreadyExists) {
                       const updated = [...configuredRewards, normalized];
                       setConfiguredRewards(updated);
-                      localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
+                      configuredRewardsRef.current = updated;
+                      try {
+                        localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
+                      } catch(e) {}
+                      triggerToast(`✨ Canje "${normalized}" añadido con éxito.`);
+                      // Sincronizar inmediatamente si hay conexión o token
+                      const token = (broadcasterOauthRef.current || localStorage.getItem('twitch_broadcaster_oauth') || botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+                      if (token) {
+                        syncTwitchCustomRewards();
+                      }
+                    } else {
+                      triggerToast(`ℹ️ El canje "${normalized}" ya está registrado.`);
                     }
                     setNewRewardInput('');
                     setShowNewRewardModal(false);
                   }}>
                     <div className="form-group" style={{ marginBottom: '20px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem' }}>Nombre del Canje:</label>
+                      <label className="form-label" style={{ fontSize: '0.85rem' }}>Nombre de la Recompensa (Twitch):</label>
                       <input 
                         type="text"
                         className="form-control"
-                        placeholder="Ej: GoodTokkii Pack X5, Cofre Especial, etc."
+                        placeholder="Ej: GoodTokkii Pack X1, Cofre Especial, etc."
                         value={newRewardInput}
                         onChange={(e) => setNewRewardInput(e.target.value)}
                         required
@@ -6241,7 +6382,10 @@ function App() {
                       <button
                         type="button"
                         className="btn-add"
-                        onClick={() => setShowNewRewardModal(false)}
+                        onClick={() => {
+                          setNewRewardInput('');
+                          setShowNewRewardModal(false);
+                        }}
                         style={{ flex: 1, padding: '10px' }}
                       >
                         Cancelar
