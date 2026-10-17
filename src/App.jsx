@@ -1725,7 +1725,7 @@ function App() {
   const pingIntervalRef = useRef(null);
   const eventSubWsRef = useRef(null);
   const seenTwitchRedemptionIdsRef = useRef(new Set());
-  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5']);
+  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3']);
   const [eventSubStatus, setEventSubStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'missing_scope'
 
   const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
@@ -2279,20 +2279,16 @@ function App() {
                 });
                 if (alreadyExists) return;
 
+                // Verificar si la recompensa es de cartas o configurada manualmente en el Builder
+                const activeConfigured = configuredRewardsRef.current || DEFAULT_TWITCH_REWARDS;
+                const isCardOrConfigured = DEFAULT_TWITCH_REWARDS.some(d => d.toLowerCase() === rewardTitle.toLowerCase()) ||
+                  activeConfigured.some(c => c.toLowerCase() === rewardTitle.toLowerCase());
+                if (!isCardOrConfigured) {
+                  return; // Ignorar canjes que no correspondan a cartas o categorías autorizadas
+                }
+
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
                 addBotLog(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}"`);
-
-                // Asegurar que la categoría aparezca registrada en el Builder
-                if (rewardTitle) {
-                  setConfiguredRewards(prev => {
-                    if (!prev.includes(rewardTitle)) {
-                      const updated = [...prev, rewardTitle];
-                      try { localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated)); } catch(e) {}
-                      return updated;
-                    }
-                    return prev;
-                  });
-                }
 
                 // Intentar entregar sobre automáticamente en TCG
                 let initialStatus = 'pendiente';
@@ -2482,11 +2478,6 @@ function App() {
         return DEFAULT_TWITCH_REWARDS.includes(norm) || activeConfigured.some(c => normalizeRewardName(c).toLowerCase() === norm.toLowerCase());
       });
 
-      // Si por alguna razón no coincidió ninguno pero hay recompensas creadas, sincronizar todas las recompensas disponibles
-      if (targetRewards.length === 0 && rewards.length > 0) {
-        targetRewards = rewards;
-      }
-
       // Pre-cargar canjes existentes de Supabase para evitar duplicados
       const { data: dbExisting } = await supabase
         .from('twitch_redemptions')
@@ -2498,18 +2489,6 @@ function App() {
 
       for (const r of targetRewards) {
         const normTitle = normalizeRewardName(r.title);
-
-        // Asegurar que la categoría quede en el estado del Builder
-        if (normTitle) {
-          setConfiguredRewards(prev => {
-            if (!prev.includes(normTitle)) {
-              const updated = [...prev, normTitle];
-              try { localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated)); } catch(e) {}
-              return updated;
-            }
-            return prev;
-          });
-        }
 
         // Consultar tanto canjes en cola (UNFULFILLED) como completados/auto-aprobados (FULFILLED)
         for (const stat of ['UNFULFILLED', 'FULFILLED']) {
@@ -2851,11 +2830,12 @@ function App() {
   const [isLoadingParticipations, setIsLoadingParticipations] = useState(false);
 
   // Twitch Redemptions State
-  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'];
+  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3'];
   const [configuredRewards, setConfiguredRewards] = useState(() => {
     try {
-      localStorage.removeItem('twitch_configured_rewards'); // Limpiar caché anterior con canjes no deseados
-      const saved = localStorage.getItem('twitch_configured_rewards_v2');
+      localStorage.removeItem('twitch_configured_rewards');
+      localStorage.removeItem('twitch_configured_rewards_v2'); // Limpiar categorías automáticas pasadas
+      const saved = localStorage.getItem('twitch_configured_rewards_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return [...new Set([...DEFAULT_TWITCH_REWARDS, ...parsed])];
@@ -3252,8 +3232,8 @@ function App() {
   }, [view, tipoItem]);
 
   // Claves y TTL para Caché Local Inteligente (Ahorro de Egress de Supabase)
-  const BUILDER_LIBRARY_CACHE_KEY = 'tokkii_builder_library_cache_v2';
-  const BUILDER_LIBRARY_CACHE_TIME_KEY = 'tokkii_builder_library_cache_time_v2';
+  const BUILDER_LIBRARY_CACHE_KEY = 'tokkii_builder_library_cache_v3';
+  const BUILDER_LIBRARY_CACHE_TIME_KEY = 'tokkii_builder_library_cache_time_v3';
   const BUILDER_STREAMED_CACHE_KEY = 'tokkii_builder_streamed_cache_v1';
   const BUILDER_STREAMED_CACHE_TIME_KEY = 'tokkii_builder_streamed_cache_time_v1';
   const BUILDER_CACHE_TTL = 20 * 60 * 1000; // 20 minutos de caché local
@@ -4606,8 +4586,7 @@ function App() {
       ) : ['create', 'create_content_item', 'view_participations', 'view_twitch'].includes(view) && (() => {
         const dynamicRewards = [...new Set([
           ...DEFAULT_TWITCH_REWARDS,
-          ...configuredRewards,
-          ...(twitchList || []).map(t => normalizeRewardName(t.reward_name)).filter(Boolean)
+          ...configuredRewards
         ])];
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? dynamicRewards.map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
@@ -5717,8 +5696,7 @@ function App() {
                     {(() => {
                       const allRewardsList = [...new Set([
                         ...DEFAULT_TWITCH_REWARDS,
-                        ...configuredRewards,
-                        ...(twitchList || []).map(t => normalizeRewardName(t.reward_name)).filter(Boolean)
+                        ...configuredRewards
                       ])];
 
                       return allRewardsList.map(rewardName => {
@@ -5765,6 +5743,11 @@ function App() {
                                         ✨ 3,000 pts (1 Carta)
                                       </span>
                                     )}
+                                    {rewardName === 'GoodTokkii Pack X2' && (
+                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                        ✨ 4,000 pts (2 Cartas)
+                                      </span>
+                                    )}
                                     {rewardName === 'GoodTokkii Pack X3' && (
                                       <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
                                         ✨ 5,000 pts (3 Cartas)
@@ -5788,7 +5771,7 @@ function App() {
                                       if (window.confirm(`¿Quitar la categoría "${rewardName}" del menú? Los reclamos ya registrados seguirán guardados.`)) {
                                         const updated = configuredRewards.filter(r => r !== rewardName);
                                         setConfiguredRewards(updated);
-                                        localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated));
+                                        localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
                                       }
                                     }}
                                     style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
@@ -5829,7 +5812,7 @@ function App() {
                     <HelpCircle size={28} color="#A855F7" style={{ flexShrink: 0 }} />
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
                       <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '2px' }}>¿Cómo funciona la sincronización con Twitch?</strong>
-                      Cuando tus espectadores canjean <strong>GoodTokkii Pack X1</strong> o <strong>GoodTokkii Pack X3</strong> con puntos de canal en Twitch, el detector recibe el evento en vivo y lo registra automáticamente.
+                      Cuando tus espectadores canjean <strong>GoodTokkii Pack X1</strong>, <strong>GoodTokkii Pack X2</strong> o <strong>GoodTokkii Pack X3</strong> con puntos de canal en Twitch, el detector recibe el evento en vivo y lo registra automáticamente.
                     </div>
                   </div>
                 </div>
@@ -6063,9 +6046,26 @@ function App() {
                                             className="btn-delete-news"
                                             style={{ position: 'relative', top: '0', right: '0', opacity: 1, padding: '6px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', width: 'auto', background: 'rgba(239,68,68,0.08)' }}
                                             onClick={() => showConfirm(`¿Eliminar reclamo de ${claim.username}?`, async () => {
-                                              const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
-                                              if(!error) fetchLibraryItems();
                                               closeConfirm();
+                                              // Actualización visual instantánea en tiempo real
+                                              setTwitchList(prev => prev.filter(c => c.id !== claim.id));
+                                              invalidateLibraryCache();
+                                              try {
+                                                const statusMap = getLocalStatusMap();
+                                                if (statusMap[claim.id]) {
+                                                  delete statusMap[claim.id];
+                                                  localStorage.setItem('tokkii_redemptions_status_map', JSON.stringify(statusMap));
+                                                }
+                                              } catch (e) {}
+
+                                              const { error } = await supabase.from('twitch_redemptions').delete().eq('id', claim.id);
+                                              if (!error) {
+                                                triggerToast(`🗑️ Reclamo de @${claim.username} eliminado.`);
+                                                fetchLibraryItems(true);
+                                              } else {
+                                                triggerToast(`⚠️ Error al eliminar en base de datos: ${error.message}`);
+                                                fetchLibraryItems(true);
+                                              }
                                             })}
                                           >
                                             <Trash2 size={14} /> Eliminar
@@ -6219,7 +6219,7 @@ function App() {
                     if (!configuredRewards.includes(normalized)) {
                       const updated = [...configuredRewards, normalized];
                       setConfiguredRewards(updated);
-                      localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated));
+                      localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
                     }
                     setNewRewardInput('');
                     setShowNewRewardModal(false);

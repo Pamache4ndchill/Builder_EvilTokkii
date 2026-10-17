@@ -71,6 +71,18 @@ export const getPackTypeFromReward = (rewardName) => {
     return 'pack_3';
   }
 
+  // Sobre de 2 cartas
+  if (
+    clean.includes('x2') ||
+    clean.includes('pack 2') ||
+    clean.includes('pack_2') ||
+    clean.includes('2 carta') ||
+    clean.includes('2 cartas') ||
+    clean.includes('dos cartas')
+  ) {
+    return 'pack_2';
+  }
+
   // Sobre de 1 carta
   if (
     clean.includes('x1') ||
@@ -188,7 +200,7 @@ export const deliverPackForRedemption = async (twitchUsername, rewardName) => {
     };
   }
 
-  const labelPack = packType === 'pack_1' ? '1 Carta' : packType === 'pack_3' ? '3 Cartas' : '5 Cartas';
+  const labelPack = packType === 'pack_1' ? '1 Carta' : packType === 'pack_2' ? '2 Cartas' : packType === 'pack_3' ? '3 Cartas' : '5 Cartas';
 
   // Buscar si el usuario existe en el TCG
   const user = await findTcgUser(twitchUsername);
