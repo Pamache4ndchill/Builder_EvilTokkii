@@ -2127,24 +2127,30 @@ function App() {
     return null;
   };
 
-  // Normalizador de nombres de canjes (GoodTokkii Pack X1, X3, X5)
+  // Normalizador flexible y robusto de nombres de canjes (GoodTokkii Pack X1, X3, X5)
   const normalizeRewardName = (name) => {
     if (!name) return '';
-    const clean = String(name).trim();
-    if (/goodtokkii\s*pack\s*x?1/i.test(clean)) return 'GoodTokkii Pack X1';
-    if (/goodtokkii\s*pack\s*x?3/i.test(clean)) return 'GoodTokkii Pack X3';
-    if (/goodtokkii\s*pack\s*x?5/i.test(clean)) return 'GoodTokkii Pack X5';
-    if (/goodtokkii\s*pack\s*x?2/i.test(clean)) return 'GoodTokkii Pack X2';
-    return clean;
+    const clean = String(name).trim().toLowerCase();
+    if (clean.includes('x5') || clean.includes('x 5') || clean.includes('pack 5') || clean.includes('pack_5') || clean.includes('5 carta') || clean.includes('5 cartas') || clean.includes('cinco cartas')) {
+      return 'GoodTokkii Pack X5';
+    }
+    if (clean.includes('x3') || clean.includes('x 3') || clean.includes('pack 3') || clean.includes('pack_3') || clean.includes('3 carta') || clean.includes('3 cartas') || clean.includes('tres cartas')) {
+      return 'GoodTokkii Pack X3';
+    }
+    if (clean.includes('x2') || clean.includes('x 2') || clean.includes('pack 2') || clean.includes('2 carta')) {
+      return 'GoodTokkii Pack X2';
+    }
+    if (clean.includes('x1') || clean.includes('x 1') || clean.includes('pack 1') || clean.includes('pack_1') || clean.includes('1 carta') || clean.includes('una carta') || (/goodtokkii\s*pack/i.test(clean) && !clean.includes('3') && !clean.includes('5'))) {
+      return 'GoodTokkii Pack X1';
+    }
+    return String(name).trim();
   };
 
   // Detector de Canjes de Puntos de Canal en Tiempo Real (Twitch EventSub WebSocket)
   const connectTwitchEventSub = async () => {
     const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
-    const botToken = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
-    const rawToken = broadcasterToken || botToken;
-    if (!rawToken) {
-      setEventSubStatus('disconnected');
+    if (!broadcasterToken) {
+      setEventSubStatus('missing_scope');
       return;
     }
 
@@ -2174,8 +2180,18 @@ function App() {
 
           if (msgType === 'session_welcome') {
             const sessionId = data.payload?.session?.id;
-            const clientId = await getTwitchClientId(rawToken);
-            const broadcasterId = '1131620140'; // eviltokkii
+            const clientId = await getTwitchClientId(broadcasterToken);
+            let broadcasterId = '1131620140'; // eviltokkii por defecto
+
+            try {
+              const valRes = await fetch('https://id.twitch.tv/oauth2/validate', {
+                headers: { 'Authorization': `OAuth ${broadcasterToken}` }
+              });
+              if (valRes.ok) {
+                const valData = await valRes.json();
+                if (valData.user_id) broadcasterId = valData.user_id;
+              }
+            } catch(e) {}
 
             console.log("Suscribiendo EventSub session:", sessionId, "clientId:", clientId, "broadcasterId:", broadcasterId);
 
@@ -2183,7 +2199,7 @@ function App() {
             const subRes = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${rawToken}`,
+                'Authorization': `Bearer ${broadcasterToken}`,
                 'Client-Id': clientId,
                 'Content-Type': 'application/json'
               },
@@ -2219,16 +2235,23 @@ function App() {
               if (ev) {
                 const rawTitle = ev.reward?.title || '';
                 const rewardTitle = normalizeRewardName(rawTitle);
-                const currentConfigured = configuredRewardsRef.current || ['GoodTokkii Pack X1', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'];
-                const isTracked = currentConfigured.some(c => normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase());
-                if (!isTracked) {
-                  return; // Ignorar canjes no configurados en el Builder
-                }
                 const viewerName = ev.user_name || ev.user_login || 'Espectador';
                 const redeemedAt = ev.redeemed_at || new Date().toISOString();
 
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
                 addBotLog(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}"`);
+
+                // Asegurar que la categoría aparezca registrada en el Builder
+                if (rewardTitle) {
+                  setConfiguredRewards(prev => {
+                    if (!prev.includes(rewardTitle)) {
+                      const updated = [...prev, rewardTitle];
+                      try { localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated)); } catch(e) {}
+                      return updated;
+                    }
+                    return prev;
+                  });
+                }
 
                 // Intentar entregar sobre automáticamente en TCG
                 let initialStatus = 'pendiente';
@@ -2274,7 +2297,8 @@ function App() {
                     setLocalClaimStatus(savedId, initialStatus);
                   }
 
-                  fetchLibraryItems();
+                  invalidateLibraryCache();
+                  fetchLibraryItems(true);
                   triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
                 } catch (insEx) {
                   console.error("Excepción al guardar canje:", insEx);
@@ -2290,7 +2314,8 @@ function App() {
       esWs.onclose = () => {
         setEventSubStatus('disconnected');
         const isBotEnabled = localStorage.getItem('twitch_bot_enabled') !== 'false';
-        if (isBotEnabled && !isManuallyDisconnectedRef.current) {
+        const hasBroadcasterToken = !!(localStorage.getItem('twitch_broadcaster_oauth') || '').trim();
+        if (isBotEnabled && hasBroadcasterToken && !isManuallyDisconnectedRef.current) {
           setTimeout(() => {
             connectTwitchEventSub();
           }, 8000);
@@ -2387,7 +2412,17 @@ function App() {
     try {
       triggerToast('🔄 Consultando canjes en Twitch...');
       const clientId = await getTwitchClientId(rawToken);
-      const broadcasterId = '1131620140'; // eviltokkii
+      let broadcasterId = '1131620140'; // eviltokkii por defecto
+
+      try {
+        const valRes = await fetch('https://id.twitch.tv/oauth2/validate', {
+          headers: { 'Authorization': `OAuth ${rawToken}` }
+        });
+        if (valRes.ok) {
+          const valData = await valRes.json();
+          if (valData.user_id) broadcasterId = valData.user_id;
+        }
+      } catch(e) {}
 
       // 1. Obtener los custom rewards del canal
       const rewardsRes = await fetch(`https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=${broadcasterId}&only_manageable_rewards=false`, {
@@ -2412,15 +2447,34 @@ function App() {
       const rewards = rewardsData.data || [];
       console.log("Rewards de Twitch obtenidos:", rewards.map(r => r.title));
 
-      // Solo sincronizar reclamos de los canjes que están configurados en el Builder
+      // Sincronizar reclamos de todos los canjes que sean sobres O que estén en las categorías configuradas
       const activeConfigured = configuredRewardsRef.current || DEFAULT_TWITCH_REWARDS;
-      const targetRewards = rewards.filter(r => 
-        activeConfigured.some(c => normalizeRewardName(c).toLowerCase() === normalizeRewardName(r.title).toLowerCase())
-      );
+      let targetRewards = rewards.filter(r => {
+        const norm = normalizeRewardName(r.title);
+        return DEFAULT_TWITCH_REWARDS.includes(norm) || activeConfigured.some(c => normalizeRewardName(c).toLowerCase() === norm.toLowerCase());
+      });
+
+      // Si por alguna razón no coincidió ninguno pero hay recompensas creadas, sincronizar todas las recompensas disponibles
+      if (targetRewards.length === 0 && rewards.length > 0) {
+        targetRewards = rewards;
+      }
 
       let imported = 0;
       for (const r of targetRewards) {
         const normTitle = normalizeRewardName(r.title);
+
+        // Asegurar que la categoría quede en el estado del Builder
+        if (normTitle) {
+          setConfiguredRewards(prev => {
+            if (!prev.includes(normTitle)) {
+              const updated = [...prev, normTitle];
+              try { localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated)); } catch(e) {}
+              return updated;
+            }
+            return prev;
+          });
+        }
+
         // Consultar tanto canjes en cola (UNFULFILLED) como completados/auto-aprobados (FULFILLED)
         for (const stat of ['UNFULFILLED', 'FULFILLED']) {
           try {
@@ -2435,20 +2489,35 @@ function App() {
               const list = redData.data || [];
               for (const item of list) {
                 const uName = item.user_name || item.user_login;
-                // Verificar si ya existe en Supabase
+                const redeemedAt = item.redeemed_at || new Date().toISOString();
+
+                // Verificar si este canje exacto ya existe en Supabase (por username y fecha exacta)
                 const { data: existing } = await supabase
                   .from('twitch_redemptions')
                   .select('id')
-                  .in('reward_name', [normTitle, r.title])
                   .eq('username', uName)
+                  .eq('created_at', redeemedAt)
                   .limit(1);
 
                 if (!existing || existing.length === 0) {
-                  await supabase.from('twitch_redemptions').insert([{
+                  let initialStatus = 'pendiente';
+                  try {
+                    const delivery = await deliverPackForRedemption(uName, normTitle);
+                    if (delivery && delivery.delivered) {
+                      initialStatus = 'entregado';
+                    }
+                  } catch (delivErr) {}
+
+                  const { data: insData } = await supabase.from('twitch_redemptions').insert([{
                     reward_name: normTitle,
                     username: uName,
-                    created_at: item.redeemed_at || new Date().toISOString()
-                  }]);
+                    created_at: redeemedAt,
+                    status: initialStatus
+                  }]).select();
+
+                  if (insData?.[0]?.id) {
+                    setLocalClaimStatus(insData[0].id, initialStatus);
+                  }
                   imported++;
                 }
               }
@@ -2459,7 +2528,8 @@ function App() {
         }
       }
 
-      fetchLibraryItems();
+      invalidateLibraryCache();
+      await fetchLibraryItems(true);
       if (imported > 0) {
         triggerToast(`🎉 ¡Éxito! Se sincronizaron ${imported} canjes de Twitch.`);
       } else {
@@ -2757,7 +2827,7 @@ function App() {
     if (!claim || !claim.username) return;
     setDeliveringClaimId(claim.id);
     try {
-      const rewardToDeliver = claim.reward_name || selectedRewardName || 'GoodTokkii Pack X3';
+      const rewardToDeliver = normalizeRewardName(claim.reward_name) || selectedRewardName || 'GoodTokkii Pack X1';
       const result = await deliverPackForRedemption(claim.username, rewardToDeliver);
       if (result.delivered) {
         setLocalClaimStatus(claim.id, 'entregado');
@@ -2968,9 +3038,11 @@ function App() {
     }
   }, []);
 
-  // Al abrir la vista de canjes, verificar conexión y sincronizar de Twitch
+  // Al abrir la vista de canjes, verificar conexión y sincronizar de Twitch de inmediato
   useEffect(() => {
     if (view === 'view_twitch') {
+      invalidateLibraryCache();
+      fetchLibraryItems(true);
       connectTwitchEventSub();
       syncTwitchCustomRewards();
     }
@@ -4485,7 +4557,11 @@ function App() {
           </div>
         </aside>
       ) : ['create', 'create_content_item', 'view_participations', 'view_twitch'].includes(view) && (() => {
-        const dynamicRewards = configuredRewards;
+        const dynamicRewards = [...new Set([
+          ...DEFAULT_TWITCH_REWARDS,
+          ...configuredRewards,
+          ...(twitchList || []).map(t => normalizeRewardName(t.reward_name)).filter(Boolean)
+        ])];
         const activeList = view === 'view_participations' ? eventsList : 
                            view === 'view_twitch' ? dynamicRewards.map(name => ({ id: name, titulo: name, tipo: 'Canje Twitch', created_at: new Date() })) :
                            view === 'create' ? savedNews : 
@@ -5591,107 +5667,115 @@ function App() {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                    {configuredRewards.map(rewardName => {
-                      const claims = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName));
-                      const isDefault = DEFAULT_TWITCH_REWARDS.includes(rewardName);
+                    {(() => {
+                      const allRewardsList = [...new Set([
+                        ...DEFAULT_TWITCH_REWARDS,
+                        ...configuredRewards,
+                        ...(twitchList || []).map(t => normalizeRewardName(t.reward_name)).filter(Boolean)
+                      ])];
 
-                      return (
-                        <div 
-                          key={rewardName}
-                          onClick={() => setSelectedRewardName(rewardName)}
-                          style={{
-                            background: 'var(--bg-card-hover)',
-                            border: '1px solid rgba(168, 85, 247, 0.3)',
-                            borderRadius: '14px',
-                            padding: '20px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '14px',
-                            transition: 'all 0.2s ease',
-                            position: 'relative',
-                            overflow: 'hidden'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = '#A855F7'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)'}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A855F7' }}>
-                                <Gift size={22} />
-                              </div>
-                              <div>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 800 }}>
-                                  {rewardName}
-                                </h3>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                                  {isDefault && (
-                                    <span style={{ fontSize: '0.72rem', color: '#A855F7', fontWeight: 600 }}>
-                                      Canje Vinculado
-                                    </span>
-                                  )}
-                                  {rewardName === 'GoodTokkii Pack X1' && (
-                                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                      ✨ 3,000 pts (1 Carta)
-                                    </span>
-                                  )}
-                                  {rewardName === 'GoodTokkii Pack X3' && (
-                                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                      ✨ 5,000 pts (3 Cartas)
-                                    </span>
-                                  )}
-                                  {rewardName === 'GoodTokkii Pack X5' && (
-                                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                      ✨ 10,000 pts (5 Cartas)
-                                    </span>
-                                  )}
+                      return allRewardsList.map(rewardName => {
+                        const claims = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName));
+                        const isDefault = DEFAULT_TWITCH_REWARDS.includes(rewardName);
+
+                        return (
+                          <div 
+                            key={rewardName}
+                            onClick={() => setSelectedRewardName(rewardName)}
+                            style={{
+                              background: 'var(--bg-card-hover)',
+                              border: '1px solid rgba(168, 85, 247, 0.3)',
+                              borderRadius: '14px',
+                              padding: '20px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '14px',
+                              transition: 'all 0.2s ease',
+                              position: 'relative',
+                              overflow: 'hidden'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = '#A855F7'}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)'}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A855F7' }}>
+                                  <Gift size={22} />
+                                </div>
+                                <div>
+                                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                                    {rewardName}
+                                  </h3>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                                    {isDefault && (
+                                      <span style={{ fontSize: '0.72rem', color: '#A855F7', fontWeight: 600 }}>
+                                        Canje Vinculado
+                                      </span>
+                                    )}
+                                    {rewardName === 'GoodTokkii Pack X1' && (
+                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                        ✨ 3,000 pts (1 Carta)
+                                      </span>
+                                    )}
+                                    {rewardName === 'GoodTokkii Pack X3' && (
+                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                        ✨ 5,000 pts (3 Cartas)
+                                      </span>
+                                    )}
+                                    {rewardName === 'GoodTokkii Pack X5' && (
+                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
+                                        ✨ 10,000 pts (5 Cartas)
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {!DEFAULT_TWITCH_REWARDS.includes(rewardName) && (
+                                  <button
+                                    type="button"
+                                    title="Eliminar esta categoría del Builder"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(`¿Quitar la categoría "${rewardName}" del menú? Los reclamos ya registrados seguirán guardados.`)) {
+                                        const updated = configuredRewards.filter(r => r !== rewardName);
+                                        setConfiguredRewards(updated);
+                                        localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated));
+                                      }
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                                    onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                                <span style={{
+                                  padding: '4px 10px',
+                                  borderRadius: '20px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 800,
+                                  background: claims.length > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                  color: claims.length > 0 ? '#C084FC' : 'var(--text-muted)'
+                                }}>
+                                  {claims.length} {claims.length === 1 ? 'Reclamo' : 'Reclamos'}
+                                </span>
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {!DEFAULT_TWITCH_REWARDS.includes(rewardName) && (
-                                <button
-                                  type="button"
-                                  title="Eliminar esta categoría del Builder"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (window.confirm(`¿Quitar la categoría "${rewardName}" del menú? Los reclamos ya registrados seguirán guardados.`)) {
-                                      const updated = configuredRewards.filter(r => r !== rewardName);
-                                      setConfiguredRewards(updated);
-                                      localStorage.setItem('twitch_configured_rewards_v2', JSON.stringify(updated));
-                                    }
-                                  }}
-                                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
-                                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                              <span style={{
-                                padding: '4px 10px',
-                                borderRadius: '20px',
-                                fontSize: '0.8rem',
-                                fontWeight: 800,
-                                background: claims.length > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                color: claims.length > 0 ? '#C084FC' : 'var(--text-muted)'
-                              }}>
-                                {claims.length} {claims.length === 1 ? 'Reclamo' : 'Reclamos'}
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                {claims.length > 0 ? `Último: ${new Date(claims[0].created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : 'Sin reclamos registrados'}
+                              </span>
+                              <span style={{ color: '#A855F7', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                Ver Lista →
                               </span>
                             </div>
                           </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                              {claims.length > 0 ? `Último: ${new Date(claims[0].created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : 'Sin reclamos registrados'}
-                            </span>
-                            <span style={{ color: '#A855F7', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              Ver Lista →
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
 
                   <div style={{ background: 'rgba(15, 23, 42, 0.4)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
