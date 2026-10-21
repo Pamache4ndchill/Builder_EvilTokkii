@@ -72,6 +72,53 @@ export const resolveGameImage = (url) => {
   return `${CLOUDFLARE_R2_BASE_URL}/${trimmed}`;
 };
 
+// Normalizador flexible y robusto de nombres de canjes (GoodTokkii Pack X1, X2, X3, X5)
+export const normalizeRewardName = (name) => {
+  if (!name) return '';
+  const clean = String(name).trim().toLowerCase();
+  const isPackRelated = clean.includes('pack') || clean.includes('sobre') || clean.includes('carta') || clean.includes('goodtokkii') || clean.includes('tokkii');
+  if (isPackRelated) {
+    if (clean.includes('x5') || clean.includes('x 5') || clean.includes('pack 5') || clean.includes('pack_5') || clean.includes('5 carta') || clean.includes('5 cartas') || clean.includes('cinco cartas')) {
+      return 'GoodTokkii Pack X5';
+    }
+    if (clean.includes('x3') || clean.includes('x 3') || clean.includes('pack 3') || clean.includes('pack_3') || clean.includes('3 carta') || clean.includes('3 cartas') || clean.includes('tres cartas')) {
+      return 'GoodTokkii Pack X3';
+    }
+    if (clean.includes('x2') || clean.includes('x 2') || clean.includes('pack 2') || clean.includes('pack_2') || clean.includes('2 carta') || clean.includes('2 cartas') || clean.includes('dos cartas')) {
+      return 'GoodTokkii Pack X2';
+    }
+    if (clean.includes('x1') || clean.includes('x 1') || clean.includes('pack 1') || clean.includes('pack_1') || clean.includes('1 carta') || clean.includes('una carta') || (/goodtokkii\s*pack/i.test(clean))) {
+      return 'GoodTokkii Pack X1';
+    }
+  }
+  return String(name).trim();
+};
+
+// Deduplicar lista de canjes (evita duplicados si existen en base de datos o cachés)
+export const deduplicateRedemptions = (list) => {
+  if (!Array.isArray(list)) return [];
+  const result = [];
+  for (const item of list) {
+    const itemTime = new Date(item.created_at).getTime();
+    const existingIdx = result.findIndex(r => {
+      const sameUser = (r.username || '').toLowerCase() === (item.username || '').toLowerCase();
+      const sameReward = normalizeRewardName(r.reward_name).toLowerCase() === normalizeRewardName(item.reward_name).toLowerCase();
+      const timeDiff = Math.abs(new Date(r.created_at).getTime() - itemTime);
+      return sameUser && sameReward && timeDiff <= 15000;
+    });
+
+    if (existingIdx === -1) {
+      result.push(item);
+    } else {
+      // Si uno está entregado y el otro pendiente, preferir siempre el entregado
+      if (item.status === 'entregado' && result[existingIdx].status !== 'entregado') {
+        result[existingIdx] = item;
+      }
+    }
+  }
+  return result;
+};
+
 function getDbdPerkImageUrl(apiPath) {
   if (!apiPath) return '';
   const parts = apiPath.split('/');
@@ -1041,8 +1088,20 @@ function App() {
 
     const twitchChannel = supabase
       .channel('twitch_redemptions_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'twitch_redemptions' }, () => {
-        fetchLibraryItems(true);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'twitch_redemptions' }, (payload) => {
+        if (payload?.eventType === 'INSERT' && payload?.new) {
+          const localStatus = getLocalStatusMap();
+          const item = {
+            ...payload.new,
+            status: payload.new.status || localStatus[payload.new.id] || 'pendiente'
+          };
+          setTwitchList(prev => deduplicateRedemptions([item, ...prev]));
+        } else if (payload?.eventType === 'DELETE' && payload?.old?.id) {
+          setTwitchList(prev => prev.filter(c => c.id !== payload.old.id));
+        } else {
+          invalidateLibraryCache();
+          fetchLibraryItems(true);
+        }
       })
       .subscribe();
 
@@ -2128,53 +2187,6 @@ function App() {
     return null;
   };
 
-  // Normalizador flexible y robusto de nombres de canjes (GoodTokkii Pack X1, X2, X3, X5)
-  const normalizeRewardName = (name) => {
-    if (!name) return '';
-    const clean = String(name).trim().toLowerCase();
-    const isPackRelated = clean.includes('pack') || clean.includes('sobre') || clean.includes('carta') || clean.includes('goodtokkii') || clean.includes('tokkii');
-    if (isPackRelated) {
-      if (clean.includes('x5') || clean.includes('x 5') || clean.includes('pack 5') || clean.includes('pack_5') || clean.includes('5 carta') || clean.includes('5 cartas') || clean.includes('cinco cartas')) {
-        return 'GoodTokkii Pack X5';
-      }
-      if (clean.includes('x3') || clean.includes('x 3') || clean.includes('pack 3') || clean.includes('pack_3') || clean.includes('3 carta') || clean.includes('3 cartas') || clean.includes('tres cartas')) {
-        return 'GoodTokkii Pack X3';
-      }
-      if (clean.includes('x2') || clean.includes('x 2') || clean.includes('pack 2') || clean.includes('pack_2') || clean.includes('2 carta') || clean.includes('2 cartas') || clean.includes('dos cartas')) {
-        return 'GoodTokkii Pack X2';
-      }
-      if (clean.includes('x1') || clean.includes('x 1') || clean.includes('pack 1') || clean.includes('pack_1') || clean.includes('1 carta') || clean.includes('una carta') || (/goodtokkii\s*pack/i.test(clean))) {
-        return 'GoodTokkii Pack X1';
-      }
-    }
-    return String(name).trim();
-  };
-
-  // Deduplicar lista de canjes (evita duplicados si existen en base de datos o cachés)
-  const deduplicateRedemptions = (list) => {
-    if (!Array.isArray(list)) return [];
-    const result = [];
-    for (const item of list) {
-      const itemTime = new Date(item.created_at).getTime();
-      const existingIdx = result.findIndex(r => {
-        const sameUser = (r.username || '').toLowerCase() === (item.username || '').toLowerCase();
-        const sameReward = normalizeRewardName(r.reward_name).toLowerCase() === normalizeRewardName(item.reward_name).toLowerCase();
-        const timeDiff = Math.abs(new Date(r.created_at).getTime() - itemTime);
-        return sameUser && sameReward && timeDiff <= 15000;
-      });
-
-      if (existingIdx === -1) {
-        result.push(item);
-      } else {
-        // Si uno está entregado y el otro pendiente, preferir siempre el entregado
-        if (item.status === 'entregado' && result[existingIdx].status !== 'entregado') {
-          result[existingIdx] = item;
-        }
-      }
-    }
-    return result;
-  };
-
   // Detector de Canjes de Puntos de Canal en Tiempo Real (Twitch EventSub WebSocket)
   const connectTwitchEventSub = async () => {
     const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
@@ -2290,7 +2302,17 @@ function App() {
                     normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase();
                 });
                 if (!isConfiguredReward) {
-                  return; // Ignorar canjes que no correspondan a categorías agregadas en el Builder
+                  // Si es un canje de pack de cartas oficial, auto-agregar a categorías configuradas
+                  if (rewardTitle.startsWith('GoodTokkii Pack')) {
+                    const updated = [...new Set([...activeConfigured, rewardTitle])];
+                    setConfiguredRewards(updated);
+                    configuredRewardsRef.current = updated;
+                    try {
+                      localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
+                    } catch(e) {}
+                  } else {
+                    return; // Ignorar canjes no relacionados
+                  }
                 }
 
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
@@ -2312,8 +2334,22 @@ function App() {
                   console.warn("Error en auto-entrega TCG:", delivErr);
                 }
 
+                // Inyección instantánea en memoria para actualización inmediata de la UI
+                const tempId = `es_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                const optimisticClaim = {
+                  id: tempId,
+                  reward_name: rewardTitle,
+                  username: viewerName,
+                  created_at: redeemedAt,
+                  status: initialStatus
+                };
+
+                setLatestIncomingClaim({ username: viewerName, reward: rewardTitle, time: Date.now() });
+                setTwitchList(prev => deduplicateRedemptions([optimisticClaim, ...prev]));
+                twitchListRef.current = deduplicateRedemptions([optimisticClaim, ...twitchListRef.current]);
+
                 try {
-                  const { data: insData } = await supabase
+                  const { data: insData, error: insErr } = await supabase
                     .from('twitch_redemptions')
                     .insert([{
                       reward_name: rewardTitle,
@@ -2322,16 +2358,21 @@ function App() {
                     }])
                     .select();
 
+                  if (insErr) {
+                    console.error("Error al insertar canje en Supabase:", insErr);
+                  }
+
                   const savedId = insData?.[0]?.id;
                   if (savedId) {
                     setLocalClaimStatus(savedId, initialStatus);
+                    setTwitchList(prev => prev.map(c => c.id === tempId ? { ...c, id: savedId } : c));
                   }
 
                   invalidateLibraryCache();
-                  fetchLibraryItems(true);
                   triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
                 } catch (insEx) {
                   console.error("Excepción al guardar canje:", insEx);
+                  triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
                 }
               }
             }
@@ -2549,6 +2590,8 @@ function App() {
                   if (insData?.[0]?.id) {
                     setLocalClaimStatus(insData[0].id, initialStatus);
                     knownClaims.push(insData[0]);
+                    const newSyncedClaim = { ...insData[0], status: initialStatus };
+                    setTwitchList(prev => deduplicateRedemptions([newSyncedClaim, ...prev]));
                   }
                   imported++;
                 }
@@ -2928,6 +2971,7 @@ function App() {
     twitchListRef.current = twitchList;
   }, [twitchList]);
   const [selectedRewardName, setSelectedRewardName] = useState(null);
+  const [latestIncomingClaim, setLatestIncomingClaim] = useState(null);
   const [isLoadingTwitch, setIsLoadingTwitch] = useState(false);
   const [showAddRedemptionModal, setShowAddRedemptionModal] = useState(false);
   const [showNewRewardModal, setShowNewRewardModal] = useState(false);
@@ -3338,9 +3382,15 @@ function App() {
 
     setIsLoadingLibrary(true);
     try {
-      const { data: news } = await supabase.from('news_articles').select('*').order('created_at', { ascending: false });
-      const { data: content } = await supabaseWeb.from('content_items').select('*').order('created_at', { ascending: false });
-      const { data: redemptions } = await supabase.from('twitch_redemptions').select('*').order('created_at', { ascending: false });
+      const [newsRes, contentRes, redemptionsRes] = await Promise.allSettled([
+        supabase.from('news_articles').select('*').order('created_at', { ascending: false }),
+        supabaseWeb.from('content_items').select('*').order('created_at', { ascending: false }),
+        supabase.from('twitch_redemptions').select('*').order('created_at', { ascending: false })
+      ]);
+
+      const news = newsRes.status === 'fulfilled' ? newsRes.value?.data : null;
+      const content = contentRes.status === 'fulfilled' ? contentRes.value?.data : null;
+      const redemptions = redemptionsRes.status === 'fulfilled' ? redemptionsRes.value?.data : null;
       
       if (news) setSavedNews(news);
       if (content) setLibraryItems(content);
@@ -5741,17 +5791,28 @@ function App() {
                         Selecciona cualquiera de tus canjes para consultar la lista de viewers que lo reclamaron, ordenados por fecha y listos para copiar con 1 click.
                       </p>
                     </div>
-                    {configuredRewards.length < 3 && (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button
                         type="button"
-                        className="btn-add"
-                        onClick={handleRestoreDefaultRewards}
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        title="Restaurar las categorías oficiales de cartas (Packs X1, X2 y X3)"
+                        className="btn-submit"
+                        onClick={() => setSelectedRewardName('ALL')}
+                        style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #9333EA, #7C3AED)' }}
+                        title="Ver todos los canjes recibidos juntos en vivo"
                       >
-                        <RefreshCw size={13} /> Restaurar Packs de Cartas
+                        <Layers size={16} /> Ver Todos los Canjes ({twitchList.length})
                       </button>
-                    )}
+                      {configuredRewards.length < 3 && (
+                        <button
+                          type="button"
+                          className="btn-add"
+                          onClick={handleRestoreDefaultRewards}
+                          style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          title="Restaurar las categorías oficiales de cartas (Packs X1, X2 y X3)"
+                        >
+                          <RefreshCw size={13} /> Restaurar Packs de Cartas
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '30px' }}>
@@ -5902,7 +5963,10 @@ function App() {
                   </div>
                 </div>
               ) : (() => {
-                  const claimsForReward = deduplicateRedemptions((twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(selectedRewardName)));
+                  const claimsForReward = deduplicateRedemptions((twitchList || []).filter(t => {
+                    if (selectedRewardName === 'ALL') return true;
+                    return normalizeRewardName(t.reward_name) === normalizeRewardName(selectedRewardName);
+                  }));
                   
                   // Agrupar por día
                   const groupedByDay = claimsForReward.reduce((acc, claim) => {
@@ -5924,7 +5988,7 @@ function App() {
                   return (
                     <>
                       {/* Top Bar for Selected Reward */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <button 
                             type="button" 
@@ -5932,18 +5996,18 @@ function App() {
                             onClick={() => setSelectedRewardName(null)}
                             style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                           >
-                            <ChevronLeft size={16} /> Todas las categorías
+                            <ChevronLeft size={16} /> Volver a Categorías
                           </button>
                           <h2 style={{ color: '#A855F7', display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.3rem' }}>
                             <Gift size={24} />
-                            Canje: "{selectedRewardName}"
+                            {selectedRewardName === 'ALL' ? 'Todos los Canjes de Twitch' : `Canje: "${selectedRewardName}"`}
                           </h2>
                           <span style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#A855F7', padding: '4px 12px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.85rem' }}>
                             {claimsForReward.length} {claimsForReward.length === 1 ? 'Reclamo' : 'Reclamos'}
                           </span>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                           {claimsForReward.length > 0 && (
                             <button 
                               className="btn-add" 
@@ -5956,82 +6020,189 @@ function App() {
                           <button
                             className="btn-submit"
                             onClick={() => {
-                              setManualRewardName(selectedRewardName);
+                              setManualRewardName(selectedRewardName === 'ALL' ? (configuredRewards[0] || 'GoodTokkii Pack X1') : selectedRewardName);
                               setShowAddRedemptionModal(true);
                             }}
                             style={{ width: 'auto', padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
                           >
                             <Plus size={15} /> Añadir Usuario
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(selectedRewardName)}
-                            style={{
-                              position: 'static',
-                              width: 'auto',
-                              padding: '8px 14px',
-                              fontSize: '0.85rem',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              background: 'rgba(239, 68, 68, 0.15)',
-                              color: '#EF4444',
-                              border: '1px solid rgba(239, 68, 68, 0.35)',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
-                              e.currentTarget.style.borderColor = '#EF4444';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)';
-                            }}
-                            title="Eliminar este canje de la lista de categorías del Builder"
-                          >
-                            <Trash2 size={15} /> Eliminar Canje
-                          </button>
+                          {selectedRewardName !== 'ALL' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(selectedRewardName)}
+                              style={{
+                                position: 'static',
+                                width: 'auto',
+                                padding: '8px 14px',
+                                fontSize: '0.85rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                color: '#EF4444',
+                                border: '1px solid rgba(239, 68, 68, 0.35)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                                e.currentTarget.style.borderColor = '#EF4444';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+                              }}
+                              title="Eliminar este canje de la lista de categorías del Builder"
+                            >
+                              <Trash2 size={15} /> Eliminar Canje
+                            </button>
+                          )}
                         </div>
                       </div>
+
+                      {/* Category Switcher Tabs */}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', padding: '10px 14px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '12px', border: '1px solid var(--border-color)', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginRight: '4px' }}>
+                          Filtrar:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRewardName('ALL')}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            border: selectedRewardName === 'ALL' ? '1px solid #A855F7' : '1px solid rgba(255, 255, 255, 0.1)',
+                            background: selectedRewardName === 'ALL' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                            color: selectedRewardName === 'ALL' ? '#C084FC' : 'var(--text-muted)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          🌐 Todos los Canjes ({twitchList.length})
+                        </button>
+                        {configuredRewards.map(reward => {
+                          const count = (twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(reward)).length;
+                          const isSel = selectedRewardName === reward;
+                          return (
+                            <button
+                              key={reward}
+                              type="button"
+                              onClick={() => setSelectedRewardName(reward)}
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                border: isSel ? '1px solid #A855F7' : '1px solid rgba(255, 255, 255, 0.1)',
+                                background: isSel ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                                color: isSel ? '#C084FC' : 'var(--text-muted)',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              🎁 {reward} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Banner si llega un canje en vivo en otra categoría */}
+                      {latestIncomingClaim && selectedRewardName && selectedRewardName !== 'ALL' && normalizeRewardName(selectedRewardName) !== normalizeRewardName(latestIncomingClaim.reward) && (
+                        <div style={{
+                          background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.2) 0%, rgba(56, 189, 248, 0.15) 100%)',
+                          border: '1px solid #A855F7',
+                          borderRadius: '10px',
+                          padding: '12px 18px',
+                          marginBottom: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          flexWrap: 'wrap'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Sparkles size={18} color="#A855F7" />
+                            <span style={{ fontSize: '0.88rem', color: '#F8FAFC' }}>
+                              ¡Nuevo canje en vivo! <strong>@{latestIncomingClaim.username}</strong> canjeó <strong>"{latestIncomingClaim.reward}"</strong>.
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRewardName(latestIncomingClaim.reward)}
+                              style={{ background: '#A855F7', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              Ir a {latestIncomingClaim.reward}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRewardName('ALL')}
+                              style={{ background: 'rgba(255, 255, 255, 0.12)', color: '#F8FAFC', border: '1px solid rgba(255, 255, 255, 0.25)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              Ver Todos
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setLatestIncomingClaim(null)}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       
                       {claimsForReward.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
                           <Gift size={48} opacity={0.3} color="#A855F7" style={{ marginBottom: '14px' }} />
                           <h3 style={{ color: 'var(--text-main)', fontSize: '1.2rem', marginBottom: '8px' }}>
-                            Aún no hay reclamos para "{selectedRewardName}"
+                            {selectedRewardName === 'ALL' ? 'Aún no hay canjes registrados en Twitch' : `Aún no hay reclamos para "${selectedRewardName}"`}
                           </h3>
                           <p style={{ maxWidth: '500px', margin: '0 auto 20px auto', fontSize: '0.88rem' }}>
-                            En cuanto un espectador canjee esta recompensa en tu stream de Twitch con puntos de canal, aparecerá automáticamente aquí.
+                            En cuanto un espectador canjee una recompensa en tu stream de Twitch con puntos de canal, aparecerá automáticamente aquí.
                           </p>
                           <button
                             type="button"
                             className="btn-submit"
                             onClick={async () => {
                               const testUser = `Viewer_Prueba_${Math.floor(Math.random() * 900 + 100)}`;
+                              const targetReward = selectedRewardName === 'ALL' ? (configuredRewards[0] || 'GoodTokkii Pack X1') : selectedRewardName;
                               let initialStatus = 'pendiente';
                               try {
-                                const delivery = await deliverPackForRedemption(testUser, selectedRewardName);
+                                const delivery = await deliverPackForRedemption(testUser, targetReward);
                                 if (delivery && delivery.delivered) {
                                   initialStatus = 'entregado';
                                 }
                               } catch (dErr) {}
 
-                              const { data: insData } = await supabase.from('twitch_redemptions').insert([{
-                                reward_name: selectedRewardName,
+                              const tempTestId = `test_${Date.now()}`;
+                              const testClaim = {
+                                id: tempTestId,
+                                reward_name: targetReward,
                                 username: testUser,
-                                created_at: new Date().toISOString()
+                                created_at: new Date().toISOString(),
+                                status: initialStatus
+                              };
+                              setTwitchList(prev => deduplicateRedemptions([testClaim, ...prev]));
+
+                              const { data: insData } = await supabase.from('twitch_redemptions').insert([{
+                                reward_name: targetReward,
+                                username: testUser,
+                                created_at: testClaim.created_at
                               }]).select();
 
                               const savedId = insData?.[0]?.id;
                               if (savedId) {
                                 setLocalClaimStatus(savedId, initialStatus);
+                                setTwitchList(prev => prev.map(c => c.id === tempTestId ? { ...c, id: savedId } : c));
                               }
 
                               invalidateLibraryCache();
-                              fetchLibraryItems(true);
                               triggerToast(`🧪 Canje de prueba registrado para @${testUser} (${initialStatus})`);
                             }}
                             style={{ width: 'auto', padding: '8px 20px', borderRadius: '8px', fontSize: '0.85rem', margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -6097,8 +6268,11 @@ function App() {
                                         }}
                                       >
                                         <div>
-                                          <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', color: 'var(--text-main)' }}>
+                                          <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', color: 'var(--text-main)', flexWrap: 'wrap' }}>
                                             <Users size={14} color={isDelivered ? "#22c55e" : "#eab308"} /> {claim.username}
+                                            <span style={{ fontSize: '0.72rem', background: 'rgba(168, 85, 247, 0.15)', color: '#C084FC', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                                              {claim.reward_name}
+                                            </span>
                                           </strong>
                                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                             A las {new Date(claim.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
@@ -6233,15 +6407,26 @@ function App() {
                         console.warn("No se pudo auto-entregar:", dErr);
                       }
 
+                      const tempManualId = `manual_${Date.now()}`;
+                      const manualClaim = {
+                        id: tempManualId,
+                        reward_name: manualRewardName,
+                        username: cleanUser,
+                        created_at: new Date().toISOString(),
+                        status: initialStatus
+                      };
+                      setTwitchList(prev => deduplicateRedemptions([manualClaim, ...prev]));
+
                       const { data: insData } = await supabase.from('twitch_redemptions').insert([{
                         reward_name: manualRewardName,
                         username: cleanUser,
-                        created_at: new Date().toISOString()
+                        created_at: manualClaim.created_at
                       }]).select();
 
                       const savedId = insData?.[0]?.id;
                       if (savedId) {
                         setLocalClaimStatus(savedId, initialStatus);
+                        setTwitchList(prev => prev.map(c => c.id === tempManualId ? { ...c, id: savedId } : c));
                       }
 
                       triggerToast(initialStatus === 'entregado'
@@ -6249,7 +6434,6 @@ function App() {
                         : `⚠️ Reclamo añadido para @${cleanUser} (Pendiente: no registrado aún en TCG)`
                       );
                       invalidateLibraryCache();
-                      fetchLibraryItems(true);
                       setManualUsername('');
                       setShowAddRedemptionModal(false);
                     } catch (err) {
