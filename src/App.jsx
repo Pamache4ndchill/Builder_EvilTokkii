@@ -3446,7 +3446,7 @@ function App() {
 
     if (!isSilent) setIsLoadingMostStreamed(true);
     try {
-      const { data, error } = await supabaseWeb
+      const { data, error } = await supabase
         .from('most_streamed')
         .select('*')
         .order('order_index', { ascending: true });
@@ -3506,7 +3506,7 @@ function App() {
   const handleDeleteMostStreamedItem = async (id, title) => {
     if (!window.confirm(`¿Estás seguro de que deseas eliminar "${title || 'este juego'}" de la lista?`)) return;
     try {
-      const { error } = await supabaseWeb
+      const { error } = await supabase
         .from('most_streamed')
         .delete()
         .eq('id', id);
@@ -3525,7 +3525,7 @@ function App() {
   const handleAddMostStreamedItem = async () => {
     try {
       const newOrder = mostStreamed.length + 1;
-      const { data, error } = await supabaseWeb
+      const { data, error } = await supabase
         .from('most_streamed')
         .insert([{
           title: 'Nuevo Juego',
@@ -3561,7 +3561,7 @@ function App() {
           description: item.description !== undefined ? item.description : '',
           order_index: item.order_index
       };
-      const { error } = await supabaseWeb
+      const { error } = await supabase
         .from('most_streamed')
         .upsert(payload);
       
