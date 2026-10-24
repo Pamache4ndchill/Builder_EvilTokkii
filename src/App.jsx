@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X, Loader2, Upload } from 'lucide-react';
+import { Globe, Tv, Bot, Plus, Sparkles, Award, Image as ImageIcon, Type, Trash2, Send, LayoutTemplate, Newspaper, FilePlus, ChevronLeft, Bold, Italic, Underline, List, ListOrdered, RemoveFormatting, Calendar, Users, Gift, Cake, Key, Crown, ShieldCheck, CheckCircle2, Save, Lock, AlertCircle, LogOut, Copy, ChevronDown, ChevronUp, Gamepad2, MessageSquare, Play, Square, Settings, Wifi, WifiOff, Pause, SkipForward, Trophy, HelpCircle, Disc, Layers, Volume2, VolumeX, Mic, UserCheck, UserX, ExternalLink, RefreshCw, X, Loader2, Upload, Skull } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { deliverPackForRedemption, getLocalStatusMap, setLocalClaimStatus } from './services/tcgBridgeService';
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
@@ -13,6 +13,7 @@ import BotCredentialsManager from './components/BotCredentialsManager';
 import ChatCommandsManager from './components/ChatCommandsManager';
 import PointsWheelManager, { PointsWheelOBSOverlay } from './components/PointsWheelManager';
 import TTSVoiceManager, { TTSAudioOBSOverlay, DEFAULT_CHARACTERS, TTSSpeechEngine } from './components/TTSVoiceManager';
+import RuletaSangrientaManager, { RuletaSangrientaOBSOverlay } from './components/RuletaSangrienta';
 import UserPermissionsManager from './components/UserPermissionsManager';
 import PendingAuthorizationsManager from './components/PendingAuthorizationsManager';
 
@@ -561,6 +562,11 @@ function App() {
   if (isTTSAudioOverlay) {
     return <TTSAudioOBSOverlay supabase={supabase} />;
   }
+
+  const isRuletaSangrientaOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overlay') === 'ruleta_sangrienta';
+  if (isRuletaSangrientaOverlay) {
+    return <RuletaSangrientaOBSOverlay supabase={supabase} />;
+  }
   const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('builder_session') === 'true');
   const [sessionEmail, setSessionEmail] = useState(localStorage.getItem('builder_email') || '');
   const [sessionUsername, setSessionUsername] = useState(localStorage.getItem('builder_username') || '');
@@ -679,6 +685,8 @@ function App() {
           return sessionPermissions.access_tts_voices !== undefined ? !!sessionPermissions.access_tts_voices : (sessionPermissions.access_twitch || true);
         case 'points_wheel':
           return sessionPermissions.access_points_wheel !== undefined ? !!sessionPermissions.access_points_wheel : (sessionPermissions.access_twitch || sessionPermissions.access_ruleta || true);
+        case 'ruleta_sangrienta':
+          return sessionPermissions.access_ruleta_sangrienta !== undefined ? !!sessionPermissions.access_ruleta_sangrienta : true;
         case 'tierlists':
           return sessionPermissions.access_tierlists !== undefined ? !!sessionPermissions.access_tierlists : true;
         case 'admin':
@@ -1784,7 +1792,7 @@ function App() {
   const pingIntervalRef = useRef(null);
   const eventSubWsRef = useRef(null);
   const seenTwitchRedemptionIdsRef = useRef(new Set());
-  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3']);
+  const configuredRewardsRef = useRef(['GoodTokkii Pack X1', 'GoodTokkii Pack X3']);
   const [eventSubStatus, setEventSubStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected' | 'missing_scope'
 
   const handleTwitchTTSMessage = (user, fullText, rawIrcMessage = '') => {
@@ -2294,25 +2302,46 @@ function App() {
                 });
                 if (alreadyExists) return;
 
-                // Verificar si la recompensa coincide con alguna categoría configurada en el Builder
+                // Verificar si la recompensa coincide con alguna categoría configurada en el Builder (Cartas/Packs)
                 const activeConfigured = configuredRewardsRef.current || [];
                 const isConfiguredReward = activeConfigured.some(c => {
                   const cleanC = c.trim().toLowerCase();
                   return cleanC === rawTitle.trim().toLowerCase() ||
                     normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase();
                 });
-                if (!isConfiguredReward) {
-                  // Si es un canje de pack de cartas oficial, auto-agregar a categorías configuradas
-                  if (rewardTitle.startsWith('GoodTokkii Pack')) {
-                    const updated = [...new Set([...activeConfigured, rewardTitle])];
-                    setConfiguredRewards(updated);
-                    configuredRewardsRef.current = updated;
+
+                // Verificar si es un canje de la Ruleta Sangrienta o poderes de la ruleta
+                const isRuletaReward = rewardTitle.toLowerCase() === 'ruleta sangrienta' ||
+                  rawTitle.toLowerCase() === 'ruleta sangrienta' ||
+                  (() => {
                     try {
-                      localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
+                      const savedPowers = localStorage.getItem('ruleta_sangrienta_powers');
+                      if (savedPowers) {
+                        const parsed = JSON.parse(savedPowers);
+                        return Array.isArray(parsed) && parsed.some(p => p.name.toLowerCase() === rawTitle.toLowerCase() || p.name.toLowerCase() === rewardTitle.toLowerCase());
+                      }
                     } catch(e) {}
-                  } else {
-                    return; // Ignorar canjes no relacionados
+                    return false;
+                  })();
+
+                if (!isConfiguredReward && !isRuletaReward) {
+                  return; // Ignorar canjes que no pertenezcan ni a cartas ni a ruleta
+                }
+
+                // Si es un canje exclusivo de la Ruleta Sangrienta, guardarlo en Supabase para que la ruleta lo tome y salir sin contaminar las categorías de cartas
+                if (isRuletaReward && !isConfiguredReward) {
+                  console.log(`🎰 [Ruleta Twitch Detectado]: @${viewerName} canjeó "${rawTitle}"`);
+                  addBotLog(`🎰 [Ruleta Twitch Detectado]: @${viewerName} canjeó "${rawTitle}"`);
+                  try {
+                    await supabase.from('twitch_redemptions').insert([{
+                      reward_name: rawTitle,
+                      username: viewerName,
+                      created_at: redeemedAt
+                    }]);
+                  } catch(dbErr) {
+                    console.warn("Error guardando canje de ruleta en Supabase:", dbErr);
                   }
+                  return;
                 }
 
                 console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
@@ -2469,21 +2498,22 @@ function App() {
     syncTwitchCustomRewards();
   };
 
-  // Sincronizar canjes previos de Twitch vía Helix API
+  // Sincronizar canjes previos de Twitch vía Helix API (Solicitudes del día y recientes)
   const syncTwitchCustomRewards = async () => {
     const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
     const botToken = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
     const rawToken = broadcasterToken || botToken;
     if (!rawToken) {
-      triggerToast('⚠️ Conecta un Token con permiso de canjes primero.');
+      triggerToast('⚠️ Conecta tu Token de Streamer con permiso de canjes primero.');
       return;
     }
 
     setIsSyncingTwitch(true);
     try {
-      triggerToast('🔄 Consultando canjes en Twitch...');
+      triggerToast('🔄 Consultando todas las solicitudes de canjes en Twitch...');
       const clientId = await getTwitchClientId(rawToken);
       let broadcasterId = '1131620140'; // eviltokkii por defecto
+      const currentChannel = (botChannelRef.current || localStorage.getItem('twitch_bot_channel') || 'eviltokkii').toLowerCase().replace(/^#/, '').trim();
 
       try {
         const valRes = await fetch('https://id.twitch.tv/oauth2/validate', {
@@ -2491,7 +2521,12 @@ function App() {
         });
         if (valRes.ok) {
           const valData = await valRes.json();
-          if (valData.user_id) broadcasterId = valData.user_id;
+          if (valData.user_id && (valData.login || '').toLowerCase() === currentChannel) {
+            broadcasterId = valData.user_id;
+          } else {
+            const targetId = await getTwitchUserId(currentChannel, rawToken);
+            if (targetId) broadcasterId = targetId;
+          }
         }
       } catch(e) {}
 
@@ -2507,7 +2542,7 @@ function App() {
         const err = await rewardsRes.json().catch(() => ({}));
         console.warn("Could not fetch rewards:", rewardsRes.status, err);
         if (rewardsRes.status === 403 || rewardsRes.status === 401) {
-          triggerToast('⚠️ El token no tiene autorización para consultar canjes de @eviltokkii.');
+          triggerToast('⚠️ El token no tiene autorización para consultar canjes de @' + currentChannel + ' (requiere permiso channel:read:redemptions).');
         } else {
           triggerToast(`⚠️ Error al consultar canjes (${rewardsRes.status})`);
         }
@@ -2518,9 +2553,9 @@ function App() {
       const rewards = rewardsData.data || [];
       console.log("Rewards de Twitch obtenidos:", rewards.map(r => r.title));
 
-      // Sincronizar reclamos de todos los canjes que coincidan con las categorías configuradas
+      // Sincronizar ÚNICAMENTE los canjes que la streamer ya tiene configurados en la casilla
       const activeConfigured = configuredRewardsRef.current || [];
-      let targetRewards = rewards.filter(r => {
+      const targetRewards = rewards.filter(r => {
         const rawTitle = (r.title || '').trim().toLowerCase();
         const norm = normalizeRewardName(r.title).toLowerCase();
         return activeConfigured.some(c => {
@@ -2528,6 +2563,12 @@ function App() {
           return cleanC === rawTitle || normalizeRewardName(c).toLowerCase() === norm;
         });
       });
+
+      if (targetRewards.length === 0) {
+        triggerToast(`ℹ️ Ninguno de los canjes agregados (${activeConfigured.join(', ')}) se encontró en Twitch.`);
+        setIsSyncingTwitch(false);
+        return;
+      }
 
       // Pre-cargar canjes existentes de Supabase para evitar duplicados
       const { data: dbExisting } = await supabase
@@ -2538,23 +2579,42 @@ function App() {
       const seenTwitchIds = new Set();
       let imported = 0;
 
+      // Calcular el corte para solicitudes del día de hoy (desde las 00:00:00 de hoy en hora local)
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const cutoffTimeMs = startOfToday.getTime();
+
       for (const r of targetRewards) {
         const normTitle = normalizeRewardName(r.title);
 
         // Consultar tanto canjes en cola (UNFULFILLED) como completados/auto-aprobados (FULFILLED)
         for (const stat of ['UNFULFILLED', 'FULFILLED']) {
-          try {
-            const redRes = await fetch(`https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions?broadcaster_id=${broadcasterId}&reward_id=${r.id}&status=${stat}&first=50&sort=NEWEST`, {
-              headers: {
-                'Authorization': `Bearer ${rawToken}`,
-                'Client-Id': clientId
+          let cursor = null;
+          let page = 0;
+          let hasMorePages = true;
+
+          while (hasMorePages && page < 6) { // Hasta 300 canjes por cada estado
+            page++;
+            try {
+              let url = `https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions?broadcaster_id=${broadcasterId}&reward_id=${r.id}&status=${stat}&first=50&sort=NEWEST`;
+              if (cursor) {
+                url += `&after=${encodeURIComponent(cursor)}`;
               }
-            });
-            if (redRes.ok) {
+
+              const redRes = await fetch(url, {
+                headers: {
+                  'Authorization': `Bearer ${rawToken}`,
+                  'Client-Id': clientId
+                }
+              });
+
+              if (!redRes.ok) break;
+
               const redData = await redRes.json();
               const list = redData.data || [];
+              if (list.length === 0) break;
+
               for (const item of list) {
-                // Deduplicar si ya procesamos este ID de canje de Twitch en esta corrida
                 if (item.id) {
                   if (seenTwitchIds.has(item.id)) continue;
                   seenTwitchIds.add(item.id);
@@ -2564,12 +2624,19 @@ function App() {
                 const redeemedAt = item.redeemed_at || new Date().toISOString();
                 const targetTime = new Date(redeemedAt).getTime();
 
-                // Verificar si ya existe en Supabase o en memoria (mismo usuario, recompensa y timestamp dentro de 15s)
+                // Si son canjes completados que son de días anteriores a hoy, detener paginación de este estado
+                if (stat === 'FULFILLED' && targetTime < cutoffTimeMs) {
+                  hasMorePages = false;
+                  continue;
+                }
+
+                // Verificar si ya existe en Supabase o en memoria
                 const alreadyExists = knownClaims.some(c => {
+                  if (c.id && item.id && c.id === item.id) return true;
                   const sameUser = (c.username || '').toLowerCase() === (uName || '').toLowerCase();
                   const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === normTitle.toLowerCase();
                   const diff = Math.abs(new Date(c.created_at).getTime() - targetTime);
-                  return sameUser && sameReward && diff <= 15000;
+                  return sameUser && sameReward && diff <= 30000;
                 });
 
                 if (!alreadyExists) {
@@ -2581,24 +2648,45 @@ function App() {
                     }
                   } catch (delivErr) {}
 
-                  const { data: insData } = await supabase.from('twitch_redemptions').insert([{
+                  let savedClaim = null;
+                  try {
+                    const { data: insData } = await supabase.from('twitch_redemptions').insert([{
+                      reward_name: normTitle,
+                      username: uName,
+                      created_at: redeemedAt
+                    }]).select();
+
+                    if (insData?.[0]) {
+                      savedClaim = insData[0];
+                    }
+                  } catch (dbErr) {
+                    console.warn("Error guardando canje en Supabase:", dbErr);
+                  }
+
+                  const claimObj = savedClaim || {
+                    id: `twitch_${item.id || Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
                     reward_name: normTitle,
                     username: uName,
-                    created_at: redeemedAt
-                  }]).select();
+                    created_at: redeemedAt,
+                    status: initialStatus
+                  };
 
-                  if (insData?.[0]?.id) {
-                    setLocalClaimStatus(insData[0].id, initialStatus);
-                    knownClaims.push(insData[0]);
-                    const newSyncedClaim = { ...insData[0], status: initialStatus };
-                    setTwitchList(prev => deduplicateRedemptions([newSyncedClaim, ...prev]));
-                  }
+                  setLocalClaimStatus(claimObj.id, initialStatus);
+                  knownClaims.push(claimObj);
+                  const newSyncedClaim = { ...claimObj, status: initialStatus };
+                  setTwitchList(prev => deduplicateRedemptions([newSyncedClaim, ...prev]));
                   imported++;
                 }
               }
+
+              cursor = redData.pagination?.cursor;
+              if (!cursor) {
+                hasMorePages = false;
+              }
+            } catch (pageErr) {
+              console.warn(`Error en paginación de ${r.title} (${stat}):`, pageErr);
+              break;
             }
-          } catch (innerErr) {
-            console.warn(`Error consultando canjes (${stat}) de ${r.title}:`, innerErr);
           }
         }
       }
@@ -2606,9 +2694,9 @@ function App() {
       invalidateLibraryCache();
       await fetchLibraryItems(true);
       if (imported > 0) {
-        triggerToast(`🎉 ¡Éxito! Se sincronizaron ${imported} canjes de Twitch.`);
+        triggerToast(`🎉 ¡Éxito! Se sincronizaron ${imported} solicitudes de hoy para tus canjes agregados.`);
       } else {
-        triggerToast('✅ Conexión con Twitch correcta. No hay canjes pendientes nuevos.');
+        triggerToast(`✅ Canjes agregados al día. No hay nuevas solicitudes hoy.`);
       }
     } catch (e) {
       console.error("Error sincronizando con Twitch Helix:", e);
@@ -2883,7 +2971,7 @@ function App() {
   const [isLoadingParticipations, setIsLoadingParticipations] = useState(false);
 
   // Twitch Redemptions State
-  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3'];
+  const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
   const [configuredRewards, setConfiguredRewards] = useState(() => {
     try {
       localStorage.removeItem('twitch_configured_rewards');
@@ -2951,15 +3039,15 @@ function App() {
     });
   };
 
-  // Restaurar categorías de cartas oficiales por defecto
+  // Restaurar categorías de cartas oficiales por defecto (GoodTokkii Pack X1 y X3)
   const handleRestoreDefaultRewards = () => {
-    const defaults = ['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3'];
+    const defaults = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
     setConfiguredRewards(defaults);
     configuredRewardsRef.current = defaults;
     try {
       localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(defaults));
     } catch(e) {}
-    triggerToast('✨ Canjes de cartas por defecto restaurados (Pack X1, X2 y X3).');
+    triggerToast('✨ Canjes restaurados a GoodTokkii Pack X1 y GoodTokkii Pack X3.');
   };
 
   useEffect(() => {
@@ -5305,6 +5393,19 @@ function App() {
                   <p>Ejecuta la sincronización automática de 3 noticias de videojuegos y 3 de anime desde los feeds oficiales.</p>
                 </div>
               </div>
+
+              <div 
+                className={`dashboard-card theme-pink ${!hasAccess('ruleta_sangrienta') ? 'restricted' : ''}`} 
+                onClick={() => restrictedNavigate('view_ruleta_sangrienta', 'ruleta_sangrienta')}
+              >
+                <div className="icon-bg" style={{ background: hasAccess('ruleta_sangrienta') ? 'rgba(244, 114, 182, 0.15)' : 'rgba(15, 23, 42, 0.5)', color: '#F472B6' }}>
+                  <Skull size={26} color="#F472B6" />
+                </div>
+                <div className="dashboard-card-info">
+                  <h3 style={{ color: 'var(--text-main)' }}>Ruleta Sangrienta</h3>
+                  <p>Doble ruleta temática con overlay transparente 1920x1080 para OBS y gestión de participantes.</p>
+                </div>
+              </div>
             </div>
 
             {/* 3. SECCIÓN: HERRAMIENTAS TWITCH (Celeste #38BDF8) */}
@@ -5801,17 +5902,15 @@ function App() {
                       >
                         <Layers size={16} /> Ver Todos los Canjes ({twitchList.length})
                       </button>
-                      {configuredRewards.length < 3 && (
-                        <button
-                          type="button"
-                          className="btn-add"
-                          onClick={handleRestoreDefaultRewards}
-                          style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          title="Restaurar las categorías oficiales de cartas (Packs X1, X2 y X3)"
-                        >
-                          <RefreshCw size={13} /> Restaurar Packs de Cartas
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="btn-add"
+                        onClick={handleRestoreDefaultRewards}
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        title="Dejar únicamente GoodTokkii Pack X1 y GoodTokkii Pack X3"
+                      >
+                        <RefreshCw size={13} /> Dejar solo Pack X1 y X3
+                      </button>
                     </div>
                   </div>
 
@@ -7062,6 +7161,8 @@ function App() {
               triggerToast={triggerToast}
             />
           </div>
+        ) : view === 'view_ruleta_sangrienta' ? (
+          <RuletaSangrientaManager onBack={() => setView('home')} supabase={supabase} />
         ) : view === 'view_points_wheel' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
             <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
