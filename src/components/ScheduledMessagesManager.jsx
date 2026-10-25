@@ -243,6 +243,31 @@ export default function ScheduledMessagesManager({
     const wsRef = useRef(null);
     const intervalsRef = useRef([]);
     const chatCounterRef = useRef(0);
+    const instantMsgRef = useRef(null);
+    const instantAnnounceRef = useRef(null);
+    const modalMsgRef = useRef(null);
+
+    // Auto-ajustar altura dinámica en campos de texto de mensajes
+    useEffect(() => {
+        if (instantMsgRef.current) {
+            instantMsgRef.current.style.height = 'auto';
+            instantMsgRef.current.style.height = `${Math.max(42, instantMsgRef.current.scrollHeight)}px`;
+        }
+    }, [instantMsgText]);
+
+    useEffect(() => {
+        if (instantAnnounceRef.current) {
+            instantAnnounceRef.current.style.height = 'auto';
+            instantAnnounceRef.current.style.height = `${Math.max(42, instantAnnounceRef.current.scrollHeight)}px`;
+        }
+    }, [instantAnnounceText]);
+
+    useEffect(() => {
+        if (modalMsgRef.current) {
+            modalMsgRef.current.style.height = 'auto';
+            modalMsgRef.current.style.height = `${Math.max(100, modalMsgRef.current.scrollHeight)}px`;
+        }
+    }, [editingMsg?.text, isModalOpen]);
 
     const addLog = useCallback((type, message) => {
         const time = new Date().toLocaleTimeString('es-ES', { hour12: false });
@@ -817,18 +842,32 @@ export default function ScheduledMessagesManager({
                         <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Send size={16} color="#EC4899" /> Enviar Mensaje Instantáneo
                         </h4>
-                        <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
-                            <input 
-                                type="text"
+                        <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'flex-end' }}>
+                            <textarea 
+                                ref={instantMsgRef}
+                                rows={1}
                                 className="form-control"
                                 placeholder="Escribe algo en el chat de Twitch..."
                                 value={instantMsgText}
                                 onChange={(e) => setInstantMsgText(e.target.value)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && instantMsgText.trim()) {
-                                        sendChatMessage(instantMsgText.trim(), true);
-                                        setInstantMsgText('');
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        if (instantMsgText.trim()) {
+                                            sendChatMessage(instantMsgText.trim(), true);
+                                            setInstantMsgText('');
+                                        }
                                     }
+                                }}
+                                style={{
+                                    minHeight: '42px',
+                                    height: '42px',
+                                    maxHeight: '180px',
+                                    resize: 'none',
+                                    overflowY: 'auto',
+                                    lineHeight: '1.4',
+                                    padding: '9px 12px',
+                                    flex: 1
                                 }}
                             />
 
@@ -837,6 +876,8 @@ export default function ScheduledMessagesManager({
                                 title="Insertar Emojis"
                                 onClick={() => setShowInstantEmoji(!showInstantEmoji)}
                                 style={{
+                                    height: '42px',
+                                    minHeight: '42px',
                                     padding: '0 12px',
                                     background: showInstantEmoji ? 'rgba(236, 72, 153, 0.25)' : 'rgba(255, 255, 255, 0.06)',
                                     border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -845,7 +886,8 @@ export default function ScheduledMessagesManager({
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
+                                    justifyContent: 'center',
+                                    flexShrink: 0
                                 }}
                             >
                                 😊
@@ -865,10 +907,16 @@ export default function ScheduledMessagesManager({
                                 className="btn-submit"
                                 style={{
                                     width: 'auto',
+                                    height: '42px',
+                                    minHeight: '42px',
                                     padding: '0 18px',
                                     background: 'var(--primary)',
                                     color: '#fff',
-                                    borderRadius: '8px'
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
                                 }}
                                 onClick={() => {
                                     if (instantMsgText.trim()) {
@@ -893,23 +941,37 @@ export default function ScheduledMessagesManager({
                                 Banner Twitch
                             </span>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
-                            <input 
-                                type="text"
+                        <div style={{ display: 'flex', gap: '8px', position: 'relative', alignItems: 'flex-end' }}>
+                            <textarea 
+                                ref={instantAnnounceRef}
+                                rows={1}
                                 className="form-control"
                                 placeholder="Escribe un anuncio para destacarlo en grande en el chat..."
                                 value={instantAnnounceText}
                                 onChange={(e) => setInstantAnnounceText(e.target.value)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && instantAnnounceText.trim()) {
-                                        const textToSend = instantAnnounceText.trim().startsWith('/announce') 
-                                            ? instantAnnounceText.trim() 
-                                            : `/announce ${instantAnnounceText.trim()}`;
-                                        sendChatMessage(textToSend, true);
-                                        setInstantAnnounceText('');
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        if (instantAnnounceText.trim()) {
+                                            const textToSend = instantAnnounceText.trim().startsWith('/announce') 
+                                                ? instantAnnounceText.trim() 
+                                                : `/announce ${instantAnnounceText.trim()}`;
+                                            sendChatMessage(textToSend, true);
+                                            setInstantAnnounceText('');
+                                        }
                                     }
                                 }}
-                                style={{ border: '1px solid rgba(145, 70, 255, 0.4)' }}
+                                style={{
+                                    border: '1px solid rgba(145, 70, 255, 0.4)',
+                                    minHeight: '42px',
+                                    height: '42px',
+                                    maxHeight: '180px',
+                                    resize: 'none',
+                                    overflowY: 'auto',
+                                    lineHeight: '1.4',
+                                    padding: '9px 12px',
+                                    flex: 1
+                                }}
                             />
 
                             <button
@@ -917,6 +979,8 @@ export default function ScheduledMessagesManager({
                                 title="Insertar Emojis"
                                 onClick={() => setShowAnnounceEmoji(!showAnnounceEmoji)}
                                 style={{
+                                    height: '42px',
+                                    minHeight: '42px',
                                     padding: '0 12px',
                                     background: showAnnounceEmoji ? 'rgba(145, 70, 255, 0.35)' : 'rgba(255, 255, 255, 0.06)',
                                     border: '1px solid rgba(145, 70, 255, 0.3)',
@@ -925,7 +989,8 @@ export default function ScheduledMessagesManager({
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
+                                    justifyContent: 'center',
+                                    flexShrink: 0
                                 }}
                             >
                                 😊
@@ -945,12 +1010,18 @@ export default function ScheduledMessagesManager({
                                 className="btn-submit"
                                 style={{
                                     width: 'auto',
+                                    height: '42px',
+                                    minHeight: '42px',
                                     padding: '0 20px',
                                     background: 'linear-gradient(135deg, #9146FF, #772CE8)',
                                     color: '#fff',
                                     fontWeight: 700,
                                     borderRadius: '8px',
-                                    boxShadow: '0 4px 12px rgba(145, 70, 255, 0.35)'
+                                    boxShadow: '0 4px 12px rgba(145, 70, 255, 0.35)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
                                 }}
                                 onClick={() => {
                                     if (instantAnnounceText.trim()) {
@@ -1115,13 +1186,22 @@ export default function ScheduledMessagesManager({
 
                                 <div style={{ position: 'relative' }}>
                                     <textarea
+                                        ref={modalMsgRef}
                                         className="form-control"
-                                        rows="4"
+                                        rows="3"
                                         required
                                         placeholder="Escribe el texto. Puedes usar /announce al inicio para publicarlo como Anuncio oficial..."
                                         value={editingMsg.text}
                                         onChange={(e) => setEditingMsg({ ...editingMsg, text: e.target.value })}
-                                        style={{ paddingRight: '45px', paddingBottom: '35px' }}
+                                        style={{
+                                            paddingRight: '45px',
+                                            paddingBottom: '35px',
+                                            minHeight: '100px',
+                                            maxHeight: '380px',
+                                            resize: 'none',
+                                            overflowY: 'auto',
+                                            lineHeight: '1.4'
+                                        }}
                                     />
                                     <button
                                         type="button"
