@@ -60,7 +60,6 @@ export default function PendingAuthorizationsManager({ supabase, triggerToast, s
                 .update({ 
                     approved: true,
                     // Permisos básicos predeterminados
-                    access_news: true,
                     access_events: true,
                     access_giveaways: true,
                     access_participations: true,
@@ -68,13 +67,10 @@ export default function PendingAuthorizationsManager({ supabase, triggerToast, s
                     access_scheduled_messages: true,
                     access_song_request: true,
                     access_commands: true,
-                    access_reports: true,
                     access_minigames: true,
                     access_ruleta: true,
                     access_twitch_giveaway: true,
                     access_birthdays: true,
-                    access_tts_voices: true,
-                    access_points_wheel: true,
                     access_tierlists: true,
                     access_most_streamed: true
                 })

@@ -5,14 +5,11 @@ import { deliverPackForRedemption, getLocalStatusMap, setLocalClaimStatus } from
 import Ruleta, { RuletaSidebar, RuletaWheel } from './components/Ruleta';
 import TwitchGiveaway, { TwitchGiveawaySidebar, TwitchGiveawayMain } from './components/TwitchGiveaway';
 import TierlistsManager from './components/TierlistsManager';
-import SyncNewsManager from './components/SyncNewsManager';
 import ScheduledMessagesManager from './components/ScheduledMessagesManager';
 import SpotifySongRequestManager from './components/SpotifySongRequestManager';
 import BirthdaysManager from './components/BirthdaysManager';
 import BotCredentialsManager from './components/BotCredentialsManager';
 import ChatCommandsManager from './components/ChatCommandsManager';
-import PointsWheelManager, { PointsWheelOBSOverlay } from './components/PointsWheelManager';
-import TTSVoiceManager, { TTSAudioOBSOverlay, DEFAULT_CHARACTERS, TTSSpeechEngine } from './components/TTSVoiceManager';
 import RuletaSangrientaManager, { RuletaSangrientaOBSOverlay } from './components/RuletaSangrienta';
 import UserPermissionsManager from './components/UserPermissionsManager';
 import PendingAuthorizationsManager from './components/PendingAuthorizationsManager';
@@ -4842,51 +4839,7 @@ function App() {
               )}
             </div>
             <div className="sidebar-content">
-              {/* FILTRO Y SELECTOR DE MES/AÑO EXCLUSIVO PARA NOTICIAS */}
-              {view === 'create' && savedNews.length > 0 && (() => {
-                // Obtener meses únicos con formato "Mes Año"
-                const monthGroupsMap = {};
-                savedNews.forEach(item => {
-                  const d = new Date(item.created_at || Date.now());
-                  const monthName = d.toLocaleDateString('es-ES', { month: 'long' });
-                  const key = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${d.getFullYear()}`;
-                  if (!monthGroupsMap[key]) monthGroupsMap[key] = [];
-                  monthGroupsMap[key].push(item);
-                });
-                const availableMonths = Object.keys(monthGroupsMap);
-
-                return (
-                  <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '8px' }}>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, marginBottom: '5px' }}>
-                      Filtrar por Mes y Año:
-                    </label>
-                    <select
-                      value={newsMonthFilter}
-                      onChange={(e) => setNewsMonthFilter(e.target.value)}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(15, 23, 42, 0.8)',
-                        border: '1px solid rgba(236, 72, 153, 0.3)',
-                        borderRadius: '6px',
-                        padding: '6px 8px',
-                        color: '#F8FAFC',
-                        fontSize: '0.82rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="all">📅 Todos los Meses ({savedNews.length})</option>
-                      {availableMonths.map(mKey => (
-                        <option key={mKey} value={mKey}>
-                          📅 {mKey} ({monthGroupsMap[mKey].length})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })()}
-
-              {isLoadingLibrary && (activeList || []).length === 0 && view !== 'create' && view !== 'view_scheduled_messages' ? (
+              {isLoadingLibrary && (activeList || []).length === 0 ? (
                 <div className="empty-sidebar" style={{ opacity: 0.6, transition: 'opacity 0.2s' }}>
                   <div style={{ marginBottom: '10px' }}><LayoutTemplate size={40} /></div>
                   Cargando librería en vivo...
@@ -4896,119 +4849,10 @@ function App() {
                   <div style={{ opacity: 0.5 }}><LayoutTemplate size={40} /></div>
                   Aún no hay registros de {titleText.toLowerCase()}.
                 </div>
-              ) : view === 'create' ? (() => {
-                // Agrupar noticias por Mes y Año
-                const grouped = {};
-                savedNews.forEach(item => {
-                  const d = new Date(item.created_at || Date.now());
-                  const monthName = d.toLocaleDateString('es-ES', { month: 'long' });
-                  const key = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${d.getFullYear()}`;
-                  if (!grouped[key]) grouped[key] = [];
-                  grouped[key].push(item);
-                });
-
-                const groupKeys = Object.keys(grouped).filter(k => newsMonthFilter === 'all' || newsMonthFilter === k);
-
-                if (groupKeys.length === 0) {
-                  return (
-                    <div className="empty-sidebar" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      No hay noticias en este mes seleccionado.
-                    </div>
-                  );
-                }
-
-                return groupKeys.map(groupMonth => {
-                  const itemsInMonth = grouped[groupMonth];
-
-                  return (
-                    <div key={groupMonth} style={{ marginBottom: '14px' }}>
-                      {/* Cabecera del Mes con Botón de Eliminar Mes */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '6px 10px',
-                        background: 'linear-gradient(90deg, rgba(236, 72, 153, 0.15) 0%, rgba(15, 23, 42, 0.5) 100%)',
-                        borderLeft: '3px solid #EC4899',
-                        borderRadius: '6px',
-                        marginBottom: '6px',
-                        marginTop: '4px'
-                      }}>
-                        <span style={{ color: '#F8FAFC', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          📅 {groupMonth} <span style={{ color: '#EC4899', fontSize: '0.75rem' }}>({itemsInMonth.length})</span>
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteNewsByMonth(groupMonth, itemsInMonth)}
-                          title={`Eliminar todas las noticias de ${groupMonth} en Supabase y Builder`}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.15)',
-                            color: '#EF4444',
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            borderRadius: '4px',
-                            padding: '3px 7px',
-                            fontSize: '0.72rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          <Trash2 size={12} /> Eliminar Mes
-                        </button>
-                      </div>
-
-                      {/* Lista de Noticias del Mes */}
-                      {itemsInMonth.map(item => {
-                        const isActive = editingItemId === item.id;
-
-                        return (
-                          <div 
-                            key={item.id} 
-                            className={`news-item animate-slide-down ${isActive ? 'active' : ''}`} 
-                            style={{ 
-                              cursor: 'pointer',
-                              borderLeft: isActive ? '4px solid var(--primary)' : 'none',
-                              backgroundColor: isActive ? 'var(--bg-card-hover)' : 'var(--bg-card)',
-                              marginBottom: '6px'
-                            }} 
-                            onClick={() => { 
-                              handleEditItem(item.id, 'noticia');
-                            }}
-                          >
-                            <button 
-                              className="btn-delete-news" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleDeleteItem(item.id); 
-                              }}
-                              title="Eliminar noticia individual"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                            <div className="news-item-title" style={{ paddingRight: '20px' }}>
-                              {item.titulo || item.title}
-                            </div>
-                            <div className="news-item-date" style={{ textTransform: 'capitalize', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <div>
-                                Noticia • {item.author || 'Sin Autor'} • {new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                });
-              })() : (
+              ) : (
                 (activeList || []).map(item => {
                   const isActive = selectedEventId === item.id || 
-                                   selectedRewardName === item.id || 
-                                   (view === 'view_scheduled_messages' && editingMsg && editingMsg.id === item.id) ||
-                                   (view === 'view_commands' && cmdFormName === item.command_name);
+                                   selectedRewardName === item.id;
 
                   return (
                     <div 
@@ -5024,18 +4868,8 @@ function App() {
                           setSelectedEventId(item.id);
                         } else if (view === 'view_twitch') {
                           setSelectedRewardName(item.id);
-                        } else if (view === 'view_scheduled_messages') {
-                          setEditingMsg(item);
-                          setEditingMsgText(item.text);
-                          setEditingMsgInterval(item.intervalMs / 60000);
-                          setEditingMsgMinChat(item.minChatMessages !== undefined ? item.minChatMessages : 20);
-                        } else if (view === 'view_commands') {
-                          setCmdFormName(item.command_name);
-                          setCmdFormType(item.template_type);
-                          setCmdFormDesc(item.description || '');
-                          setCmdFormResponses(item.responses);
                         } else {
-                          handleEditItem(item.id, null);
+                          handleEditItem(item.id);
                         }
                       }}
                     >
@@ -5044,14 +4878,7 @@ function App() {
                           className="btn-delete-news" 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            if (view === 'view_scheduled_messages') {
-                              setScheduledMessages(scheduledMessages.filter(m => m.id !== item.id));
-                              if (editingMsg && editingMsg.id === item.id) setEditingMsg(null);
-                            } else if (view === 'view_commands') {
-                              handleDeleteChatCommand(item.id);
-                            } else {
-                              handleDeleteItem(item.id); 
-                            }
+                            handleDeleteItem(item.id);
                           }}
                           title="Eliminar"
                         >
@@ -5067,11 +4894,8 @@ function App() {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#A855F7', fontWeight: 600 }}>
                               <Gift size={12} /> {(twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(item.id)).length} reclamos
                             </span>
-                          ) : 
-                           view === 'view_scheduled_messages' ? `Intervalo: ${item.intervalMs / 60000} min` : 
-                           view === 'view_commands' ? `Tipo: ${item.template_type === 'versus' ? 'Pelea/Versus' : item.template_type === 'action' ? 'Acción' : 'Decisión'}` :
-                           (item.tipo || 'Objeto')} 
-                           {view !== 'view_twitch' && view !== 'view_commands' && ` • ${new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}`}
+                          ) : (item.tipo || 'Objeto')} 
+                           {view !== 'view_twitch' && ` • ${new Date(item.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric'})}`}
                         </div>
                         {(view === 'create_content_item' || view === 'view_participations') && item.tipo && (
                           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '2px' }}>
@@ -5251,38 +5075,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Voces TTS (Text to Speech) */}
-              <div 
-                className={`dashboard-card theme-green ${!hasAccess('tts_voices') ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('view_tts_voices', 'tts_voices')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('tts_voices') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#10B981' }}>
-                  <Volume2 size={26} color="#10B981" />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Voces TTS (Personajes)</h3>
-                  <p>Comandos de voz con personajes de anime, videojuegos y celebridades (Goku, Homero, Sonic, etc.).</p>
-                </div>
-              </div>
-            </div>
-
-            {/* SECCIÓN: CANJES POR PUNTOS DE TWITCH (Azul #3B82F6) */}
-            <h2 className="section-title" style={{ marginTop: '1.5rem', marginBottom: '1.2rem', color: '#3B82F6', fontSize: '1.4rem', fontWeight: 600, borderBottom: '1px solid rgba(59, 130, 246, 0.2)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Award size={22} color="#3B82F6" /> Canjes por puntos de Twitch
-            </h2>
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
-              <div 
-                className={`dashboard-card theme-blue ${!hasAccess('points_wheel') ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('view_points_wheel', 'points_wheel')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('points_wheel') ? 'rgba(59, 130, 246, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#3B82F6' }}>
-                  <Sparkles size={26} color="#3B82F6" />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Ruleta por Puntos</h3>
-                  <p>Ruleta interactiva con overlay para OBS que gira automáticamente al canjear puntos de canal.</p>
-                </div>
-              </div>
             </div>
 
             {/* 2. SECCIÓN: HERRAMIENTAS DE LA WEB (Rosa #EC4899) */}
@@ -5290,19 +5082,6 @@ function App() {
               <Globe size={22} color="#EC4899" /> Herramientas de la Web
             </h2>
             <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '2.5rem', gap: '1.2rem' }}>
-              <div 
-                className={`dashboard-card theme-pink ${!hasAccess('news_only') ? 'restricted' : ''}`} 
-                onClick={() => { setEditingItemId(null); setNewsData({ title: '', subtitle: '', header_image_url: '', content: [] }); restrictedNavigate('create', 'news_only'); }}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
-                  <FilePlus size={26} color="#EC4899" />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3>Crear Noticia</h3>
-                  <p>Genera un nuevo artículo inmersivo con imágenes y bloques de texto para la vista principal.</p>
-                </div>
-              </div>
-
               <div 
                 className={`dashboard-card theme-pink ${!hasAccess('events_and_giveaways') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('create_content_item', 'events_and_giveaways')}
@@ -5343,19 +5122,6 @@ function App() {
               </div>
 
               <div 
-                className={`dashboard-card theme-pink ${!hasAccess('reports') ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('view_reports', 'reports')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('reports') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
-                  <AlertCircle size={26} color="#EC4899" />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Reportes Web</h3>
-                  <p>Visualiza y gestiona los reportes, sugerencias y fallos enviados por los usuarios desde la web.</p>
-                </div>
-              </div>
-
-              <div 
                 className={`dashboard-card theme-pink ${!hasAccess('minigames') ? 'restricted' : ''}`} 
                 onClick={() => restrictedNavigate('view_minijuegos', 'minigames')}
               >
@@ -5378,19 +5144,6 @@ function App() {
                 <div className="dashboard-card-info">
                   <h3 style={{ color: 'var(--text-main)' }}>Contenido Tierlists</h3>
                   <p>Gestiona, añade y actualiza personajes e imágenes en las 4 Tierlists oficiales de la web.</p>
-                </div>
-              </div>
-
-              <div 
-                className={`dashboard-card theme-pink ${!hasAccess('news_only') ? 'restricted' : ''}`} 
-                onClick={() => restrictedNavigate('view_sync_news', 'news_only')}
-              >
-                <div className="icon-bg" style={{ background: hasAccess('news_only') ? 'rgba(236, 72, 153, 0.12)' : 'rgba(15, 23, 42, 0.5)', color: '#EC4899' }}>
-                  <Newspaper size={26} color="#EC4899" />
-                </div>
-                <div className="dashboard-card-info">
-                  <h3 style={{ color: 'var(--text-main)' }}>Sincronizar Noticias</h3>
-                  <p>Ejecuta la sincronización automática de 3 noticias de videojuegos y 3 de anime desde los feeds oficiales.</p>
                 </div>
               </div>
 
@@ -7148,36 +6901,8 @@ function App() {
               setMessages={setScheduledMessages}
             />
           </div>
-        ) : view === 'view_tts_voices' ? (
-          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
-            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
-              <button className="btn-back" onClick={() => setView('home')}>
-                <ChevronLeft size={18} /> Volver
-              </button>
-            </div>
-
-            <TTSVoiceManager 
-              supabase={supabase}
-              triggerToast={triggerToast}
-            />
-          </div>
         ) : view === 'view_ruleta_sangrienta' ? (
           <RuletaSangrientaManager onBack={() => setView('home')} supabase={supabase} />
-        ) : view === 'view_points_wheel' ? (
-          <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
-            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
-              <button className="btn-back" onClick={() => setView('home')}>
-                <ChevronLeft size={18} /> Volver
-              </button>
-            </div>
-
-            <PointsWheelManager 
-              supabase={supabase}
-              triggerToast={triggerToast}
-              enviarMensajeTwitch={enviarMensajeTwitch}
-              isBotConnected={isBotConnected}
-            />
-          </div>
         ) : view === 'view_commands' ? (
           <div className="builder-view" style={{ maxWidth: '1400px', width: '95%', margin: '0 auto' }}>
             <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
@@ -7196,326 +6921,6 @@ function App() {
               enviarMensajeTwitch={enviarMensajeTwitch}
               isBotConnected={isBotConnected}
             />
-          </div>
-        ) : view === 'view_reports' ? (
-          <div className="builder-view" style={{ maxWidth: '1500px', width: '98%' }}>
-            <div className="builder-header animate-slide-down">
-              <button className="btn-back" onClick={() => { setView('home'); setSelectedReportId(null); setReplyingText(''); }}>
-                <ChevronLeft size={18} /> Volver
-              </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                Bandeja de Reportes y Ayuda
-              </h1>
-            </div>
-
-            {/* Sub-header con Filtros y Buscador */}
-            <div className="card animate-slide-down" style={{ padding: '16px 20px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {['todos', 'bug', 'sugerencia', 'cambio'].map(type => (
-                    <button
-                      key={type}
-                      type="button"
-                      className={`btn-add ${reportFilter === type ? 'active' : ''}`}
-                      onClick={() => setReportFilter(type)}
-                      style={{
-                        padding: '6px 12px',
-                        background: reportFilter === type ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                        border: reportFilter === type ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.1)',
-                        color: 'var(--text-main)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem',
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      {type === 'todos' ? 'Todos' : type === 'bug' ? '🐛 Bugs' : type === 'sugerencia' ? '💡 Sugerencias' : '🔄 Cambios'}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Buscar por usuario o texto..."
-                    value={reportSearch}
-                    onChange={(e) => setReportSearch(e.target.value)}
-                    style={{ width: '260px', margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}
-                  />
-                  <button
-                    onClick={fetchUserReports}
-                    className="btn-submit"
-                    style={{ width: 'auto', padding: '6px 16px', margin: 0 }}
-                    disabled={loadingReports}
-                  >
-                    {loadingReports ? 'Cargando...' : 'Actualizar'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {loadingReports ? (
-              <div className="card text-center" style={{ padding: '40px' }}>
-                <p style={{ color: 'var(--text-muted)' }}>Cargando reportes desde la base de datos...</p>
-              </div>
-            ) : (() => {
-              const filteredReports = userReports
-                .filter(r => reportFilter === 'todos' || r.report_type === reportFilter)
-                .filter(r => !reportSearch || r.description.toLowerCase().includes(reportSearch.toLowerCase()) || (r.username && r.username.toLowerCase().includes(reportSearch.toLowerCase())));
-
-              const activeReport = filteredReports.find(r => r.id === selectedReportId) || filteredReports[0] || null;
-
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '20px', alignItems: 'start' }}>
-                  {/* BARRA LATERAL IZQUIERDA: Lista de Reportes */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', paddingRight: '4px' }}>
-                    {filteredReports.length === 0 ? (
-                      <div className="card text-center" style={{ padding: '30px 15px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                        No hay reportes que coincidan con la búsqueda.
-                      </div>
-                    ) : (
-                      filteredReports.map((report) => {
-                        const isSelected = activeReport && activeReport.id === report.id;
-                        const isAnswered = !!report.admin_response;
-
-                        return (
-                          <div
-                            key={report.id}
-                            className="card animate-slide-down"
-                            onClick={() => {
-                              setSelectedReportId(report.id);
-                              setReplyingText(report.admin_response || '');
-                            }}
-                            style={{
-                              padding: '14px 16px',
-                              margin: 0,
-                              cursor: 'pointer',
-                              borderRadius: '12px',
-                              background: isSelected 
-                                ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)' 
-                                : 'var(--bg-card)',
-                              border: isSelected 
-                                ? '1px solid var(--primary)' 
-                                : '1px solid rgba(255, 255, 255, 0.05)',
-                              borderLeft: `5px solid ${
-                                report.report_type === 'bug' ? '#EF4444' : 
-                                report.report_type === 'sugerencia' ? '#10B981' : 
-                                '#F59E0B'
-                              }`,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '8px',
-                              transition: 'all 0.2s ease',
-                              boxShadow: isSelected ? '0 4px 14px rgba(236, 72, 153, 0.2)' : 'none'
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                fontSize: '0.65rem',
-                                fontWeight: 'bold',
-                                textTransform: 'uppercase',
-                                background: report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                                color: report.report_type === 'bug' ? '#EF4444' : report.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
-                                border: `1px solid ${report.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : report.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
-                              }}>
-                                {report.report_type === 'bug' ? '🐛 Bug' : report.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
-                              </span>
-
-                              <span style={{
-                                fontSize: '0.65rem',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                fontWeight: 'bold',
-                                background: isAnswered ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                                color: isAnswered ? '#10B981' : '#F59E0B'
-                              }}>
-                                {isAnswered ? 'Respondido' : 'Pendiente'}
-                              </span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <strong style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                {report.username ? `@${report.username}` : `Usuario #${report.user_id.substring(0,6)}`}
-                              </strong>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                {new Date(report.created_at).toLocaleDateString()}
-                              </span>
-                            </div>
-
-                            <p style={{
-                              margin: 0,
-                              fontSize: '0.8rem',
-                              color: 'var(--text-muted)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {report.description}
-                            </p>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* PANEL PRINCIPAL DERECHO: Detalle del Reporte y Casilla para Responder */}
-                  {activeReport ? (
-                    <div className="card animate-slide-down" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', margin: 0 }}>
-                      {/* Cabecera del Reporte Seleccionado */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                            <span style={{
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              fontWeight: 'bold',
-                              textTransform: 'uppercase',
-                              background: activeReport.report_type === 'bug' ? 'rgba(239, 68, 68, 0.15)' : activeReport.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                              color: activeReport.report_type === 'bug' ? '#EF4444' : activeReport.report_type === 'sugerencia' ? '#10B981' : '#F59E0B',
-                              border: `1px solid ${activeReport.report_type === 'bug' ? 'rgba(239, 68, 68, 0.3)' : activeReport.report_type === 'sugerencia' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
-                            }}>
-                              {activeReport.report_type === 'bug' ? '🐛 Bug' : activeReport.report_type === 'sugerencia' ? '💡 Sugerencia' : '🔄 Cambio'}
-                            </span>
-                            <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)' }}>
-                              {activeReport.username ? `@${activeReport.username}` : `Usuario: ${activeReport.user_id}`}
-                            </h2>
-                          </div>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            Enviado el {new Date(activeReport.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="btn-delete-news"
-                          onClick={() => handleDeleteReport(activeReport.id)}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.15)',
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            color: '#EF4444',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            padding: '8px 14px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.85rem',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          <Trash2 size={16} /> Eliminar Reporte
-                        </button>
-                      </div>
-
-                      {/* Contenido Completo de la Descripción */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                          Mensaje / Descripción del Usuario
-                        </label>
-                        <div style={{
-                          fontSize: '0.95rem',
-                          color: 'var(--text-main)',
-                          background: 'rgba(15, 23, 42, 0.4)',
-                          padding: '16px',
-                          borderRadius: '12px',
-                          border: '1px solid rgba(255, 255, 255, 0.05)',
-                          whiteSpace: 'pre-wrap',
-                          lineHeight: '1.6'
-                        }}>
-                          {activeReport.description}
-                        </div>
-                      </div>
-
-                      {/* Galería de Imágenes Adjuntas */}
-                      {activeReport.images && Array.isArray(activeReport.images) && activeReport.images.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                            Imágenes Adjuntas ({activeReport.images.length})
-                          </label>
-                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                            {activeReport.images.map((imgUrl, index) => (
-                              <a
-                                key={index}
-                                href={imgUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: 'block',
-                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                  borderRadius: '8px',
-                                  overflow: 'hidden',
-                                  transition: 'transform 0.2s',
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.03)'}
-                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                              >
-                                <img
-                                  src={imgUrl}
-                                  alt={`Captura ${index + 1}`}
-                                  style={{
-                                    height: '140px',
-                                    maxWidth: '220px',
-                                    objectFit: 'cover',
-                                    display: 'block'
-                                  }}
-                                />
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Casilla para Responder al Usuario */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
-                        <label style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          💌 Responder al Usuario (Aparecerá en su buzón personal):
-                        </label>
-                        <textarea
-                          rows={4}
-                          className="form-control"
-                          placeholder="Escribe tu respuesta oficial de soporte aquí..."
-                          value={replyingText}
-                          onChange={(e) => setReplyingText(e.target.value)}
-                          style={{
-                            width: '100%',
-                            margin: 0,
-                            padding: '12px 14px',
-                            fontSize: '0.9rem',
-                            lineHeight: 1.5,
-                            background: 'rgba(0,0,0,0.25)'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="btn-submit"
-                          onClick={() => handleSaveReportResponse(activeReport.id)}
-                          disabled={sendingResponse}
-                          style={{
-                            width: 'fit-content',
-                            padding: '10px 24px',
-                            margin: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            alignSelf: 'flex-end',
-                            fontSize: '0.9rem'
-                          }}
-                        >
-                          {sendingResponse ? 'Guardando...' : activeReport.admin_response ? '🔄 Actualizar Respuesta' : '✉️ Enviar Respuesta'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="card text-center" style={{ padding: '50px 20px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                      Selecciona un reporte de la izquierda para ver los detalles.
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
           </div>
         ) : view === 'view_minijuegos' ? (
           <div className="builder-view" style={{ maxWidth: '1600px', width: '98%' }}>
@@ -8238,364 +7643,10 @@ function App() {
             </div>
             <TierlistsManager supabase={supabase} triggerToast={triggerToast} />
           </div>
-        ) : view === 'view_sync_news' ? (
-          <div className="builder-view" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 2rem' }}>
-            <div className="builder-header animate-slide-down" style={{ width: '100%', justifyContent: 'flex-start', position: 'relative', minHeight: '40px', marginBottom: '1.5rem' }}>
-              <button className="btn-back" onClick={() => setView('home')}>
-                <ChevronLeft size={18} /> Volver
-              </button>
-            </div>
-            <SyncNewsManager supabase={supabase} triggerToast={triggerToast} onSyncComplete={fetchLibraryItems} />
-          </div>
-        ) : (
-          <div className="builder-view">
-            <div className="builder-header animate-slide-down">
-              <button className="btn-back" onClick={() => setView('home')}>
-                <ChevronLeft size={18} /> Volver
-              </button>
-              <h1 className="header-title" style={{ fontSize: '1.8rem', flex: 1, textAlign: 'center', paddingRight: '100px' }}>
-                {editingItemId ? "Editar Noticia" : "Generador de Noticias"}
-              </h1>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              {/* Main Info Card */}
-              <div className="card animate-slide-down" style={{ animationDelay: '0.1s' }}>
-                <div className="form-group">
-                  <label className="form-label">Título de la Noticia</label>
-                  <input 
-                    type="text" 
-                    name="title"
-                    className="form-control" 
-                    placeholder="Ej: Anunciada nueva temporada de tu anime favorito..."
-                    value={newsData.title}
-                    onChange={handleMainChange}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Subtítulo (Opcional)</label>
-                  <input 
-                    type="text" 
-                    name="subtitle"
-                    className="form-control" 
-                    placeholder="Añade un texto breve que complemente al título"
-                    value={newsData.subtitle}
-                    onChange={handleMainChange}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Imagen de Cabecera (URL)</label>
-                  <input 
-                    type="url" 
-                    name="header_image_url"
-                    className="form-control" 
-                    placeholder={`${CLOUDFLARE_R2_BASE_URL}/portada-noticia.jpg`}
-                    value={newsData.header_image_url}
-                    onChange={handleMainChange}
-                    required
-                  />
-                  {newsData.header_image_url && (
-                    <div className="image-preview-wrapper" style={{ marginTop: '10px' }}>
-                      <img src={getDisplayUrl(newsData.header_image_url)} alt="Cabecera" onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.classList.add('error'); }} />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Dynamic Content Builder */}
-              <div className="card animate-slide-down" style={{ animationDelay: '0.2s' }}>
-                <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem' }}>
-                  <LayoutTemplate className="lucide" size={24} color="var(--primary)" />
-                  Cuerpo de la Noticia
-                </h2>
-                
-                <div className="blocks-container">
-                  {newsData.content.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                      No has añadido ningún bloque. Selecciona una opción abajo para empezar.
-                    </div>
-                  )}
-
-                  {newsData.content.map((block, index) => (
-                    <div key={block.id} className="block-item animate-slide-down">
-                      <div className="block-header">
-                        <span className="block-type-badge">
-                          {block.type === 'text' ? <Type size={14} /> : <ImageIcon size={14} />}
-                          {block.type === 'text' ? 'Bloque de Texto' : 'Bloque de Imagen'}
-                        </span>
-                        <button 
-                          type="button" 
-                          className="btn-icon" 
-                          onClick={() => removeContentBlock(block.id)}
-                          title="Eliminar bloque"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                      
-                      {block.type === 'text' ? (
-                        <RichTextEditor
-                          value={block.value}
-                          onChange={(htmlValue) => updateContentBlock(block.id, htmlValue)}
-                        />
-                      ) : (
-                        <div>
-                          <input 
-                            type="url" 
-                            className="form-control" 
-                            placeholder="Pega el enlace generado por el subidor superior"
-                            value={block.value}
-                            onChange={(e) => updateContentBlock(block.id, e.target.value)}
-                            required
-                          />
-                          {block.value && (
-                            <div className="image-preview-wrapper" style={{ minHeight: '80px', marginTop: '1rem' }}>
-                              <img src={getDisplayUrl(block.value)} alt={`Bloque ${index}`} onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.classList.add('error'); }} />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="add-actions">
-                  <button 
-                    type="button" 
-                    className="btn-add" 
-                    onClick={() => addContentBlock('text')}
-                  >
-                    <Type size={18} /> Añadir Texto
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn-add" 
-                    onClick={() => addContentBlock('image')}
-                  >
-                    <ImageIcon size={18} /> Añadir Imagen
-                  </button>
-                </div>
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn-submit animate-slide-down" 
-                style={{ animationDelay: '0.3s' }}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Procesando...' : editingItemId ? <><Save size={20} /> Guardar Cambios</> : <><Send size={20} /> Publicar</>}
-              </button>
-            </form>
-          </div>
-        )}
+        ) : null}
       </main>
     </div>
   );
 }
-
-// YouTube Iframe Player Wrapper Component
-const YoutubePlayer = ({ videoId, onEnded, volume = 50, isPlaying = true }) => {
-  const playerRef = useRef(null);
-  const containerId = useRef(`yt-player-${Math.random().toString(36).substr(2, 9)}`);
-
-  useEffect(() => {
-    let player;
-    const initPlayer = () => {
-      player = new window.YT.Player(containerId.current, {
-        host: 'https://www.youtube-nocookie.com',
-        height: '100%',
-        width: '100%',
-        videoId: videoId,
-        playerVars: {
-          autoplay: isPlaying ? 1 : 0,
-          controls: 1,
-          modestbranding: 1,
-          rel: 0
-        },
-        events: {
-          onReady: (event) => {
-            event.target.setVolume(volume);
-            if (isPlaying) {
-              event.target.playVideo();
-            } else {
-              event.target.pauseVideo();
-            }
-          },
-          onStateChange: (event) => {
-            if (event.data === 0) { // YT.PlayerState.ENDED is 0
-              onEnded();
-            }
-          }
-        }
-      });
-      playerRef.current = player;
-    };
-
-    if (window.YT && window.YT.Player) {
-      initPlayer();
-    } else {
-      if (!document.getElementById('youtube-iframe-api-script')) {
-        const tag = document.createElement('script');
-        tag.id = 'youtube-iframe-api-script';
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        if (firstScriptTag) {
-          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-        } else {
-          document.head.appendChild(tag);
-        }
-      }
-      
-      const previousCallback = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => {
-        if (previousCallback) previousCallback();
-        initPlayer();
-      };
-    }
-
-    return () => {
-      if (player) {
-        try {
-          player.destroy();
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    };
-  }, [videoId]);
-
-  useEffect(() => {
-    if (playerRef.current && typeof playerRef.current.setVolume === 'function') {
-      playerRef.current.setVolume(volume);
-    }
-  }, [volume]);
-
-  useEffect(() => {
-    if (playerRef.current) {
-      if (isPlaying && typeof playerRef.current.playVideo === 'function') {
-        playerRef.current.playVideo();
-      } else if (!isPlaying && typeof playerRef.current.pauseVideo === 'function') {
-        playerRef.current.pauseVideo();
-      }
-    }
-  }, [isPlaying]);
-
-  return <div style={{ width: '100%', height: '100%' }} id={containerId.current}></div>;
-};
-
-// Sleek Stream overlay widget for OBS browser source
-const SongRequestOverlay = ({ currentSong, volume, onEnded }) => {
-  const isPlaying = currentSong ? (currentSong.is_playing !== false) : false;
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('obs_reload_channel')
-      .on('broadcast', { event: 'reload_widget' }, () => {
-        window.location.reload(true); // force reload bypassing cache
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      background: 'transparent',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      overflow: 'hidden',
-      fontFamily: 'system-ui, sans-serif',
-      color: '#fff',
-      padding: '20px',
-      boxSizing: 'border-box'
-    }}>
-      {currentSong && (
-        <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0.01, pointerEvents: 'none' }}>
-          <YoutubePlayer videoId={currentSong.video_id} onEnded={onEnded} volume={volume} isPlaying={isPlaying} />
-        </div>
-      )}
-      
-      {currentSong ? (
-        <div style={{
-          background: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(168, 85, 247, 0.4)',
-          borderRadius: '16px',
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(168, 85, 247, 0.2)',
-          maxWidth: '450px',
-          animation: 'slideIn 0.5s ease-out'
-        }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            overflow: 'hidden',
-            border: '2px solid #A855F7',
-            animation: isPlaying ? 'spin 10s linear infinite' : 'none',
-            flexShrink: 0,
-            background: '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <img 
-              src={`https://img.youtube.com/vi/${currentSong.video_id}/mqdefault.jpg`} 
-              alt="cover" 
-              style={{ width: '140%', height: '140%', objectFit: 'cover' }} 
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
-            <span style={{ fontSize: '0.8rem', color: '#A855F7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
-              {isPlaying ? 'Sonando ahora' : 'Pausado'}
-            </span>
-            <span style={{ fontSize: '1.05rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentSong.title}</span>
-            <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Pedida por: <strong style={{ color: '#E9D5FF' }}>@{currentSong.requested_by}</strong></span>
-          </div>
-        </div>
-      ) : (
-        <div style={{
-          background: 'rgba(15, 23, 42, 0.5)',
-          backdropFilter: 'blur(8px)',
-          border: '1px dashed rgba(148, 163, 184, 0.3)',
-          borderRadius: '16px',
-          padding: '16px 24px',
-          fontSize: '0.9rem',
-          color: '#94A3B8',
-          animation: 'pulse 2s infinite'
-        }}>
-          Sin canciones en cola. ¡Usa tu comando en el chat!
-        </div>
-      )}
-      
-      <style>{`
-        @keyframes slideIn {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes pulse {
-          0% { opacity: 0.6; }
-          50% { opacity: 1; }
-          100% { opacity: 0.6; }
-        }
-      `}</style>
-    </div>
-  );
-};
 
 export default App;
