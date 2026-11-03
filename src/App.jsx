@@ -2147,7 +2147,9 @@ function App() {
   const getTwitchClientId = async (token) => {
     const clean = (token || '').replace(/^oauth:/i, '').trim();
     if (!clean) return 'gp762nuuoqcoxypju8c569th9wz7q5';
-    if (twitchClientIdCacheRef.current) return twitchClientIdCacheRef.current;
+    if (typeof twitchClientIdCacheRef.current === 'object' && twitchClientIdCacheRef.current !== null && twitchClientIdCacheRef.current[clean]) {
+      return twitchClientIdCacheRef.current[clean];
+    }
     try {
       const res = await fetch('https://id.twitch.tv/oauth2/validate', {
         headers: { 'Authorization': `OAuth ${clean}` }
@@ -2155,7 +2157,10 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.client_id) {
-          twitchClientIdCacheRef.current = data.client_id;
+          if (typeof twitchClientIdCacheRef.current !== 'object' || twitchClientIdCacheRef.current === null) {
+            twitchClientIdCacheRef.current = {};
+          }
+          twitchClientIdCacheRef.current[clean] = data.client_id;
           return data.client_id;
         }
       }
@@ -2211,7 +2216,12 @@ function App() {
 
     try {
       if (eventSubWsRef.current) {
-        try { eventSubWsRef.current.close(); } catch(e) {}
+        try {
+          eventSubWsRef.current.onclose = null;
+          eventSubWsRef.current.onerror = null;
+          eventSubWsRef.current.close();
+        } catch(e) {}
+        eventSubWsRef.current = null;
       }
 
       setEventSubStatus('connecting');
@@ -2274,15 +2284,18 @@ function App() {
             if (subRes.ok || subRes.status === 202) {
               setEventSubStatus('connected');
               addBotLog("🟢 ¡Detector de Canjes de Twitch (EventSub) ACTIVO! Escuchando canjes en tiempo real.");
+              triggerToast("🟢 ¡Detector de Canjes de Twitch ACTIVO!");
             } else {
               const errData = await subRes.json().catch(() => ({}));
               console.warn("EventSub subscription response error:", subRes.status, errData);
-              if (subRes.status === 403 || subRes.status === 401 || errData.message?.includes('scope')) {
+              const errMsg = errData.message || (typeof errData === 'string' ? errData : 'Fallo de suscripción');
+              addBotLog(`⚠️ Twitch EventSub (${subRes.status}): ${errMsg}`);
+              if (subRes.status === 403 || subRes.status === 401 || String(errMsg).toLowerCase().includes('scope') || String(errMsg).toLowerCase().includes('authorization')) {
                 setEventSubStatus('missing_scope');
-                addBotLog("⚠️ EventSub: Twitch requiere que este token pertenezca al canal (@eviltokkii) y tenga el permiso 'channel:read:redemptions'.");
+                triggerToast(`⚠️ EventSub (${subRes.status}): ${errMsg}`);
               } else {
                 setEventSubStatus('disconnected');
-                addBotLog(`⚠️ EventSub error (${subRes.status}): ${errData.message || 'Fallo de suscripción'}`);
+                triggerToast(`⚠️ Error EventSub (${subRes.status}): ${errMsg}`);
               }
             }
           } else if (msgType === 'notification') {
@@ -2494,24 +2507,37 @@ function App() {
       clean = 'oauth:' + clean;
     }
     localStorage.setItem('twitch_broadcaster_oauth', clean);
-    // Si el usuario también quiere usarlo para el bot chat:
-    if (broadcasterTokenValidation?.hasChat) {
+    
+    // Si no había bot configurado y este token tiene chat, guardarlo también
+    const existingBotOauth = localStorage.getItem('twitch_bot_oauth');
+    if (!existingBotOauth && broadcasterTokenValidation?.hasChat) {
       localStorage.setItem('twitch_bot_oauth', clean);
       if (broadcasterTokenValidation?.login) {
         localStorage.setItem('twitch_bot_username', broadcasterTokenValidation.login);
       }
     }
-    triggerToast('✅ Token guardado. Conectando detector en tiempo real...');
+
+    triggerToast('✅ Token guardado. Conectando detector...');
     setShowTwitchTokenModal(false);
     
-    // Reconectar EventSub con el nuevo token
+    // Reconectar EventSub con el nuevo token cerrando limpiamente el anterior
     if (eventSubWsRef.current) {
-      try { eventSubWsRef.current.close(); } catch(e) {}
+      try {
+        eventSubWsRef.current.onclose = null;
+        eventSubWsRef.current.onerror = null;
+        eventSubWsRef.current.close();
+      } catch(e) {}
+      eventSubWsRef.current = null;
     }
-    connectTwitchEventSub();
+    
+    setTimeout(() => {
+      connectTwitchEventSub();
+    }, 200);
     
     // Sincronizar canjes anteriores
-    syncTwitchCustomRewards();
+    setTimeout(() => {
+      syncTwitchCustomRewards();
+    }, 500);
   };
 
   // Sincronizar canjes previos de Twitch vía Helix API (Solicitudes del día y recientes)
@@ -5575,12 +5601,12 @@ function App() {
                   borderRadius: '20px',
                   fontSize: '0.8rem',
                   fontWeight: 700,
-                  background: eventSubStatus === 'connected' ? 'rgba(34, 197, 94, 0.15)' : eventSubStatus === 'missing_scope' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(148, 163, 184, 0.15)',
-                  border: eventSubStatus === 'connected' ? '1px solid rgba(34, 197, 94, 0.4)' : eventSubStatus === 'missing_scope' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(148, 163, 184, 0.3)',
-                  color: eventSubStatus === 'connected' ? '#22c55e' : eventSubStatus === 'missing_scope' ? '#f59e0b' : '#94a3b8'
+                  background: eventSubStatus === 'connected' ? 'rgba(34, 197, 94, 0.15)' : eventSubStatus === 'connecting' ? 'rgba(56, 189, 248, 0.15)' : eventSubStatus === 'missing_scope' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                  border: eventSubStatus === 'connected' ? '1px solid rgba(34, 197, 94, 0.4)' : eventSubStatus === 'connecting' ? '1px solid rgba(56, 189, 248, 0.4)' : eventSubStatus === 'missing_scope' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(148, 163, 184, 0.3)',
+                  color: eventSubStatus === 'connected' ? '#22c55e' : eventSubStatus === 'connecting' ? '#38bdf8' : eventSubStatus === 'missing_scope' ? '#f59e0b' : '#94a3b8'
                 }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: eventSubStatus === 'connected' ? '#22c55e' : eventSubStatus === 'missing_scope' ? '#f59e0b' : '#94a3b8' }}></span>
-                  {eventSubStatus === 'connected' ? 'Detector de Canjes Activo' : eventSubStatus === 'missing_scope' ? 'Falta Token de @eviltokkii' : 'EventSub Desconectado'}
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: eventSubStatus === 'connected' ? '#22c55e' : eventSubStatus === 'connecting' ? '#38bdf8' : eventSubStatus === 'missing_scope' ? '#f59e0b' : '#94a3b8' }}></span>
+                  {eventSubStatus === 'connected' ? 'Detector de Canjes Activo' : eventSubStatus === 'connecting' ? 'Conectando Detector...' : eventSubStatus === 'missing_scope' ? 'Falta Token de @eviltokkii' : 'EventSub Desconectado'}
                 </div>
 
                 <button
