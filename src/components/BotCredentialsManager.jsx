@@ -65,10 +65,13 @@ export default function BotCredentialsManager({
                 });
                 if (res.ok) {
                     const data = await res.json();
+                    const cleanChannel = (botChannel || 'eviltokkii').trim().toLowerCase().replace(/^#/, '');
+                    const isBroadcaster = (data.login || '').toLowerCase() === cleanChannel;
                     setTokenValidation({
                         valid: true,
                         scopes: data.scopes || [],
                         login: data.login,
+                        isBroadcaster,
                         hasChat: (data.scopes || []).includes('chat:read') && (data.scopes || []).includes('chat:edit'),
                         hasAnnounce: (data.scopes || []).includes('moderator:manage:announcements'),
                         hasRedemptions: (data.scopes || []).includes('channel:read:redemptions') || (data.scopes || []).includes('channel:manage:redemptions')
@@ -138,6 +141,11 @@ export default function BotCredentialsManager({
         localStorage.setItem('twitch_bot_username', cleanUser);
         localStorage.setItem('twitch_bot_oauth', cleanOauth);
 
+        // Si el token tiene permiso de canjes o pertenece al canal, guardarlo también para EventSub
+        if (tokenValidation && (tokenValidation.hasRedemptions || (tokenValidation.login || '').toLowerCase() === cleanChannel)) {
+            localStorage.setItem('twitch_broadcaster_oauth', cleanOauth);
+        }
+
         if (supabase) {
             try {
                 await supabase.from('app_settings').upsert({
@@ -163,6 +171,11 @@ export default function BotCredentialsManager({
             setTimeout(() => {
                 connectTwitchBot();
             }, 300);
+        }
+        if (connectTwitchEventSub) {
+            setTimeout(() => {
+                connectTwitchEventSub();
+            }, 500);
         }
     };
 
@@ -384,6 +397,12 @@ export default function BotCredentialsManager({
                                 {tokenValidation && tokenValidation.valid && !tokenValidation.hasRedemptions && (
                                     <div style={{ marginTop: '6px', fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
                                         ⚠️ Tu token actual no incluye <strong>channel:read:redemptions</strong>. Pulsa el enlace superior para generar un token con todos los permisos marcados y recibir los canjes en tiempo real.
+                                    </div>
+                                )}
+
+                                {tokenValidation && tokenValidation.valid && !tokenValidation.isBroadcaster && (
+                                    <div style={{ marginTop: '6px', fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                                        ℹ️ Este token pertenece a la cuenta de bot <strong>@{tokenValidation.login}</strong>. Para chat y anuncios funciona perfecto. Para que el detector lea los canjes de puntos de canal (GoodTokkii Pack X1/X3), Twitch exige que el token haya sido generado desde la cuenta propietaria del canal (<strong>@{botChannel || 'eviltokkii'}</strong>). Puedes vincularlo directamente desde la casilla <em>Inscripciones por Canje de Twitch</em>.
                                     </div>
                                 )}
 

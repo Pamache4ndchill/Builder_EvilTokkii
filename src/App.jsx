@@ -2194,7 +2194,12 @@ function App() {
 
   // Detector de Canjes de Puntos de Canal en Tiempo Real (Twitch EventSub WebSocket)
   const connectTwitchEventSub = async () => {
-    const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
+    const broadcasterToken = (
+      localStorage.getItem('twitch_broadcaster_oauth') ||
+      botOauthRef.current ||
+      localStorage.getItem('twitch_bot_oauth') ||
+      ''
+    ).replace(/^oauth:/i, '').trim();
     if (!broadcasterToken) {
       setEventSubStatus('missing_scope');
       return;
@@ -2228,6 +2233,7 @@ function App() {
             const sessionId = data.payload?.session?.id;
             const clientId = await getTwitchClientId(broadcasterToken);
             let broadcasterId = '1131620140'; // eviltokkii por defecto
+            const targetChannel = (botChannelRef.current || localStorage.getItem('twitch_bot_channel') || 'eviltokkii').toLowerCase().replace(/^#/, '').trim();
 
             try {
               const valRes = await fetch('https://id.twitch.tv/oauth2/validate', {
@@ -2235,7 +2241,12 @@ function App() {
               });
               if (valRes.ok) {
                 const valData = await valRes.json();
-                if (valData.user_id) broadcasterId = valData.user_id;
+                if (valData.user_id && (valData.login || '').toLowerCase() === targetChannel) {
+                  broadcasterId = valData.user_id;
+                } else {
+                  const fetchedId = await getTwitchUserId(targetChannel, broadcasterToken);
+                  if (fetchedId) broadcasterId = fetchedId;
+                }
               }
             } catch(e) {}
 
@@ -2300,11 +2311,15 @@ function App() {
                 if (alreadyExists) return;
 
                 // Verificar si la recompensa coincide con alguna categoría configurada en el Builder (Cartas/Packs)
-                const activeConfigured = configuredRewardsRef.current || [];
-                const isConfiguredReward = activeConfigured.some(c => {
+                const activeConfigured = (configuredRewardsRef.current && configuredRewardsRef.current.length > 0)
+                  ? configuredRewardsRef.current
+                  : ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+                const isPackTitle = /goodtokkii\s*pack/i.test(rawTitle) || /goodtokkii\s*pack/i.test(rewardTitle) || rewardTitle.startsWith('GoodTokkii Pack');
+                const isConfiguredReward = isPackTitle || activeConfigured.some(c => {
                   const cleanC = c.trim().toLowerCase();
                   return cleanC === rawTitle.trim().toLowerCase() ||
-                    normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase();
+                    normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase() ||
+                    normalizeRewardName(c).toLowerCase() === normalizeRewardName(rawTitle).toLowerCase();
                 });
 
                 // Verificar si es un canje de la Ruleta Sangrienta o poderes de la ruleta
@@ -2411,7 +2426,11 @@ function App() {
       esWs.onclose = () => {
         setEventSubStatus('disconnected');
         const isBotEnabled = localStorage.getItem('twitch_bot_enabled') !== 'false';
-        const hasBroadcasterToken = !!(localStorage.getItem('twitch_broadcaster_oauth') || '').trim();
+        const hasBroadcasterToken = !!(
+          localStorage.getItem('twitch_broadcaster_oauth') ||
+          localStorage.getItem('twitch_bot_oauth') ||
+          ''
+        ).trim();
         if (isBotEnabled && hasBroadcasterToken && !isManuallyDisconnectedRef.current) {
           setTimeout(() => {
             connectTwitchEventSub();
@@ -2551,11 +2570,13 @@ function App() {
       console.log("Rewards de Twitch obtenidos:", rewards.map(r => r.title));
 
       // Sincronizar ÚNICAMENTE los canjes que la streamer ya tiene configurados en la casilla
-      const activeConfigured = configuredRewardsRef.current || [];
+      const activeConfigured = (configuredRewardsRef.current && configuredRewardsRef.current.length > 0)
+        ? configuredRewardsRef.current
+        : ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
       const targetRewards = rewards.filter(r => {
         const rawTitle = (r.title || '').trim().toLowerCase();
         const norm = normalizeRewardName(r.title).toLowerCase();
-        return activeConfigured.some(c => {
+        return /goodtokkii\s*pack/i.test(r.title) || activeConfigured.some(c => {
           const cleanC = c.trim().toLowerCase();
           return cleanC === rawTitle || normalizeRewardName(c).toLowerCase() === norm;
         });
@@ -7648,5 +7669,206 @@ function App() {
     </div>
   );
 }
+
+const YoutubePlayer = ({ videoId, onEnded, volume = 50, isPlaying = true }) => {
+  const playerRef = useRef(null);
+  const containerId = useRef(`yt-player-${Math.random().toString(36).substr(2, 9)}`);
+
+  useEffect(() => {
+    let player;
+    const initPlayer = () => {
+      player = new window.YT.Player(containerId.current, {
+        host: 'https://www.youtube-nocookie.com',
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          autoplay: isPlaying ? 1 : 0,
+          controls: 1,
+          modestbranding: 1,
+          rel: 0
+        },
+        events: {
+          onReady: (event) => {
+            event.target.setVolume(volume);
+            if (isPlaying) {
+              event.target.playVideo();
+            } else {
+              event.target.pauseVideo();
+            }
+          },
+          onStateChange: (event) => {
+            if (event.data === 0) { // YT.PlayerState.ENDED is 0
+              onEnded();
+            }
+          }
+        }
+      });
+      playerRef.current = player;
+    };
+
+    if (window.YT && window.YT.Player) {
+      initPlayer();
+    } else {
+      if (!document.getElementById('youtube-iframe-api-script')) {
+        const tag = document.createElement('script');
+        tag.id = 'youtube-iframe-api-script';
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        if (firstScriptTag) {
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        } else {
+          document.head.appendChild(tag);
+        }
+      }
+      
+      const previousCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (previousCallback) previousCallback();
+        initPlayer();
+      };
+    }
+
+    return () => {
+      if (player) {
+        try {
+          player.destroy();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+  }, [videoId]);
+
+  useEffect(() => {
+    if (playerRef.current && typeof playerRef.current.setVolume === 'function') {
+      playerRef.current.setVolume(volume);
+    }
+  }, [volume]);
+
+  useEffect(() => {
+    if (playerRef.current) {
+      if (isPlaying && typeof playerRef.current.playVideo === 'function') {
+        playerRef.current.playVideo();
+      } else if (!isPlaying && typeof playerRef.current.pauseVideo === 'function') {
+        playerRef.current.pauseVideo();
+      }
+    }
+  }, [isPlaying]);
+
+  return <div style={{ width: '100%', height: '100%' }} id={containerId.current}></div>;
+};
+
+// Sleek Stream overlay widget for OBS browser source
+const SongRequestOverlay = ({ currentSong, volume, onEnded }) => {
+  const isPlaying = currentSong ? (currentSong.is_playing !== false) : false;
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('obs_reload_channel')
+      .on('broadcast', { event: 'reload_widget' }, () => {
+        window.location.reload(true); // force reload bypassing cache
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  return (
+    <div style={{
+      width: '100vw',
+      height: '100vh',
+      background: 'transparent',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      overflow: 'hidden',
+      fontFamily: 'system-ui, sans-serif',
+      color: '#fff',
+      padding: '20px',
+      boxSizing: 'border-box'
+    }}>
+      {currentSong && (
+        <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0.01, pointerEvents: 'none' }}>
+          <YoutubePlayer videoId={currentSong.video_id} onEnded={onEnded} volume={volume} isPlaying={isPlaying} />
+        </div>
+      )}
+      
+      {currentSong ? (
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(168, 85, 247, 0.4)',
+          borderRadius: '16px',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(168, 85, 247, 0.2)',
+          maxWidth: '450px',
+          animation: 'slideIn 0.5s ease-out'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            overflow: 'hidden',
+            border: '2px solid #A855F7',
+            animation: isPlaying ? 'spin 10s linear infinite' : 'none',
+            flexShrink: 0,
+            background: '#000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <img 
+              src={`https://img.youtube.com/vi/${currentSong.video_id}/mqdefault.jpg`} 
+              alt="cover" 
+              style={{ width: '140%', height: '140%', objectFit: 'cover' }} 
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
+            <span style={{ fontSize: '0.8rem', color: '#A855F7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              {isPlaying ? 'Sonando ahora' : 'Pausado'}
+            </span>
+            <span style={{ fontSize: '1.05rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentSong.title}</span>
+            <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Pedida por: <strong style={{ color: '#E9D5FF' }}>@{currentSong.requested_by}</strong></span>
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.5)',
+          backdropFilter: 'blur(8px)',
+          border: '1px dashed rgba(148, 163, 184, 0.3)',
+          borderRadius: '16px',
+          padding: '16px 24px',
+          fontSize: '0.9rem',
+          color: '#94A3B8',
+          animation: 'pulse 2s infinite'
+        }}>
+          Sin canciones en cola. ¡Usa tu comando en el chat!
+        </div>
+      )}
+      
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 1; }
+          100% { opacity: 0.6; }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 export default App;
