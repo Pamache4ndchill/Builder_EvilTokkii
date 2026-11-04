@@ -1724,11 +1724,14 @@ function App() {
     }
   };
   
+  const DEFAULT_TWITCH_TOKEN = 'x26zleknqyzh2vkbk1slzok3eq2fid';
+
   const [botOauth, setBotOauth] = useState(() => {
     const saved = localStorage.getItem('twitch_bot_oauth') || '';
-    if (!saved || saved !== 'eqwqvqkwf6onasha2qzupnzxlardxd') {
-      localStorage.setItem('twitch_bot_oauth', 'eqwqvqkwf6onasha2qzupnzxlardxd');
-      return 'eqwqvqkwf6onasha2qzupnzxlardxd';
+    const clean = saved.replace(/^oauth:/i, '').trim();
+    if (!clean || clean === 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+      localStorage.setItem('twitch_bot_oauth', `oauth:${DEFAULT_TWITCH_TOKEN}`);
+      return `oauth:${DEFAULT_TWITCH_TOKEN}`;
     }
     return saved;
   });
@@ -2199,12 +2202,18 @@ function App() {
 
   // Detector de Canjes de Puntos de Canal en Tiempo Real (Twitch EventSub WebSocket)
   const connectTwitchEventSub = async () => {
-    const broadcasterToken = (
+    let broadcasterToken = (
       localStorage.getItem('twitch_broadcaster_oauth') ||
       botOauthRef.current ||
       localStorage.getItem('twitch_bot_oauth') ||
-      ''
+      DEFAULT_TWITCH_TOKEN
     ).replace(/^oauth:/i, '').trim();
+
+    if (!broadcasterToken || broadcasterToken === 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+      broadcasterToken = DEFAULT_TWITCH_TOKEN;
+      localStorage.setItem('twitch_broadcaster_oauth', `oauth:${DEFAULT_TWITCH_TOKEN}`);
+    }
+
     if (!broadcasterToken) {
       setEventSubStatus('missing_scope');
       return;
@@ -2227,7 +2236,11 @@ function App() {
       setEventSubStatus('connecting');
       addBotLog("🔌 Conectando a Twitch EventSub WebSocket (Detector de Canjes)...");
 
-      const esWs = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
+      const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      const wsUrl = isLocal
+        ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/twitch-eventsub-ws`
+        : 'wss://eventsub.wss.twitch.tv/ws';
+      const esWs = new WebSocket(wsUrl);
       eventSubWsRef.current = esWs;
 
       esWs.onopen = () => {
@@ -2507,14 +2520,12 @@ function App() {
       clean = 'oauth:' + clean;
     }
     localStorage.setItem('twitch_broadcaster_oauth', clean);
+    localStorage.setItem('twitch_bot_oauth', clean);
+    setBotOauth(clean);
     
-    // Si no había bot configurado y este token tiene chat, guardarlo también
-    const existingBotOauth = localStorage.getItem('twitch_bot_oauth');
-    if (!existingBotOauth && broadcasterTokenValidation?.hasChat) {
-      localStorage.setItem('twitch_bot_oauth', clean);
-      if (broadcasterTokenValidation?.login) {
-        localStorage.setItem('twitch_bot_username', broadcasterTokenValidation.login);
-      }
+    if (broadcasterTokenValidation?.login) {
+      localStorage.setItem('twitch_bot_username', broadcasterTokenValidation.login);
+      setBotUsername(broadcasterTokenValidation.login);
     }
 
     triggerToast('✅ Token guardado. Conectando detector...');
@@ -3112,7 +3123,15 @@ function App() {
   const [manualUsername, setManualUsername] = useState('');
   const [isSubmittingManualRedemption, setIsSubmittingManualRedemption] = useState(false);
   const [showTwitchTokenModal, setShowTwitchTokenModal] = useState(false);
-  const [broadcasterTokenInput, setBroadcasterTokenInput] = useState(() => localStorage.getItem('twitch_broadcaster_oauth') || localStorage.getItem('twitch_bot_oauth') || '');
+  const [broadcasterTokenInput, setBroadcasterTokenInput] = useState(() => {
+    const saved = localStorage.getItem('twitch_broadcaster_oauth') || localStorage.getItem('twitch_bot_oauth') || '';
+    const clean = saved.replace(/^oauth:/i, '').trim();
+    if (!clean || clean === 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+      localStorage.setItem('twitch_broadcaster_oauth', `oauth:${DEFAULT_TWITCH_TOKEN}`);
+      return DEFAULT_TWITCH_TOKEN;
+    }
+    return clean;
+  });
   const [isTestingToken, setIsTestingToken] = useState(false);
   const [broadcasterTokenValidation, setBroadcasterTokenValidation] = useState(null);
   const [isSyncingTwitch, setIsSyncingTwitch] = useState(false);
