@@ -908,6 +908,7 @@ function App() {
   const isSongRequestEnabledRef = useRef(isSongRequestEnabled);
   const twitchUserIdsCacheRef = useRef({});
   const twitchClientIdCacheRef = useRef(null);
+  const twitchTokenInfoCacheRef = useRef({});
   const ttsUserCooldownRef = useRef({});
 
   useEffect(() => {
@@ -2147,11 +2148,11 @@ function App() {
 
 // Caches para IDs y Client ID movidos al inicio
 
-  const getTwitchClientId = async (token) => {
+  const getTwitchTokenInfo = async (token) => {
     const clean = (token || '').replace(/^oauth:/i, '').trim();
-    if (!clean) return 'gp762nuuoqcoxypju8c569th9wz7q5';
-    if (typeof twitchClientIdCacheRef.current === 'object' && twitchClientIdCacheRef.current !== null && twitchClientIdCacheRef.current[clean]) {
-      return twitchClientIdCacheRef.current[clean];
+    if (!clean) return null;
+    if (twitchTokenInfoCacheRef.current && twitchTokenInfoCacheRef.current[clean]) {
+      return twitchTokenInfoCacheRef.current[clean];
     }
     try {
       const res = await fetch('https://id.twitch.tv/oauth2/validate', {
@@ -2159,17 +2160,32 @@ function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.client_id) {
-          if (typeof twitchClientIdCacheRef.current !== 'object' || twitchClientIdCacheRef.current === null) {
-            twitchClientIdCacheRef.current = {};
-          }
-          twitchClientIdCacheRef.current[clean] = data.client_id;
-          return data.client_id;
+        if (!twitchTokenInfoCacheRef.current || typeof twitchTokenInfoCacheRef.current !== 'object') {
+          twitchTokenInfoCacheRef.current = {};
         }
+        twitchTokenInfoCacheRef.current[clean] = data;
+        if (!twitchClientIdCacheRef.current || typeof twitchClientIdCacheRef.current !== 'object') {
+          twitchClientIdCacheRef.current = {};
+        }
+        if (data.client_id) {
+          twitchClientIdCacheRef.current[clean] = data.client_id;
+        }
+        return data;
       }
     } catch (e) {
-      console.warn("Could not validate token client ID:", e);
+      console.warn("Could not validate token info:", e);
     }
+    return null;
+  };
+
+  const getTwitchClientId = async (token) => {
+    const clean = (token || '').replace(/^oauth:/i, '').trim();
+    if (!clean) return 'gp762nuuoqcoxypju8c569th9wz7q5';
+    if (typeof twitchClientIdCacheRef.current === 'object' && twitchClientIdCacheRef.current !== null && twitchClientIdCacheRef.current[clean]) {
+      return twitchClientIdCacheRef.current[clean];
+    }
+    const info = await getTwitchTokenInfo(clean);
+    if (info?.client_id) return info.client_id;
     return 'gp762nuuoqcoxypju8c569th9wz7q5'; // TwitchTokenGenerator Client ID oficial
   };
 
@@ -2762,39 +2778,63 @@ function App() {
   };
 
   // Twitch Helix Official Announcement Sender Dinámico
-  const sendTwitchAnnouncement = async (messageText, color = 'primary') => {
-    const rawToken = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
-    if (!rawToken) return false;
+  const sendTwitchAnnouncement = async (messageText, preferredColor = 'primary') => {
+    const botTok = (botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
+    const broadTok = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
+    
+    // Lista de tokens candidatos priorizando el token del bot, streamer y token oficial
+    const candidateTokens = [...new Set([botTok, broadTok, DEFAULT_TWITCH_TOKEN].filter(Boolean))];
+    if (candidateTokens.length === 0) return false;
 
     const currentChannel = (botChannelRef.current || localStorage.getItem('twitch_bot_channel') || 'eviltokkii').toLowerCase().replace(/^#/, '').trim();
-    const currentBot = (botUsernameRef.current || localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe').toLowerCase().trim();
+    const validColors = ['blue', 'green', 'orange', 'purple', 'primary'];
+    const chosenColor = validColors.includes((preferredColor || '').toLowerCase()) ? preferredColor.toLowerCase() : 'primary';
 
-    try {
-      const clientId = await getTwitchClientId(rawToken);
-      const broadcasterId = await getTwitchUserId(currentChannel, rawToken);
-      const moderatorId = await getTwitchUserId(currentBot, rawToken);
+    for (const token of candidateTokens) {
+      try {
+        const tokenInfo = await getTwitchTokenInfo(token);
+        if (!tokenInfo || !tokenInfo.user_id) continue;
 
-      if (broadcasterId && moderatorId) {
+        const scopes = tokenInfo.scopes || [];
+        const hasAnnounceScope = scopes.includes('moderator:manage:announcements');
+        if (!hasAnnounceScope) continue;
+
+        const clientId = tokenInfo.client_id || await getTwitchClientId(token);
+        // IMPORTANTE: En Twitch Helix, moderator_id DEBE coincidir exactamente con el user_id del dueño del token
+        const moderatorId = tokenInfo.user_id;
+
+        let broadcasterId = '1131620140'; // eviltokkii por defecto
+        if ((tokenInfo.login || '').toLowerCase() === currentChannel) {
+          broadcasterId = tokenInfo.user_id;
+        } else {
+          const fetchedBroadcasterId = await getTwitchUserId(currentChannel, token);
+          if (fetchedBroadcasterId) broadcasterId = fetchedBroadcasterId;
+        }
+
         const res = await fetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${rawToken}`,
+            'Authorization': `Bearer ${token}`,
             'Client-Id': clientId,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             message: messageText.substring(0, 500),
-            color: color
+            color: chosenColor
           })
         });
 
         if (res.status === 204 || res.ok) {
-          addBotLog(`📢 [Anuncio Destacado en #${currentChannel}]: "${messageText}"`);
+          addBotLog(`📢 [Anuncio Destacado (${chosenColor}) en #${currentChannel}]: "${messageText}"`);
           return true;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.warn(`Twitch Helix announcement error (${res.status}):`, errData);
+          addBotLog(`⚠️ Twitch Anuncio (${res.status}): ${errData.message || 'Error al enviar anuncio'}`);
         }
+      } catch (err) {
+        console.warn("Error sending Helix announcement:", err);
       }
-    } catch (err) {
-      console.warn("Helix Announcement error, using IRC command fallback:", err);
     }
     return false;
   };
@@ -2803,14 +2843,15 @@ function App() {
     let formattedText = (texto || '').trim();
     const channelTarget = (botChannelRef.current || localStorage.getItem('twitch_bot_channel') || 'eviltokkii').toLowerCase().replace(/^#/, '').trim();
 
-    // Detección de Anuncios (/announce)
-    const isAnnounce = /^[/\\.](announce|announcement)\s+/i.test(formattedText);
-    if (isAnnounce) {
-      const content = formattedText.replace(/^[/\\.](announce|announcement)\s+/i, '').trim();
+    // Detección de Anuncios (/announce o .announce o /anuncio)
+    const announceMatch = formattedText.match(/^[/\\.](announce|announcement|anuncio)(?:\s+\[?(blue|green|orange|purple|primary)\]?)?\s+([\s\S]+)$/i);
+    if (announceMatch) {
+      const color = (announceMatch[2] || 'primary').toLowerCase();
+      const content = announceMatch[3].trim();
       
       // 1. Intentar enviar Anuncio Oficial con Banner por API Helix
       try {
-        const sentViaHelix = await sendTwitchAnnouncement(content, 'primary');
+        const sentViaHelix = await sendTwitchAnnouncement(content, color);
         if (sentViaHelix) {
           if (!silent) triggerToast("📢 ¡Anuncio destacado enviado al chat!");
           return true;
@@ -2820,6 +2861,7 @@ function App() {
       }
 
       // 2. Si el token no tiene scope de anuncios de Helix, enviar el mensaje al chat como mensaje del bot para que NUNCA se pierda
+      addBotLog("⚠️ El anuncio no pudo enviarse como banner oficial de Twitch, enviando como mensaje normal...");
       formattedText = content;
     }
 

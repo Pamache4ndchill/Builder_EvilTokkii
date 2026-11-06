@@ -194,7 +194,12 @@ export default function ScheduledMessagesManager({
         return localStorage.getItem('twitch_bot_username') || 'EmiliaMaria_exe';
     });
     const [botOauth, setBotOauth] = useState(() => {
-        return localStorage.getItem('twitch_bot_oauth') || 'eqwqvqkwf6onasha2qzupnzxlardxd';
+        const saved = localStorage.getItem('twitch_bot_oauth') || '';
+        const clean = saved.replace(/^oauth:/i, '').trim();
+        if (!clean || clean === 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+            return 'oauth:x26zleknqyzh2vkbk1slzok3eq2fid';
+        }
+        return saved;
     });
     const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
 

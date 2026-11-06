@@ -43,7 +43,12 @@ export default function BotCredentialsManager({
         return localStorage.getItem('twitch_bot_username') || DEFAULT_USERNAME;
     });
     const [botOauth, setBotOauth] = useState(() => {
-        return localStorage.getItem('twitch_bot_oauth') || 'eqwqvqkwf6onasha2qzupnzxlardxd';
+        const saved = localStorage.getItem('twitch_bot_oauth') || '';
+        const clean = saved.replace(/^oauth:/i, '').trim();
+        if (!clean || clean === 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+            return 'oauth:x26zleknqyzh2vkbk1slzok3eq2fid';
+        }
+        return saved;
     });
     const [showPassword, setShowPassword] = useState(false);
     const [testMessage, setTestMessage] = useState('¡Hola chat! Soy EmiliaMaria_exe y estoy lista para acompañar el stream 🤖💜');
