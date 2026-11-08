@@ -6193,18 +6193,77 @@ function App() {
                                   <span style={{ fontSize: '0.8rem', background: '#A855F7', color: 'white', padding: '2px 8px', borderRadius: '10px' }}>{groupedByDay[day].length}</span>
                                 </div>
                                 
-                                <button 
-                                  className="btn-add" 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const list = groupedByDay[day].map(c => c.username).join('\n');
-                                    navigator.clipboard.writeText(list);
-                                    triggerToast(`📋 ¡${groupedByDay[day].length} usuarios de ${day} copiados!`);
-                                  }}
-                                  style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                                >
-                                  <Copy size={14} /> Copiar ({groupedByDay[day].length})
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <button 
+                                    type="button"
+                                    className="btn-add" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const list = groupedByDay[day].map(c => c.username).join('\n');
+                                      navigator.clipboard.writeText(list);
+                                      triggerToast(`📋 ¡${groupedByDay[day].length} usuarios de ${day} copiados!`);
+                                    }}
+                                    style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    title={`Copiar lista de usuarios de ${day}`}
+                                  >
+                                    <Copy size={14} /> Copiar ({groupedByDay[day].length})
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="btn-delete-news"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const count = groupedByDay[day].length;
+                                      showConfirm(`¿Eliminar todos los ${count} canjes del día ${day}? Esta acción los borrará permanentemente de la base de datos.`, async () => {
+                                        closeConfirm();
+                                        const idsToDelete = groupedByDay[day].map(c => c.id);
+                                        const idsSet = new Set(idsToDelete);
+
+                                        // Actualización visual instantánea
+                                        setTwitchList(prev => prev.filter(c => !idsSet.has(c.id)));
+                                        invalidateLibraryCache();
+
+                                        try {
+                                          const statusMap = getLocalStatusMap();
+                                          idsToDelete.forEach(id => {
+                                            if (statusMap[id]) delete statusMap[id];
+                                          });
+                                          localStorage.setItem('tokkii_redemptions_status_map', JSON.stringify(statusMap));
+                                        } catch (err) {}
+
+                                        const { error } = await supabase.from('twitch_redemptions').delete().in('id', idsToDelete);
+                                        if (!error) {
+                                          triggerToast(`🗑️ ¡${count} canjes del ${day} eliminados correctamente!`);
+                                          fetchLibraryItems(true);
+                                        } else {
+                                          triggerToast(`⚠️ Error al eliminar en base de datos: ${error.message}`);
+                                          fetchLibraryItems(true);
+                                        }
+                                      });
+                                    }}
+                                    style={{
+                                      position: 'relative',
+                                      top: '0',
+                                      right: '0',
+                                      opacity: 1,
+                                      padding: '6px 12px',
+                                      fontSize: '0.8rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      width: 'auto',
+                                      background: 'rgba(239, 68, 68, 0.12)',
+                                      color: '#f87171',
+                                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer'
+                                    }}
+                                    title={`Eliminar todos los ${groupedByDay[day].length} canjes del día ${day}`}
+                                  >
+                                    <Trash2 size={14} /> Eliminar día ({groupedByDay[day].length})
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Lista de usuarios con botones Entregado / Pendiente y Eliminar */}
