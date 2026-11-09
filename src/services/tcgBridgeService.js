@@ -185,10 +185,19 @@ export const grantTcgPack = async (userId, packType, quantity = 1) => {
 
 /**
  * Procesar un canje de sobre: busca al usuario y le entrega el sobre si está registrado
- * @returns {Promise<{ isPack: boolean, delivered: boolean, status: 'entregado' | 'pendiente', message: string, user?: any, packType?: string }>}
+ * @param {string} twitchUsername - Nombre de usuario en Twitch
+ * @param {string} rewardName - Nombre de la recompensa/categoría
+ * @param {object} [rewardConfig] - Configuración personalizada de sobres ({ packType, packCount })
+ * @returns {Promise<{ isPack: boolean, delivered: boolean, status: 'entregado' | 'pendiente', message: string, user?: any, packType?: string, packCount?: number }>}
  */
-export const deliverPackForRedemption = async (twitchUsername, rewardName) => {
-  const packType = getPackTypeFromReward(rewardName);
+export const deliverPackForRedemption = async (twitchUsername, rewardName, rewardConfig = null) => {
+  let packType = rewardConfig?.packType;
+  let packCount = Math.max(1, Number(rewardConfig?.packCount) || 1);
+
+  // Si no viene en rewardConfig, deducir por el nombre
+  if (!packType) {
+    packType = getPackTypeFromReward(rewardName);
+  }
 
   // Si no es un canje de sobre de cartas
   if (!packType) {
@@ -201,6 +210,7 @@ export const deliverPackForRedemption = async (twitchUsername, rewardName) => {
   }
 
   const labelPack = packType === 'pack_1' ? '1 Carta' : packType === 'pack_2' ? '2 Cartas' : packType === 'pack_3' ? '3 Cartas' : '5 Cartas';
+  const packText = packCount > 1 ? `${packCount}x Sobres de ${labelPack}` : `Sobre de ${labelPack}`;
 
   // Buscar si el usuario existe en el TCG
   const user = await findTcgUser(twitchUsername);
@@ -211,20 +221,22 @@ export const deliverPackForRedemption = async (twitchUsername, rewardName) => {
       delivered: false,
       status: 'pendiente',
       packType,
-      message: `@${twitchUsername} aún no ha iniciado sesión en el Visor de Cartas (tcg.eviltokkii.online). Sobre de ${labelPack} pendiente de entrega.`,
+      packCount,
+      message: `@${twitchUsername} aún no ha iniciado sesión en el Visor de Cartas (tcg.eviltokkii.online). ${packText} pendiente de entrega.`,
     };
   }
 
-  // Si el usuario existe, acreditar el sobre de inmediato
+  // Si el usuario existe, acreditar los sobres de inmediato
   try {
-    await grantTcgPack(user.id, packType, 1);
+    await grantTcgPack(user.id, packType, packCount);
     return {
       isPack: true,
       delivered: true,
       status: 'entregado',
       user,
       packType,
-      message: `¡Sobre de ${labelPack} entregado con éxito a ${user.display_name || user.username}!`,
+      packCount,
+      message: `¡${packText} entregado(s) con éxito a ${user.display_name || user.username}!`,
     };
   } catch (err) {
     return {
@@ -232,6 +244,7 @@ export const deliverPackForRedemption = async (twitchUsername, rewardName) => {
       delivered: false,
       status: 'pendiente',
       packType,
+      packCount,
       user,
       message: `Error al depositar sobre en la base de datos: ${err.message || 'Fallo de conexión'}`,
     };

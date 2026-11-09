@@ -1725,7 +1725,7 @@ function App() {
     }
   };
   
-  const DEFAULT_TWITCH_TOKEN = 'x26zleknqyzh2vkbk1slzok3eq2fid';
+  const DEFAULT_TWITCH_TOKEN = 'szvw0cs042vhhkl3payr6upao6rvsx';
 
   const [botOauth, setBotOauth] = useState(() => {
     const saved = localStorage.getItem('twitch_bot_oauth') || '';
@@ -2225,7 +2225,8 @@ function App() {
       DEFAULT_TWITCH_TOKEN
     ).replace(/^oauth:/i, '').trim();
 
-    if (!broadcasterToken || broadcasterToken === 'eqwqvqkwf6onasha2qzupnzxlardxd') {
+    const oldTokensList = ['eqwqvqkwf6onasha2qzupnzxlardxd', 'x26zleknqyzh2vkbk1slzok3eq2fid', 'mktgmpojizkoqyzcvaz90m287hjlui'];
+    if (!broadcasterToken || oldTokensList.includes(broadcasterToken)) {
       broadcasterToken = DEFAULT_TWITCH_TOKEN;
       localStorage.setItem('twitch_broadcaster_oauth', `oauth:${DEFAULT_TWITCH_TOKEN}`);
     }
@@ -2250,7 +2251,7 @@ function App() {
       }
 
       setEventSubStatus('connecting');
-      addBotLog("🔌 Conectando a Twitch EventSub WebSocket (Detector de Canjes)...");
+      addBotLog("🔌 Conectando a Twitch EventSub WebSocket (Detector de Canjes y Eventos)...");
 
       const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
       const wsUrl = isLocal
@@ -2261,6 +2262,78 @@ function App() {
 
       esWs.onopen = () => {
         console.log("Twitch EventSub WebSocket conectado.");
+      };
+
+      // Helper centralizado para procesar y entregar reclamos (Puntos, Bits, Subs)
+      const dispatchClaimDelivery = async ({ rewardTitle, viewerName, redeemedAt, customConfig = null, logPrefix = '🎁 [Canje Twitch]' }) => {
+        if (!viewerName || viewerName === 'Anónimo' || viewerName.toLowerCase() === 'anónimo') {
+          addBotLog(`ℹ️ ${logPrefix}: Evento de usuario anónimo registrado (no se entrega sobre TCG por ser anónimo).`);
+          return;
+        }
+
+        const targetTime = new Date(redeemedAt).getTime();
+        const alreadyExists = (twitchListRef.current || []).some(c => {
+          const sameUser = (c.username || '').toLowerCase() === viewerName.toLowerCase();
+          const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === normalizeRewardName(rewardTitle).toLowerCase();
+          return sameUser && sameReward && Math.abs(new Date(c.created_at).getTime() - targetTime) <= 15000;
+        });
+        if (alreadyExists) return;
+
+        const rewardConfig = customConfig || getRewardSettings(rewardTitle);
+
+        console.log(`${logPrefix}: @${viewerName} activó "${rewardTitle}" -> Config:`, rewardConfig);
+        addBotLog(`${logPrefix}: @${viewerName} activó "${rewardTitle}"`);
+
+        let initialStatus = 'pendiente';
+        try {
+          const delivery = await deliverPackForRedemption(viewerName, rewardTitle, rewardConfig);
+          if (delivery && delivery.isPack) {
+            if (delivery.delivered) {
+              initialStatus = 'entregado';
+              addBotLog(`🎉 [TCG Automático]: ¡${delivery.deliveredCount || rewardConfig.packCount} sobre(s) (${delivery.packType}) entregado(s) a @${viewerName}!`);
+            } else {
+              addBotLog(`⚠️ [TCG Automático]: @${viewerName} pendiente: ${delivery.message}`);
+            }
+          }
+        } catch (delivErr) {
+          console.warn("Error en auto-entrega TCG:", delivErr);
+        }
+
+        const tempId = `es_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const optimisticClaim = {
+          id: tempId,
+          reward_name: rewardTitle,
+          username: viewerName,
+          created_at: redeemedAt,
+          status: initialStatus
+        };
+
+        setLatestIncomingClaim({ username: viewerName, reward: rewardTitle, time: Date.now() });
+        setTwitchList(prev => deduplicateRedemptions([optimisticClaim, ...prev]));
+        twitchListRef.current = deduplicateRedemptions([optimisticClaim, ...twitchListRef.current]);
+
+        try {
+          const { data: insData, error: insErr } = await supabase
+            .from('twitch_redemptions')
+            .insert([{
+              reward_name: rewardTitle,
+              username: viewerName,
+              created_at: redeemedAt
+            }])
+            .select();
+
+          const savedId = insData?.[0]?.id;
+          if (savedId) {
+            setLocalClaimStatus(savedId, initialStatus);
+            setTwitchList(prev => prev.map(c => c.id === tempId ? { ...c, id: savedId } : c));
+          }
+
+          invalidateLibraryCache();
+          triggerToast(`${logPrefix} @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
+        } catch (insEx) {
+          console.error("Excepción al guardar canje:", insEx);
+          triggerToast(`${logPrefix} @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
+        }
       };
 
       esWs.onmessage = async (event) => {
@@ -2291,172 +2364,236 @@ function App() {
 
             console.log("Suscribiendo EventSub session:", sessionId, "clientId:", clientId, "broadcasterId:", broadcasterId);
 
-            // Suscribir al evento de canjes de puntos de canal (GoodTokkii Pack X1, X3, X5, etc.)
-            const subRes = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${broadcasterToken}`,
-                'Client-Id': clientId,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                type: 'channel.channel_points_custom_reward_redemption.add',
-                version: '1',
-                condition: { broadcaster_user_id: broadcasterId },
-                transport: {
-                  method: 'websocket',
-                  session_id: sessionId
-                }
-              })
-            });
+            // Lista de eventos de Helix EventSub a suscribir (Puntos de Canal, Bits, Suscripciones, Subs Regaladas)
+            const topicsToSubscribe = [
+              { type: 'channel.channel_points_custom_reward_redemption.add', version: '1', label: 'Puntos de Canal' },
+              { type: 'channel.cheer', version: '1', label: 'Bits / Cheers' },
+              { type: 'channel.subscribe', version: '1', label: 'Suscripciones Directas' },
+              { type: 'channel.subscription.gift', version: '1', label: 'Subs Regaladas' },
+              { type: 'channel.subscription.message', version: '1', label: 'Resubs' }
+            ];
 
-            if (subRes.ok || subRes.status === 202) {
-              setEventSubStatus('connected');
-              addBotLog("🟢 ¡Detector de Canjes de Twitch (EventSub) ACTIVO! Escuchando canjes en tiempo real.");
-              triggerToast("🟢 ¡Detector de Canjes de Twitch ACTIVO!");
-            } else {
-              const errData = await subRes.json().catch(() => ({}));
-              console.warn("EventSub subscription response error:", subRes.status, errData);
-              const errMsg = errData.message || (typeof errData === 'string' ? errData : 'Fallo de suscripción');
-              addBotLog(`⚠️ Twitch EventSub (${subRes.status}): ${errMsg}`);
-              if (subRes.status === 403 || subRes.status === 401 || String(errMsg).toLowerCase().includes('scope') || String(errMsg).toLowerCase().includes('authorization')) {
-                setEventSubStatus('missing_scope');
-                triggerToast(`⚠️ EventSub (${subRes.status}): ${errMsg}`);
-              } else {
-                setEventSubStatus('disconnected');
-                triggerToast(`⚠️ Error EventSub (${subRes.status}): ${errMsg}`);
+            let activeSubLabels = [];
+            let missingPermissions = [];
+
+            for (const topic of topicsToSubscribe) {
+              try {
+                const subRes = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${broadcasterToken}`,
+                    'Client-Id': clientId,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    type: topic.type,
+                    version: topic.version,
+                    condition: { broadcaster_user_id: broadcasterId },
+                    transport: {
+                      method: 'websocket',
+                      session_id: sessionId
+                    }
+                  })
+                });
+
+                if (subRes.ok || subRes.status === 202) {
+                  activeSubLabels.push(topic.label);
+                } else {
+                  const errData = await subRes.json().catch(() => ({}));
+                  console.warn(`EventSub subscription ${topic.type} failed:`, subRes.status, errData);
+                  if (subRes.status === 403 || subRes.status === 401) {
+                    missingPermissions.push(topic.label);
+                  }
+                }
+              } catch (subErr) {
+                console.warn(`Error suscribiendo tópico ${topic.type}:`, subErr);
               }
+            }
+
+            if (activeSubLabels.length > 0) {
+              setEventSubStatus('connected');
+              addBotLog(`🟢 ¡Detector de Canjes y Eventos Twitch ACTIVO! (${activeSubLabels.join(', ')})`);
+              if (missingPermissions.length > 0) {
+                addBotLog(`ℹ️ Faltan permisos para: ${missingPermissions.join(', ')}. Puedes renovar el token para activarlos.`);
+              }
+              triggerToast(`🟢 ¡Detector Twitch ACTIVO! (${activeSubLabels.length} eventos en vivo)`);
+            } else {
+              setEventSubStatus('missing_scope');
+              addBotLog("⚠️ Twitch EventSub: El token actual no tiene permisos suficientes para suscribirse a eventos.");
+              triggerToast("⚠️ EventSub: Faltan permisos en el Token.");
             }
           } else if (msgType === 'notification') {
             const subType = data.metadata?.subscription_type;
+            const ev = data.payload?.event;
+            if (!ev) return;
+
+            // Deduplicar eventos por ID único de EventSub
+            if (ev.id) {
+              if (seenTwitchRedemptionIdsRef.current.has(ev.id)) return;
+              seenTwitchRedemptionIdsRef.current.add(ev.id);
+            }
+
+            // 1. CANJES DE PUNTOS DE CANAL
             if (subType === 'channel.channel_points_custom_reward_redemption.add') {
-              const ev = data.payload?.event;
-              if (ev) {
-                // Deduplicar eventos repetidos de Twitch EventSub
-                if (ev.id) {
-                  if (seenTwitchRedemptionIdsRef.current.has(ev.id)) return;
-                  seenTwitchRedemptionIdsRef.current.add(ev.id);
-                }
+              const rawTitle = ev.reward?.title || '';
+              const rewardTitle = normalizeRewardName(rawTitle);
+              const viewerName = ev.user_name || ev.user_login || 'Espectador';
+              const redeemedAt = ev.redeemed_at || new Date().toISOString();
 
-                const rawTitle = ev.reward?.title || '';
-                const rewardTitle = normalizeRewardName(rawTitle);
-                const viewerName = ev.user_name || ev.user_login || 'Espectador';
-                const redeemedAt = ev.redeemed_at || new Date().toISOString();
-                const targetTime = new Date(redeemedAt).getTime();
-
-                // Verificar si ya existe en la lista de canjes cargada (mismo viewer, premio y timestamp dentro de 15s)
-                const alreadyExists = (twitchListRef.current || []).some(c => {
-                  const sameUser = (c.username || '').toLowerCase() === viewerName.toLowerCase();
-                  const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === rewardTitle.toLowerCase();
-                  return sameUser && sameReward && Math.abs(new Date(c.created_at).getTime() - targetTime) <= 15000;
-                });
-                if (alreadyExists) return;
-
-                // Verificar si la recompensa coincide con alguna categoría configurada en el Builder (Cartas/Packs)
-                const activeConfigured = (configuredRewardsRef.current && configuredRewardsRef.current.length > 0)
-                  ? configuredRewardsRef.current
-                  : ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
-                const isPackTitle = /goodtokkii\s*pack/i.test(rawTitle) || /goodtokkii\s*pack/i.test(rewardTitle) || rewardTitle.startsWith('GoodTokkii Pack');
-                const isConfiguredReward = isPackTitle || activeConfigured.some(c => {
-                  const cleanC = c.trim().toLowerCase();
-                  return cleanC === rawTitle.trim().toLowerCase() ||
-                    normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase() ||
-                    normalizeRewardName(c).toLowerCase() === normalizeRewardName(rawTitle).toLowerCase();
-                });
-
-                // Verificar si es un canje de la Ruleta Sangrienta o poderes de la ruleta
-                const isRuletaReward = rewardTitle.toLowerCase() === 'ruleta sangrienta' ||
-                  rawTitle.toLowerCase() === 'ruleta sangrienta' ||
-                  (() => {
-                    try {
-                      const savedPowers = localStorage.getItem('ruleta_sangrienta_powers');
-                      if (savedPowers) {
-                        const parsed = JSON.parse(savedPowers);
-                        return Array.isArray(parsed) && parsed.some(p => p.name.toLowerCase() === rawTitle.toLowerCase() || p.name.toLowerCase() === rewardTitle.toLowerCase());
-                      }
-                    } catch(e) {}
-                    return false;
-                  })();
-
-                if (!isConfiguredReward && !isRuletaReward) {
-                  return; // Ignorar canjes que no pertenezcan ni a cartas ni a ruleta
-                }
-
-                // Si es un canje exclusivo de la Ruleta Sangrienta, guardarlo en Supabase para que la ruleta lo tome y salir sin contaminar las categorías de cartas
-                if (isRuletaReward && !isConfiguredReward) {
-                  console.log(`🎰 [Ruleta Twitch Detectado]: @${viewerName} canjeó "${rawTitle}"`);
-                  addBotLog(`🎰 [Ruleta Twitch Detectado]: @${viewerName} canjeó "${rawTitle}"`);
+              // Ruleta Sangrienta
+              const isRuletaReward = rewardTitle.toLowerCase() === 'ruleta sangrienta' ||
+                rawTitle.toLowerCase() === 'ruleta sangrienta' ||
+                (() => {
                   try {
-                    await supabase.from('twitch_redemptions').insert([{
-                      reward_name: rawTitle,
-                      username: viewerName,
-                      created_at: redeemedAt
-                    }]);
-                  } catch(dbErr) {
-                    console.warn("Error guardando canje de ruleta en Supabase:", dbErr);
-                  }
-                  return;
-                }
-
-                console.log(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}" (Original: "${rawTitle}")`);
-                addBotLog(`🎁 [Canje Twitch Detectado]: @${viewerName} canjeó "${rewardTitle}"`);
-
-                // Intentar entregar sobre automáticamente en TCG
-                let initialStatus = 'pendiente';
-                try {
-                  const delivery = await deliverPackForRedemption(viewerName, rewardTitle);
-                  if (delivery && delivery.isPack) {
-                    if (delivery.delivered) {
-                      initialStatus = 'entregado';
-                      addBotLog(`🎉 [TCG Automático]: ¡Sobre (${delivery.packType}) entregado a @${viewerName}!`);
-                    } else {
-                      addBotLog(`⚠️ [TCG Automático]: @${viewerName} pendiente: ${delivery.message}`);
+                    const savedPowers = localStorage.getItem('ruleta_sangrienta_powers');
+                    if (savedPowers) {
+                      const parsed = JSON.parse(savedPowers);
+                      return Array.isArray(parsed) && parsed.some(p => p.name.toLowerCase() === rawTitle.toLowerCase() || p.name.toLowerCase() === rewardTitle.toLowerCase());
                     }
-                  }
-                } catch (delivErr) {
-                  console.warn("Error en auto-entrega TCG:", delivErr);
-                }
+                  } catch(e) {}
+                  return false;
+                })();
 
-                // Inyección instantánea en memoria para actualización inmediata de la UI
-                const tempId = `es_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-                const optimisticClaim = {
-                  id: tempId,
-                  reward_name: rewardTitle,
-                  username: viewerName,
-                  created_at: redeemedAt,
-                  status: initialStatus
+              const activeConfigured = (configuredRewardsRef.current && configuredRewardsRef.current.length > 0)
+                ? configuredRewardsRef.current
+                : ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+              const isPackTitle = /goodtokkii\s*pack/i.test(rawTitle) || /goodtokkii\s*pack/i.test(rewardTitle) || rewardTitle.startsWith('GoodTokkii Pack');
+              const isConfiguredReward = isPackTitle || activeConfigured.some(c => {
+                const cleanC = c.trim().toLowerCase();
+                return cleanC === rawTitle.trim().toLowerCase() ||
+                  normalizeRewardName(c).toLowerCase() === rewardTitle.toLowerCase() ||
+                  normalizeRewardName(c).toLowerCase() === normalizeRewardName(rawTitle).toLowerCase();
+              });
+
+              if (!isConfiguredReward && !isRuletaReward) return;
+
+              if (isRuletaReward && !isConfiguredReward) {
+                console.log(`🎰 [Ruleta Twitch Detectado]: @${viewerName} canjeó "${rawTitle}"`);
+                addBotLog(`🎰 [Ruleta Twitch Detectado]: @${viewerName} canjeó "${rawTitle}"`);
+                try {
+                  await supabase.from('twitch_redemptions').insert([{
+                    reward_name: rawTitle,
+                    username: viewerName,
+                    created_at: redeemedAt
+                  }]);
+                } catch(dbErr) {
+                  console.warn("Error guardando canje de ruleta en Supabase:", dbErr);
+                }
+                return;
+              }
+
+              await dispatchClaimDelivery({
+                rewardTitle,
+                viewerName,
+                redeemedAt,
+                logPrefix: '🎁 [Puntos Twitch]'
+              });
+            }
+
+            // 2. DONACIÓN DE BITS
+            else if (subType === 'channel.cheer') {
+              const bits = Number(ev.bits || 0);
+              const viewerName = ev.is_anonymous ? 'Anónimo' : (ev.user_name || ev.user_login || 'Espectador');
+              const redeemedAt = new Date().toISOString();
+
+              // Buscar si hay categorías configuradas para Bits
+              const allRewardNames = configuredRewardsRef.current || [];
+              const bitsRewards = allRewardNames
+                .map(name => ({ name, cfg: getRewardSettings(name) }))
+                .filter(item => item.cfg.eventType === 'bits' && bits >= (item.cfg.minBits || 100))
+                .sort((a, b) => (b.cfg.minBits || 100) - (a.cfg.minBits || 100)); // Tomar la de mayor umbral cumplido
+
+              if (bitsRewards.length > 0) {
+                const matched = bitsRewards[0];
+                await dispatchClaimDelivery({
+                  rewardTitle: matched.name,
+                  viewerName,
+                  redeemedAt,
+                  customConfig: matched.cfg,
+                  logPrefix: `🟡 [Donación ${bits} Bits]`
+                });
+              } else {
+                addBotLog(`🟡 [Bits Twitch]: @${viewerName} donó ${bits} bits (No coincide con ninguna categoría de bits configurada).`);
+              }
+            }
+
+            // 3. SUSCRIPCIÓN DIRECTA
+            else if (subType === 'channel.subscribe') {
+              if (ev.is_gift) return; // Las regaladas se manejan en subscription.gift con el conteo exacto
+              const viewerName = ev.user_name || ev.user_login || 'Espectador';
+              const redeemedAt = new Date().toISOString();
+
+              const allRewardNames = configuredRewardsRef.current || [];
+              const subReward = allRewardNames
+                .map(name => ({ name, cfg: getRewardSettings(name) }))
+                .find(item => item.cfg.eventType === 'sub');
+
+              if (subReward) {
+                await dispatchClaimDelivery({
+                  rewardTitle: subReward.name,
+                  viewerName,
+                  redeemedAt,
+                  customConfig: subReward.cfg,
+                  logPrefix: '⭐ [Suscripción Directa]'
+                });
+              } else {
+                addBotLog(`⭐ [Suscripción Twitch]: @${viewerName} se ha suscrito al canal.`);
+              }
+            }
+
+            // 4. RESUB / MENSAJE DE SUSCRIPCIÓN
+            else if (subType === 'channel.subscription.message') {
+              const viewerName = ev.user_name || ev.user_login || 'Espectador';
+              const redeemedAt = new Date().toISOString();
+              const cumulativeMonths = ev.cumulative_months || 1;
+
+              const allRewardNames = configuredRewardsRef.current || [];
+              const subReward = allRewardNames
+                .map(name => ({ name, cfg: getRewardSettings(name) }))
+                .find(item => item.cfg.eventType === 'sub');
+
+              if (subReward) {
+                await dispatchClaimDelivery({
+                  rewardTitle: subReward.name,
+                  viewerName,
+                  redeemedAt,
+                  customConfig: subReward.cfg,
+                  logPrefix: `⭐ [Resub ${cumulativeMonths} meses]`
+                });
+              }
+            }
+
+            // 5. SUBS REGALADAS
+            else if (subType === 'channel.subscription.gift') {
+              const gifterName = ev.is_anonymous ? 'Anónimo' : (ev.user_name || ev.user_login || 'Espectador');
+              const totalSubs = Number(ev.total || 1);
+              const redeemedAt = new Date().toISOString();
+
+              const allRewardNames = configuredRewardsRef.current || [];
+              const giftSubReward = allRewardNames
+                .map(name => ({ name, cfg: getRewardSettings(name) }))
+                .find(item => item.cfg.eventType === 'gift_sub');
+
+              if (giftSubReward) {
+                const baseCfg = giftSubReward.cfg;
+                const effectiveCount = baseCfg.giftSubMode === 'per_sub'
+                  ? (baseCfg.packCount || 1) * totalSubs
+                  : (baseCfg.packCount || 1);
+
+                const finalCfg = {
+                  ...baseCfg,
+                  packCount: effectiveCount
                 };
 
-                setLatestIncomingClaim({ username: viewerName, reward: rewardTitle, time: Date.now() });
-                setTwitchList(prev => deduplicateRedemptions([optimisticClaim, ...prev]));
-                twitchListRef.current = deduplicateRedemptions([optimisticClaim, ...twitchListRef.current]);
-
-                try {
-                  const { data: insData, error: insErr } = await supabase
-                    .from('twitch_redemptions')
-                    .insert([{
-                      reward_name: rewardTitle,
-                      username: viewerName,
-                      created_at: redeemedAt
-                    }])
-                    .select();
-
-                  if (insErr) {
-                    console.error("Error al insertar canje en Supabase:", insErr);
-                  }
-
-                  const savedId = insData?.[0]?.id;
-                  if (savedId) {
-                    setLocalClaimStatus(savedId, initialStatus);
-                    setTwitchList(prev => prev.map(c => c.id === tempId ? { ...c, id: savedId } : c));
-                  }
-
-                  invalidateLibraryCache();
-                  triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
-                } catch (insEx) {
-                  console.error("Excepción al guardar canje:", insEx);
-                  triggerToast(`🎁 ¡Nuevo canje de @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
-                }
+                await dispatchClaimDelivery({
+                  rewardTitle: giftSubReward.name,
+                  viewerName: gifterName,
+                  redeemedAt,
+                  customConfig: finalCfg,
+                  logPrefix: `🎁 [Regaló ${totalSubs} Sub(s)]`
+                });
+              } else {
+                addBotLog(`🎁 [Subs Regaladas]: @${gifterName} regaló ${totalSubs} sub(s).`);
               }
             }
           }
@@ -2504,6 +2641,8 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         const hasRedemptions = (data.scopes || []).includes('channel:read:redemptions') || (data.scopes || []).includes('channel:manage:redemptions');
+        const hasBits = (data.scopes || []).includes('bits:read');
+        const hasSubscriptions = (data.scopes || []).includes('channel:read:subscriptions');
         const isBroadcaster = (data.login || '').toLowerCase() === 'eviltokkii';
         setBroadcasterTokenValidation({
           valid: true,
@@ -2511,6 +2650,8 @@ function App() {
           userId: data.user_id,
           scopes: data.scopes || [],
           hasRedemptions,
+          hasBits,
+          hasSubscriptions,
           isBroadcaster,
           hasChat: (data.scopes || []).includes('chat:read') && (data.scopes || []).includes('chat:edit'),
           hasAnnounce: (data.scopes || []).includes('moderator:manage:announcements')
@@ -3067,12 +3208,35 @@ function App() {
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [isLoadingParticipations, setIsLoadingParticipations] = useState(false);
 
-  // Twitch Redemptions State
+  // Twitch Redemptions State & Configurations
   const DEFAULT_TWITCH_REWARDS = ['GoodTokkii Pack X1', 'GoodTokkii Pack X3'];
+  const DEFAULT_REWARD_SETTINGS = {
+    'GoodTokkii Pack X1': {
+      name: 'GoodTokkii Pack X1',
+      eventType: 'points',
+      twitchRewardTitle: 'GoodTokkii Pack X1',
+      packType: 'pack_1',
+      packCount: 1,
+      minBits: 100,
+      giftSubMode: 'per_sub',
+      description: 'Puntos de Canal • Entrega 1 Sobre de 1 Carta'
+    },
+    'GoodTokkii Pack X3': {
+      name: 'GoodTokkii Pack X3',
+      eventType: 'points',
+      twitchRewardTitle: 'GoodTokkii Pack X3',
+      packType: 'pack_3',
+      packCount: 1,
+      minBits: 500,
+      giftSubMode: 'per_sub',
+      description: 'Puntos de Canal • Entrega 1 Sobre de 3 Cartas'
+    }
+  };
+
   const [configuredRewards, setConfiguredRewards] = useState(() => {
     try {
       localStorage.removeItem('twitch_configured_rewards');
-      localStorage.removeItem('twitch_configured_rewards_v2'); // Limpiar categorías automáticas pasadas
+      localStorage.removeItem('twitch_configured_rewards_v2');
       const saved = localStorage.getItem('twitch_configured_rewards_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -3082,6 +3246,73 @@ function App() {
     return DEFAULT_TWITCH_REWARDS;
   });
 
+  const [rewardConfigs, setRewardConfigs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('twitch_reward_configs_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return { ...DEFAULT_REWARD_SETTINGS, ...parsed };
+      }
+    } catch(e) {}
+    return DEFAULT_REWARD_SETTINGS;
+  });
+
+  const rewardConfigsRef = useRef(rewardConfigs);
+  useEffect(() => {
+    rewardConfigsRef.current = rewardConfigs;
+  }, [rewardConfigs]);
+
+  const getRewardSettings = (rewardName) => {
+    if (!rewardName) return { name: 'Canje', eventType: 'points', packType: 'pack_1', packCount: 1 };
+    const clean = normalizeRewardName(rewardName);
+    const cfg = rewardConfigsRef.current?.[rewardName] || rewardConfigsRef.current?.[clean];
+    if (cfg) return cfg;
+
+    const lower = clean.toLowerCase();
+    if (lower.includes('bit')) {
+      return { name: clean, eventType: 'bits', packType: 'pack_3', packCount: 1, minBits: 500 };
+    }
+    if (lower.includes('sub regalada') || lower.includes('gift')) {
+      return { name: clean, eventType: 'gift_sub', packType: 'pack_3', packCount: 1, giftSubMode: 'per_sub' };
+    }
+    if (lower.includes('sub')) {
+      return { name: clean, eventType: 'sub', packType: 'pack_3', packCount: 1 };
+    }
+    if (lower.includes('x5') || lower.includes('5 carta')) {
+      return { name: clean, eventType: 'points', packType: 'pack_5', packCount: 1, twitchRewardTitle: clean };
+    }
+    if (lower.includes('x3') || lower.includes('3 carta')) {
+      return { name: clean, eventType: 'points', packType: 'pack_3', packCount: 1, twitchRewardTitle: clean };
+    }
+    return { name: clean, eventType: 'points', packType: 'pack_1', packCount: 1, twitchRewardTitle: clean };
+  };
+
+  const saveRewardSettings = (name, newConfig) => {
+    const updated = {
+      ...rewardConfigsRef.current,
+      [name]: {
+        ...(rewardConfigsRef.current?.[name] || {}),
+        ...newConfig,
+        name
+      }
+    };
+    setRewardConfigs(updated);
+    rewardConfigsRef.current = updated;
+    try {
+      localStorage.setItem('twitch_reward_configs_v2', JSON.stringify(updated));
+    } catch(e) {}
+  };
+
+  // State for Editing Reward Config modal
+  const [editingRewardConfig, setEditingRewardConfig] = useState(null);
+
+  // States for New Reward creation modal
+  const [newRewardEventType, setNewRewardEventType] = useState('points');
+  const [newRewardPackType, setNewRewardPackType] = useState('pack_1');
+  const [newRewardPackCount, setNewRewardPackCount] = useState(1);
+  const [newRewardMinBits, setNewRewardMinBits] = useState(500);
+  const [newRewardGiftSubMode, setNewRewardGiftSubMode] = useState('per_sub');
+
   const [deliveringClaimId, setDeliveringClaimId] = useState(null);
 
   const handleDeliverClaimPack = async (claim) => {
@@ -3089,14 +3320,15 @@ function App() {
     setDeliveringClaimId(claim.id);
     try {
       const rewardToDeliver = normalizeRewardName(claim.reward_name) || selectedRewardName || 'GoodTokkii Pack X1';
-      const result = await deliverPackForRedemption(claim.username, rewardToDeliver);
+      const config = getRewardSettings(rewardToDeliver);
+      const result = await deliverPackForRedemption(claim.username, rewardToDeliver, config);
       if (result.delivered) {
         setLocalClaimStatus(claim.id, 'entregado');
         try {
           await supabase.from('twitch_redemptions').update({ status: 'entregado' }).eq('id', claim.id);
         } catch (e) {}
         setTwitchList(prev => prev.map(c => c.id === claim.id ? { ...c, status: 'entregado' } : c));
-        triggerToast(`🎉 ¡Sobre (${result.packType}) acreditado con éxito a @${claim.username}!`);
+        triggerToast(`🎉 ¡${result.packCount > 1 ? `${result.packCount}x ` : ''}Sobre (${result.packType}) acreditado con éxito a @${claim.username}!`);
       } else {
         triggerToast(`⚠️ ${result.message}`);
       }
@@ -5814,6 +6046,16 @@ function App() {
                       return allRewardsList.map(rewardName => {
                         const claims = deduplicateRedemptions((twitchList || []).filter(t => normalizeRewardName(t.reward_name) === normalizeRewardName(rewardName)));
                         const isDefault = ['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'].includes(rewardName);
+                        const cfg = getRewardSettings(rewardName);
+
+                        const eventBadgeInfo = {
+                          points: { label: '🟣 Puntos de Canal', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.35)', color: '#C084FC' },
+                          bits: { label: `🟡 ${cfg.minBits || 100} Bits Mín.`, bg: 'rgba(234, 179, 8, 0.15)', border: 'rgba(234, 179, 8, 0.35)', color: '#facc15' },
+                          sub: { label: '⭐ Suscripción', bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.35)', color: '#38bdf8' },
+                          gift_sub: { label: `🎁 Subs Regaladas (${cfg.giftSubMode === 'per_sub' ? 'x sub' : 'fijo'})`, bg: 'rgba(244, 63, 94, 0.15)', border: 'rgba(244, 63, 94, 0.35)', color: '#fb7185' }
+                        }[cfg.eventType] || { label: '🟣 Puntos', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.35)', color: '#C084FC' };
+
+                        const packLabel = cfg.packType === 'pack_1' ? '1 Carta' : cfg.packType === 'pack_5' ? '5 Cartas' : '3 Cartas';
 
                         return (
                           <div 
@@ -5837,43 +6079,40 @@ function App() {
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A855F7' }}>
+                                <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: eventBadgeInfo.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: eventBadgeInfo.color }}>
                                   <Gift size={22} />
                                 </div>
                                 <div>
-                                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 800 }}>
+                                  <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)', fontWeight: 800 }}>
                                     {rewardName}
                                   </h3>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                                    {isDefault && (
-                                      <span style={{ fontSize: '0.72rem', color: '#A855F7', fontWeight: 600 }}>
-                                        Canje Vinculado
-                                      </span>
-                                    )}
-                                    {rewardName === 'GoodTokkii Pack X1' && (
-                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                        ✨ 3,000 pts (1 Carta)
-                                      </span>
-                                    )}
-                                    {rewardName === 'GoodTokkii Pack X2' && (
-                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                        ✨ 4,000 pts (2 Cartas)
-                                      </span>
-                                    )}
-                                    {rewardName === 'GoodTokkii Pack X3' && (
-                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                        ✨ 5,000 pts (3 Cartas)
-                                      </span>
-                                    )}
-                                    {rewardName === 'GoodTokkii Pack X5' && (
-                                      <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '1px 6px', borderRadius: '8px' }}>
-                                        ✨ 10,000 pts (5 Cartas)
-                                      </span>
-                                    )}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.72rem', color: eventBadgeInfo.color, fontWeight: 700, background: eventBadgeInfo.bg, border: `1px solid ${eventBadgeInfo.border}`, padding: '1px 8px', borderRadius: '8px' }}>
+                                      {eventBadgeInfo.label}
+                                    </span>
+                                    <span style={{ fontSize: '0.72rem', color: '#a78bfa', fontWeight: 700, background: 'rgba(167, 139, 250, 0.12)', border: '1px solid rgba(167, 139, 250, 0.3)', padding: '1px 8px', borderRadius: '8px' }}>
+                                      📦 {cfg.packCount || 1}x Sobre ({packLabel})
+                                    </span>
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  type="button"
+                                  title={`Ajustes de entrega para "${rewardName}"`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingRewardConfig({
+                                      name: rewardName,
+                                      ...cfg
+                                    });
+                                  }}
+                                  style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                                  onMouseEnter={e => { e.currentTarget.style.color = '#C084FC'; e.currentTarget.style.borderColor = '#A855F7'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'; }}
+                                >
+                                  <Settings size={15} />
+                                </button>
                                 <button
                                   type="button"
                                   title={`Eliminar categoría "${rewardName}" del Builder`}
@@ -5881,11 +6120,11 @@ function App() {
                                     e.stopPropagation();
                                     handleDeleteCategory(rewardName);
                                   }}
-                                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
-                                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                                  style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                                  onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'; }}
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={15} />
                                 </button>
                                 <span style={{
                                   padding: '4px 10px',
@@ -6512,9 +6751,10 @@ function App() {
             )}
 
             {/* Modal para añadir nueva categoría/canje personalizado */}
+            {/* Modal para añadir nueva categoría/canje personalizado con configuración de cartas */}
             {showNewRewardModal && (
               <div className="modal-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(3px)' }}>
-                <div className="card animate-slide-down" style={{ width: '90%', maxWidth: '460px', padding: '24px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                <div className="card animate-slide-down" style={{ width: '92%', maxWidth: '500px', padding: '26px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
                   <button 
                     type="button" 
                     onClick={() => setShowNewRewardModal(false)}
@@ -6523,47 +6763,12 @@ function App() {
                     <X size={20} />
                   </button>
 
-                  <h3 style={{ margin: '0 0 10px 0', fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Sparkles size={18} color="#A855F7" /> Añadir Categoría de Canje
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="#A855F7" /> Añadir Categoría de Canje / Evento
                   </h3>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
-                    Escribe el nombre de la recompensa de Twitch <strong>exactamente como se llama en Twitch</strong> para crear su tarjeta en el Builder y registrar sus canjes automáticamente.
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '18px', lineHeight: 1.5 }}>
+                    Configura el tipo de evento y los sobres de cartas que entregará automáticamente el bot del TCG.
                   </p>
-
-                  {/* Sugerencias Rápidas */}
-                  <div style={{ marginBottom: '14px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-                      Sugerencias de packs oficiales:
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {['GoodTokkii Pack X1', 'GoodTokkii Pack X2', 'GoodTokkii Pack X3', 'GoodTokkii Pack X5'].map(packName => {
-                        const isAdded = configuredRewards.some(c => c.toLowerCase() === packName.toLowerCase());
-                        return (
-                          <button
-                            key={packName}
-                            type="button"
-                            disabled={isAdded}
-                            onClick={() => setNewRewardInput(packName)}
-                            style={{
-                              fontSize: '0.75rem',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid ' + (isAdded ? 'rgba(255,255,255,0.08)' : 'rgba(168, 85, 247, 0.4)'),
-                              background: isAdded ? 'rgba(255,255,255,0.04)' : 'rgba(168, 85, 247, 0.15)',
-                              color: isAdded ? 'var(--text-muted)' : '#C084FC',
-                              cursor: isAdded ? 'not-allowed' : 'pointer',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            {packName} {isAdded ? '✓ (Añadido)' : '+'}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
 
                   <form onSubmit={async (e) => {
                     e.preventDefault();
@@ -6571,6 +6776,17 @@ function App() {
                     if (!trimmed) return;
                     const normalized = normalizeRewardName(trimmed);
                     const alreadyExists = configuredRewards.some(c => c.toLowerCase() === normalized.toLowerCase() || c.toLowerCase() === trimmed.toLowerCase());
+                    
+                    const rewardSettingsToSave = {
+                      eventType: newRewardEventType,
+                      packType: newRewardPackType,
+                      packCount: Math.max(1, Number(newRewardPackCount) || 1),
+                      minBits: Number(newRewardMinBits) || 100,
+                      giftSubMode: newRewardGiftSubMode || 'per_sub'
+                    };
+
+                    saveRewardSettings(normalized, rewardSettingsToSave);
+
                     if (!alreadyExists) {
                       const updated = [...configuredRewards, normalized];
                       setConfiguredRewards(updated);
@@ -6578,29 +6794,130 @@ function App() {
                       try {
                         localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(updated));
                       } catch(e) {}
-                      triggerToast(`✨ Canje "${normalized}" añadido con éxito.`);
-                      // Sincronizar inmediatamente si hay conexión o token
+                      triggerToast(`✨ Canje "${normalized}" añadido y configurado con éxito.`);
+                      
                       const token = (broadcasterOauthRef.current || localStorage.getItem('twitch_broadcaster_oauth') || botOauthRef.current || localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
                       if (token) {
                         syncTwitchCustomRewards();
                       }
                     } else {
-                      triggerToast(`ℹ️ El canje "${normalized}" ya está registrado.`);
+                      triggerToast(`⚙️ Configuración del canje "${normalized}" actualizada.`);
                     }
+
                     setNewRewardInput('');
                     setShowNewRewardModal(false);
                   }}>
-                    <div className="form-group" style={{ marginBottom: '20px' }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem' }}>Nombre de la Recompensa (Twitch):</label>
+                    {/* Nombre del Canje */}
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                        Nombre de la Recompensa / Evento:
+                      </label>
                       <input 
                         type="text"
                         className="form-control"
-                        placeholder="Ej: GoodTokkii Pack X1, Cofre Especial, etc."
+                        placeholder="Ej: GoodTokkii Pack X1, Donación 500 Bits, Suscripción..."
                         value={newRewardInput}
                         onChange={(e) => setNewRewardInput(e.target.value)}
                         required
                         autoFocus
+                        style={{ padding: '10px 14px', fontSize: '0.9rem' }}
                       />
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                        Si es por Puntos de Canal, debe coincidir exactamente con el nombre creado en Twitch.
+                      </span>
+                    </div>
+
+                    {/* Tipo de Activador y Requisitos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: (newRewardEventType === 'bits' || newRewardEventType === 'gift_sub') ? '1fr 1fr' : '1fr', gap: '12px', marginBottom: '16px' }}>
+                      <div className="form-group">
+                        <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                          Tipo de Activador:
+                        </label>
+                        <select 
+                          className="form-control" 
+                          value={newRewardEventType} 
+                          onChange={(e) => setNewRewardEventType(e.target.value)}
+                          style={{ padding: '10px 12px', fontSize: '0.9rem' }}
+                        >
+                          <option value="points">🟣 Puntos de Canal</option>
+                          <option value="bits">🟡 Donación de Bits</option>
+                          <option value="sub">⭐ Suscripción Directa</option>
+                          <option value="gift_sub">🎁 Subs Regaladas</option>
+                        </select>
+                      </div>
+
+                      {newRewardEventType === 'bits' && (
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                            Bits Mínimos Requeridos:
+                          </label>
+                          <input 
+                            type="number"
+                            min="1"
+                            step="50"
+                            className="form-control"
+                            value={newRewardMinBits}
+                            onChange={(e) => setNewRewardMinBits(Number(e.target.value) || 100)}
+                            style={{ padding: '10px 12px', fontSize: '0.9rem' }}
+                            placeholder="100"
+                          />
+                        </div>
+                      )}
+
+                      {newRewardEventType === 'gift_sub' && (
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                            Modo de Entrega:
+                          </label>
+                          <select 
+                            className="form-control" 
+                            value={newRewardGiftSubMode} 
+                            onChange={(e) => setNewRewardGiftSubMode(e.target.value)}
+                            style={{ padding: '10px 12px', fontSize: '0.9rem' }}
+                          >
+                            <option value="per_sub">Por cada sub regalada (Multiplica)</option>
+                            <option value="fixed">Fijo por regalo (Sin multiplicar)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tipo de Sobre TCG (Ancho Completo para que se lea completo) */}
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                        Tipo de Sobre TCG:
+                      </label>
+                      <select 
+                        className="form-control" 
+                        value={newRewardPackType} 
+                        onChange={(e) => setNewRewardPackType(e.target.value)}
+                        style={{ padding: '10px 12px', fontSize: '0.9rem', width: '100%' }}
+                      >
+                        <option value="pack_1">🎴 Sobre de 1 Carta (GoodTokkii Pack X1)</option>
+                        <option value="pack_3">🎴 Sobre de 3 Cartas (GoodTokkii Pack X3)</option>
+                        <option value="pack_5">🎴 Sobre de 5 Cartas (GoodTokkii Pack X5)</option>
+                      </select>
+                    </div>
+
+                    {/* Cantidad de Sobres (Digitalizable directamente) */}
+                    <div className="form-group" style={{ marginBottom: '22px' }}>
+                      <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                        Cantidad de Sobres a Entregar:
+                      </label>
+                      <input 
+                        type="number"
+                        min="1"
+                        max="999"
+                        className="form-control"
+                        value={newRewardPackCount}
+                        onChange={(e) => setNewRewardPackCount(Math.max(1, parseInt(e.target.value) || 1))}
+                        placeholder="Digitaliza la cantidad (ej: 1, 2, 5...)"
+                        style={{ padding: '10px 14px', fontSize: '0.9rem' }}
+                        required
+                      />
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                        Escribe el número de sobres que recibirá el viewer al activar este canje.
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px' }}>
@@ -6621,7 +6938,7 @@ function App() {
                         disabled={!newRewardInput.trim()}
                         style={{ flex: 1, padding: '10px', background: '#A855F7', color: '#fff', fontWeight: 600 }}
                       >
-                        Añadir Canje
+                        Guardar Categoría
                       </button>
                     </div>
                   </form>
@@ -6629,7 +6946,146 @@ function App() {
               </div>
             )}
 
-            {/* Modal para vincular Token de Canjes (Broadcaster @eviltokkii) */}
+            {/* Modal de Ajustes para Canje Existente */}
+            {editingRewardConfig && (
+              <div className="modal-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(3px)' }}>
+                <div className="card animate-slide-down" style={{ width: '92%', maxWidth: '500px', padding: '26px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingRewardConfig(null)}
+                    style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    <X size={20} />
+                  </button>
+
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1.25rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Settings size={20} color="#A855F7" /> Ajustes de Canje
+                  </h3>
+                  <div style={{ fontSize: '0.95rem', color: '#C084FC', fontWeight: 800, marginBottom: '18px', padding: '6px 12px', background: 'rgba(168, 85, 247, 0.1)', borderRadius: '8px', border: '1px solid rgba(168, 85, 247, 0.25)', display: 'inline-block' }}>
+                    {editingRewardConfig.name}
+                  </div>
+
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    saveRewardSettings(editingRewardConfig.name, editingRewardConfig);
+                    triggerToast(`⚙️ Ajustes guardados para "${editingRewardConfig.name}"`);
+                    setEditingRewardConfig(null);
+                  }}>
+                    {/* Tipo de Activador y Requisitos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: (editingRewardConfig.eventType === 'bits' || editingRewardConfig.eventType === 'gift_sub') ? '1fr 1fr' : '1fr', gap: '12px', marginBottom: '16px' }}>
+                      <div className="form-group">
+                        <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                          Tipo de Activador:
+                        </label>
+                        <select 
+                          className="form-control" 
+                          value={editingRewardConfig.eventType || 'points'} 
+                          onChange={(e) => setEditingRewardConfig(prev => ({ ...prev, eventType: e.target.value }))}
+                          style={{ padding: '10px 12px', fontSize: '0.9rem' }}
+                        >
+                          <option value="points">🟣 Puntos de Canal</option>
+                          <option value="bits">🟡 Donación de Bits</option>
+                          <option value="sub">⭐ Suscripción Directa</option>
+                          <option value="gift_sub">🎁 Subs Regaladas</option>
+                        </select>
+                      </div>
+
+                      {editingRewardConfig.eventType === 'bits' && (
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                            Bits Mínimos Requeridos:
+                          </label>
+                          <input 
+                            type="number"
+                            min="1"
+                            step="50"
+                            className="form-control"
+                            value={editingRewardConfig.minBits || 100}
+                            onChange={(e) => setEditingRewardConfig(prev => ({ ...prev, minBits: Number(e.target.value) || 100 }))}
+                            style={{ padding: '10px 12px', fontSize: '0.9rem' }}
+                            placeholder="100"
+                          />
+                        </div>
+                      )}
+
+                      {editingRewardConfig.eventType === 'gift_sub' && (
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                            Modo de Entrega:
+                          </label>
+                          <select 
+                            className="form-control" 
+                            value={editingRewardConfig.giftSubMode || 'per_sub'} 
+                            onChange={(e) => setEditingRewardConfig(prev => ({ ...prev, giftSubMode: e.target.value }))}
+                            style={{ padding: '10px 12px', fontSize: '0.9rem' }}
+                          >
+                            <option value="per_sub">Por cada sub regalada (Multiplica)</option>
+                            <option value="fixed">Fijo por regalo (Sin multiplicar)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tipo de Sobre TCG (Ancho Completo para que se lea completo) */}
+                    <div className="form-group" style={{ marginBottom: '16px' }}>
+                      <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                        Tipo de Sobre TCG:
+                      </label>
+                      <select 
+                        className="form-control" 
+                        value={editingRewardConfig.packType || 'pack_3'} 
+                        onChange={(e) => setEditingRewardConfig(prev => ({ ...prev, packType: e.target.value }))}
+                        style={{ padding: '10px 12px', fontSize: '0.9rem', width: '100%' }}
+                      >
+                        <option value="pack_1">🎴 Sobre de 1 Carta (GoodTokkii Pack X1)</option>
+                        <option value="pack_3">🎴 Sobre de 3 Cartas (GoodTokkii Pack X3)</option>
+                        <option value="pack_5">🎴 Sobre de 5 Cartas (GoodTokkii Pack X5)</option>
+                      </select>
+                    </div>
+
+                    {/* Cantidad de Sobres (Digitalizable directamente) */}
+                    <div className="form-group" style={{ marginBottom: '22px' }}>
+                      <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                        Cantidad de Sobres a Entregar:
+                      </label>
+                      <input 
+                        type="number"
+                        min="1"
+                        max="999"
+                        className="form-control"
+                        value={editingRewardConfig.packCount || 1} 
+                        onChange={(e) => setEditingRewardConfig(prev => ({ ...prev, packCount: Math.max(1, parseInt(e.target.value) || 1) }))}
+                        placeholder="Digitaliza la cantidad (ej: 1, 2, 5...)"
+                        style={{ padding: '10px 14px', fontSize: '0.9rem' }}
+                        required
+                      />
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                        Escribe el número de sobres que recibirá el viewer al activar este canje.
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        type="button"
+                        className="btn-add"
+                        onClick={() => setEditingRewardConfig(null)}
+                        style={{ flex: 1, padding: '10px' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-submit"
+                        style={{ flex: 1, padding: '10px', background: '#A855F7', color: '#fff', fontWeight: 600 }}
+                      >
+                        Guardar Ajustes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {showTwitchTokenModal && (
               <div className="modal-overlay animate-fade-in" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
                 <div className="card animate-slide-down" style={{ width: '90%', maxWidth: '540px', padding: '28px', position: 'relative', border: '1px solid rgba(168, 85, 247, 0.4)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -6657,9 +7113,9 @@ function App() {
 
                   <div style={{ background: 'rgba(145, 70, 255, 0.1)', border: '1px solid rgba(145, 70, 255, 0.3)', borderRadius: '10px', padding: '14px', marginBottom: '18px', fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.5 }}>
                     <strong style={{ color: '#C084FC', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                      <AlertCircle size={15} /> Requisito de Twitch:
+                      <AlertCircle size={15} /> Requisitos de Twitch para Canjes, Bits y Subs:
                     </strong>
-                    Twitch <strong>solo permite</strong> leer los canjes de puntos de canal si el token es generado con la cuenta del streamer dueño del canal (<strong>@eviltokkii</strong>) con el permiso <code>channel:read:redemptions</code>.
+                    Para que el Bot detecte automáticamente <strong>Puntos de Canal, Bits y Suscripciones/Regalos</strong>, el token debe ser generado con la cuenta de la streamer (<strong>@eviltokkii</strong>) autorizando los permisos: <code>channel:read:redemptions</code>, <code>bits:read</code> y <code>channel:read:subscriptions</code>.
                   </div>
 
                   {/* Paso 1: Enlace generador */}
@@ -6668,7 +7124,7 @@ function App() {
                       Paso 1: Genera el Token con los permisos necesarios
                     </label>
                     <a
-                      href="https://twitchtokengenerator.com/?scope=chat:read+chat:edit+moderator:manage:announcements+channel:read:redemptions"
+                      href="https://twitchtokengenerator.com/?scope=chat:read+chat:edit+moderator:manage:announcements+channel:read:redemptions+bits:read+channel:read:subscriptions"
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -6749,9 +7205,23 @@ function App() {
                           )}
 
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Permiso channel:read:redemptions:</span>
+                            <span style={{ color: 'var(--text-muted)' }}>Puntos de Canal (channel:read:redemptions):</span>
                             <strong style={{ color: broadcasterTokenValidation.hasRedemptions ? '#22c55e' : '#ef4444' }}>
                               {broadcasterTokenValidation.hasRedemptions ? '✅ ACTIVO' : '❌ FALTA ESTE PERMISO'}
+                            </strong>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Donaciones de Bits (bits:read):</span>
+                            <strong style={{ color: broadcasterTokenValidation.hasBits ? '#22c55e' : '#f59e0b' }}>
+                              {broadcasterTokenValidation.hasBits ? '✅ ACTIVO' : '⚠️ FALTA PERMISO BITS'}
+                            </strong>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Subs y Regalos (channel:read:subscriptions):</span>
+                            <strong style={{ color: broadcasterTokenValidation.hasSubscriptions ? '#22c55e' : '#f59e0b' }}>
+                              {broadcasterTokenValidation.hasSubscriptions ? '✅ ACTIVO' : '⚠️ FALTA PERMISO SUBS'}
                             </strong>
                           </div>
 
