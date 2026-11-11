@@ -133,54 +133,83 @@ export const findTcgUser = async (twitchUsername) => {
   return null;
 };
 
+// Cola en memoria por usuario para serializar acreditaciones concurrentes y evitar race conditions
+const packGrantQueues = new Map();
+
+const enqueueUserPackOperation = (userId, taskFn) => {
+  const prev = packGrantQueues.get(userId) || Promise.resolve();
+  const next = prev.then(taskFn, taskFn).finally(() => {
+    if (packGrantQueues.get(userId) === next) {
+      packGrantQueues.delete(userId);
+    }
+  });
+  packGrantQueues.set(userId, next);
+  return next;
+};
+
 /**
- * Acreditar sobre(s) al inventario de un usuario en el TCG
+ * Acreditar sobre(s) al inventario de un usuario en el TCG de forma atómica y serializada
  */
 export const grantTcgPack = async (userId, packType, quantity = 1) => {
   if (!userId || !packType || quantity <= 0) return false;
 
-  try {
-    // Consultar si ya tiene fila para ese tipo de sobre
-    const { data: existing, error: selErr } = await tcgSupabase
-      .from('user_packs')
-      .select('id, quantity')
-      .eq('user_id', userId)
-      .eq('pack_type', packType)
-      .maybeSingle();
+  return enqueueUserPackOperation(userId, async () => {
+    try {
+      // 1. Intentar incremento atómico en servidor vía RPC SQL (si ya fue migrado en Supabase TCG)
+      const { error: rpcErr } = await tcgSupabase.rpc('increment_user_pack', {
+        p_user_id: userId,
+        p_pack_type: packType,
+        p_quantity: quantity,
+      });
 
-    if (selErr) {
-      console.warn('Error consultando user_packs:', selErr);
-    }
+      if (!rpcErr) {
+        return true;
+      }
 
-    if (existing) {
-      const newQty = (Number(existing.quantity) || 0) + quantity;
-      const { error: updErr } = await tcgSupabase
+      // Si el RPC aún no existe en la BD, ejecutar lectura+escritura serializada en cola
+      console.warn('RPC increment_user_pack no disponible, usando cola serializada:', rpcErr.message);
+
+      const { data: existing, error: selErr } = await tcgSupabase
         .from('user_packs')
-        .update({
-          quantity: newQty,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
+        .select('id, quantity')
+        .eq('user_id', userId)
+        .eq('pack_type', packType)
+        .maybeSingle();
 
-      if (updErr) throw updErr;
-      return true;
-    } else {
-      const { error: insErr } = await tcgSupabase
-        .from('user_packs')
-        .insert({
-          user_id: userId,
-          pack_type: packType,
-          quantity: quantity,
-          updated_at: new Date().toISOString(),
-        });
+      if (selErr) {
+        console.warn('Error consultando user_packs:', selErr);
+      }
 
-      if (insErr) throw insErr;
-      return true;
+      if (existing) {
+        const newQty = (Number(existing.quantity) || 0) + quantity;
+        const { error: updErr } = await tcgSupabase
+          .from('user_packs')
+          .update({
+            quantity: newQty,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+
+        if (updErr) throw updErr;
+        return true;
+      } else {
+        const { error: insErr } = await tcgSupabase
+          .from('user_packs')
+          .insert({
+            user_id: userId,
+            pack_type: packType,
+            quantity: quantity,
+            updated_at: new Date().toISOString(),
+          });
+
+        if (insErr) throw insErr;
+        return true;
+      }
+    } catch (e) {
+      console.error(`Error acreditando ${quantity}x ${packType} a ${userId}:`, e);
+      throw e;
     }
-  } catch (e) {
-    console.error(`Error acreditando ${quantity}x ${packType} a ${userId}:`, e);
-    throw e;
-  }
+  });
 };
 
 /**

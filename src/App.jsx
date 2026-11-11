@@ -92,25 +92,42 @@ export const normalizeRewardName = (name) => {
   return String(name).trim();
 };
 
-// Deduplicar lista de canjes (evita duplicados si existen en base de datos o cachés)
+// Deduplicar lista de canjes por ID real o twitch_event_id (permite ráfagas de 10+ canjes seguidos sin perder ninguno)
 export const deduplicateRedemptions = (list) => {
   if (!Array.isArray(list)) return [];
   const result = [];
+  const isTempId = (id) => typeof id === 'string' && (id.startsWith('es_') || id.startsWith('sync_') || id.startsWith('temp_'));
+
   for (const item of list) {
     const itemTime = new Date(item.created_at).getTime();
     const existingIdx = result.findIndex(r => {
-      const sameUser = (r.username || '').toLowerCase() === (item.username || '').toLowerCase();
-      const sameReward = normalizeRewardName(r.reward_name).toLowerCase() === normalizeRewardName(item.reward_name).toLowerCase();
-      const timeDiff = Math.abs(new Date(r.created_at).getTime() - itemTime);
-      return sameUser && sameReward && timeDiff <= 15000;
+      // 1. Mismo ID exacto de base de datos o temporal
+      if (r.id && item.id && r.id === item.id) return true;
+      // 2. Mismo twitch_event_id único de Twitch EventSub
+      if (r.twitch_event_id && item.twitch_event_id && r.twitch_event_id === item.twitch_event_id) return true;
+      // 3. Reemplazar ítem temporal optimista por su equivalente real recién llegado de Realtime
+      if (isTempId(r.id) !== isTempId(item.id)) {
+        const sameUser = (r.username || '').toLowerCase() === (item.username || '').toLowerCase();
+        const sameReward = normalizeRewardName(r.reward_name).toLowerCase() === normalizeRewardName(item.reward_name).toLowerCase();
+        const timeDiff = Math.abs(new Date(r.created_at).getTime() - itemTime);
+        return sameUser && sameReward && timeDiff <= 2500;
+      }
+      return false;
     });
 
     if (existingIdx === -1) {
       result.push(item);
     } else {
-      // Si uno está entregado y el otro pendiente, preferir siempre el entregado
-      if (item.status === 'entregado' && result[existingIdx].status !== 'entregado') {
-        result[existingIdx] = item;
+      const existing = result[existingIdx];
+      const existingIsTemp = isTempId(existing.id);
+      const itemIsTemp = isTempId(item.id);
+      // Preferir siempre la fila real de Supabase sobre la temporal, y 'entregado' sobre 'pendiente'
+      if ((existingIsTemp && !itemIsTemp) || (item.status === 'entregado' && existing.status !== 'entregado')) {
+        result[existingIdx] = {
+          ...existing,
+          ...item,
+          status: (item.status === 'entregado' || existing.status === 'entregado') ? 'entregado' : (item.status || existing.status)
+        };
       }
     }
   }
@@ -1102,6 +1119,12 @@ function App() {
             status: payload.new.status || localStatus[payload.new.id] || 'pendiente'
           };
           setTwitchList(prev => deduplicateRedemptions([item, ...prev]));
+        } else if (payload?.eventType === 'UPDATE' && payload?.new) {
+          const updatedItem = payload.new;
+          if (updatedItem.status) {
+            setLocalClaimStatus(updatedItem.id, updatedItem.status);
+          }
+          setTwitchList(prev => prev.map(c => c.id === updatedItem.id ? { ...c, ...updatedItem } : c));
         } else if (payload?.eventType === 'DELETE' && payload?.old?.id) {
           setTwitchList(prev => prev.filter(c => c.id !== payload.old.id));
         } else {
@@ -2265,32 +2288,77 @@ function App() {
       };
 
       // Helper centralizado para procesar y entregar reclamos (Puntos, Bits, Subs)
-      const dispatchClaimDelivery = async ({ rewardTitle, viewerName, redeemedAt, customConfig = null, logPrefix = '🎁 [Canje Twitch]' }) => {
+      // Reserva atómica por twitch_event_id para permitir ráfagas de 10+ sobres seguidos y evitar doble entrega con la Edge Function 24/7
+      const dispatchClaimDelivery = async ({ eventId = null, rewardTitle, viewerName, redeemedAt, customConfig = null, logPrefix = '🎁 [Canje Twitch]' }) => {
         if (!viewerName || viewerName === 'Anónimo' || viewerName.toLowerCase() === 'anónimo') {
           addBotLog(`ℹ️ ${logPrefix}: Evento de usuario anónimo registrado (no se entrega sobre TCG por ser anónimo).`);
           return;
         }
 
-        const targetTime = new Date(redeemedAt).getTime();
-        const alreadyExists = (twitchListRef.current || []).some(c => {
-          const sameUser = (c.username || '').toLowerCase() === viewerName.toLowerCase();
-          const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === normalizeRewardName(rewardTitle).toLowerCase();
-          return sameUser && sameReward && Math.abs(new Date(c.created_at).getTime() - targetTime) <= 15000;
-        });
-        if (alreadyExists) return;
+        if (eventId && (twitchListRef.current || []).some(c => c.twitch_event_id && c.twitch_event_id === eventId)) {
+          return;
+        }
 
         const rewardConfig = customConfig || getRewardSettings(rewardTitle);
+
+        // 1. Intentar reservar en Supabase primero con twitch_event_id UNIQUE
+        let savedId = null;
+        let usedExtendedColumns = true;
+
+        try {
+          const payloadWithEventId = {
+            reward_name: rewardTitle,
+            username: viewerName,
+            created_at: redeemedAt,
+            status: 'pendiente',
+            ...(eventId ? { twitch_event_id: eventId } : {})
+          };
+
+          let { data: insData, error: insErr } = await supabase
+            .from('twitch_redemptions')
+            .insert([payloadWithEventId])
+            .select();
+
+          // Si el Edge Function 24/7 ya insertó este mismo eventId milisegundos antes -> no duplicar entrega
+          if (insErr && insErr.code === '23505') {
+            console.log(`ℹ️ [EventSub] Evento ${eventId} ya procesado por el servidor 24/7. Omitiendo duplicado.`);
+            return;
+          }
+
+          // Fallback elegante si aún no se ejecutó el SQL de migración en Supabase
+          if (insErr && (insErr.code === 'PGRST204' || insErr.code === '42703' || String(insErr.message || '').includes('column'))) {
+            usedExtendedColumns = false;
+            const retry = await supabase
+              .from('twitch_redemptions')
+              .insert([{
+                reward_name: rewardTitle,
+                username: viewerName,
+                created_at: redeemedAt
+              }])
+              .select();
+            insData = retry.data;
+            insErr = retry.error;
+          }
+
+          if (insErr) {
+            console.error("Error al reservar canje en Supabase:", insErr);
+          }
+          savedId = insData?.[0]?.id || null;
+        } catch (insEx) {
+          console.error("Excepción al reservar canje:", insEx);
+        }
 
         console.log(`${logPrefix}: @${viewerName} activó "${rewardTitle}" -> Config:`, rewardConfig);
         addBotLog(`${logPrefix}: @${viewerName} activó "${rewardTitle}"`);
 
+        // 2. Entregar sobre(s) de forma atómica/serializada en TCG
         let initialStatus = 'pendiente';
         try {
           const delivery = await deliverPackForRedemption(viewerName, rewardTitle, rewardConfig);
           if (delivery && delivery.isPack) {
             if (delivery.delivered) {
               initialStatus = 'entregado';
-              addBotLog(`🎉 [TCG Automático]: ¡${delivery.deliveredCount || rewardConfig.packCount} sobre(s) (${delivery.packType}) entregado(s) a @${viewerName}!`);
+              addBotLog(`🎉 [TCG Automático]: ¡${delivery.packCount || rewardConfig.packCount} sobre(s) (${delivery.packType}) entregado(s) a @${viewerName}!`);
             } else {
               addBotLog(`⚠️ [TCG Automático]: @${viewerName} pendiente: ${delivery.message}`);
             }
@@ -2299,41 +2367,30 @@ function App() {
           console.warn("Error en auto-entrega TCG:", delivErr);
         }
 
-        const tempId = `es_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const finalId = savedId || `es_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        if (savedId) {
+          setLocalClaimStatus(savedId, initialStatus);
+          if (initialStatus === 'entregado' && usedExtendedColumns) {
+            try {
+              await supabase.from('twitch_redemptions').update({ status: 'entregado' }).eq('id', savedId);
+            } catch (e) {}
+          }
+        }
+
         const optimisticClaim = {
-          id: tempId,
+          id: finalId,
           reward_name: rewardTitle,
           username: viewerName,
           created_at: redeemedAt,
-          status: initialStatus
+          status: initialStatus,
+          ...(eventId ? { twitch_event_id: eventId } : {})
         };
 
         setLatestIncomingClaim({ username: viewerName, reward: rewardTitle, time: Date.now() });
         setTwitchList(prev => deduplicateRedemptions([optimisticClaim, ...prev]));
         twitchListRef.current = deduplicateRedemptions([optimisticClaim, ...twitchListRef.current]);
-
-        try {
-          const { data: insData, error: insErr } = await supabase
-            .from('twitch_redemptions')
-            .insert([{
-              reward_name: rewardTitle,
-              username: viewerName,
-              created_at: redeemedAt
-            }])
-            .select();
-
-          const savedId = insData?.[0]?.id;
-          if (savedId) {
-            setLocalClaimStatus(savedId, initialStatus);
-            setTwitchList(prev => prev.map(c => c.id === tempId ? { ...c, id: savedId } : c));
-          }
-
-          invalidateLibraryCache();
-          triggerToast(`${logPrefix} @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
-        } catch (insEx) {
-          console.error("Excepción al guardar canje:", insEx);
-          triggerToast(`${logPrefix} @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
-        }
+        invalidateLibraryCache();
+        triggerToast(`${logPrefix} @${viewerName}: "${rewardTitle}"! [${initialStatus === 'entregado' ? 'Sobre Entregado' : 'Pendiente'}]`);
       };
 
       esWs.onmessage = async (event) => {
@@ -2427,10 +2484,10 @@ function App() {
             const ev = data.payload?.event;
             if (!ev) return;
 
-            // Deduplicar eventos por ID único de EventSub
-            if (ev.id) {
-              if (seenTwitchRedemptionIdsRef.current.has(ev.id)) return;
-              seenTwitchRedemptionIdsRef.current.add(ev.id);
+            const eventUniqueId = ev.id || data.metadata?.message_id || null;
+            if (eventUniqueId) {
+              if (seenTwitchRedemptionIdsRef.current.has(eventUniqueId)) return;
+              seenTwitchRedemptionIdsRef.current.add(eventUniqueId);
             }
 
             // 1. CANJES DE PUNTOS DE CANAL
@@ -2483,6 +2540,7 @@ function App() {
               }
 
               await dispatchClaimDelivery({
+                eventId: eventUniqueId,
                 rewardTitle,
                 viewerName,
                 redeemedAt,
@@ -2506,6 +2564,7 @@ function App() {
               if (bitsRewards.length > 0) {
                 const matched = bitsRewards[0];
                 await dispatchClaimDelivery({
+                  eventId: eventUniqueId,
                   rewardTitle: matched.name,
                   viewerName,
                   redeemedAt,
@@ -2530,6 +2589,7 @@ function App() {
 
               if (subReward) {
                 await dispatchClaimDelivery({
+                  eventId: eventUniqueId,
                   rewardTitle: subReward.name,
                   viewerName,
                   redeemedAt,
@@ -2554,6 +2614,7 @@ function App() {
 
               if (subReward) {
                 await dispatchClaimDelivery({
+                  eventId: eventUniqueId,
                   rewardTitle: subReward.name,
                   viewerName,
                   redeemedAt,
@@ -2586,6 +2647,7 @@ function App() {
                 };
 
                 await dispatchClaimDelivery({
+                  eventId: eventUniqueId,
                   rewardTitle: giftSubReward.name,
                   viewerName: gifterName,
                   redeemedAt,
@@ -2782,10 +2844,11 @@ function App() {
         return;
       }
 
-      // Pre-cargar canjes existentes de Supabase para evitar duplicados
+      // Pre-cargar canjes existentes de Supabase para evitar duplicados (incluyendo lo ya procesado por Edge Function 24/7)
+      await fetchLibraryItems(true);
       const { data: dbExisting } = await supabase
         .from('twitch_redemptions')
-        .select('id, username, reward_name, created_at');
+        .select('*');
 
       const knownClaims = [...(dbExisting || [])];
       const seenTwitchIds = new Set();
@@ -2842,31 +2905,41 @@ function App() {
                   continue;
                 }
 
-                // Verificar si ya existe en Supabase o en memoria
+                // Verificar si ya existe en Supabase o en memoria por ID único de Twitch (sin bloquear canjes seguidos)
                 const alreadyExists = knownClaims.some(c => {
                   if (c.id && item.id && c.id === item.id) return true;
+                  if (c.twitch_event_id && item.id && c.twitch_event_id === item.id) return true;
                   const sameUser = (c.username || '').toLowerCase() === (uName || '').toLowerCase();
                   const sameReward = normalizeRewardName(c.reward_name).toLowerCase() === normTitle.toLowerCase();
                   const diff = Math.abs(new Date(c.created_at).getTime() - targetTime);
-                  return sameUser && sameReward && diff <= 30000;
+                  return !c.twitch_event_id && sameUser && sameReward && diff <= 1000;
                 });
 
                 if (!alreadyExists) {
-                  let initialStatus = 'pendiente';
-                  try {
-                    const delivery = await deliverPackForRedemption(uName, normTitle);
-                    if (delivery && delivery.delivered) {
-                      initialStatus = 'entregado';
-                    }
-                  } catch (delivErr) {}
-
                   let savedClaim = null;
+                  let usedExtended = true;
                   try {
-                    const { data: insData } = await supabase.from('twitch_redemptions').insert([{
+                    let { data: insData, error: insErr } = await supabase.from('twitch_redemptions').insert([{
                       reward_name: normTitle,
                       username: uName,
-                      created_at: redeemedAt
+                      created_at: redeemedAt,
+                      status: 'pendiente',
+                      ...(item.id ? { twitch_event_id: item.id } : {})
                     }]).select();
+
+                    if (insErr && insErr.code === '23505') {
+                      continue; // Ya registrado por Edge Function 24/7
+                    }
+
+                    if (insErr && (insErr.code === 'PGRST204' || insErr.code === '42703' || String(insErr.message || '').includes('column'))) {
+                      usedExtended = false;
+                      const retry = await supabase.from('twitch_redemptions').insert([{
+                        reward_name: normTitle,
+                        username: uName,
+                        created_at: redeemedAt
+                      }]).select();
+                      insData = retry.data;
+                    }
 
                     if (insData?.[0]) {
                       savedClaim = insData[0];
@@ -2874,6 +2947,18 @@ function App() {
                   } catch (dbErr) {
                     console.warn("Error guardando canje en Supabase:", dbErr);
                   }
+
+                  let initialStatus = 'pendiente';
+                  try {
+                    const rewardConfig = getRewardSettings(normTitle);
+                    const delivery = await deliverPackForRedemption(uName, normTitle, rewardConfig);
+                    if (delivery && delivery.delivered) {
+                      initialStatus = 'entregado';
+                      if (savedClaim?.id && usedExtended) {
+                        await supabase.from('twitch_redemptions').update({ status: 'entregado' }).eq('id', savedClaim.id);
+                      }
+                    }
+                  } catch (delivErr) {}
 
                   const claimObj = savedClaim || {
                     id: `twitch_${item.id || Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -3287,20 +3372,79 @@ function App() {
     return { name: clean, eventType: 'points', packType: 'pack_1', packCount: 1, twitchRewardTitle: clean };
   };
 
+  const syncRewardConfigToSupabase = async (name, cfg) => {
+    try {
+      await supabase
+        .from('twitch_reward_configs')
+        .upsert({
+          reward_name: name,
+          event_type: cfg.eventType || 'points',
+          pack_type: cfg.packType || 'pack_1',
+          pack_count: Math.max(1, Number(cfg.packCount) || 1),
+          min_bits: Number(cfg.minBits) || 100,
+          gift_sub_mode: cfg.giftSubMode || 'per_sub',
+          active: true,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'reward_name' });
+    } catch (e) {
+      console.warn('No se pudo sincronizar twitch_reward_configs (ejecuta supabase_migration.sql si aún no existe la tabla):', e);
+    }
+  };
+
+  // Cargar configuraciones compartidas desde Supabase al iniciar
+  useEffect(() => {
+    const loadSharedConfigs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('twitch_reward_configs')
+          .select('*')
+          .eq('active', true);
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const remoteMap = {};
+          const remoteNames = [];
+          for (const row of data) {
+            remoteNames.push(row.reward_name);
+            remoteMap[row.reward_name] = {
+              name: row.reward_name,
+              eventType: row.event_type || 'points',
+              packType: row.pack_type || 'pack_1',
+              packCount: Number(row.pack_count) || 1,
+              minBits: Number(row.min_bits) || 100,
+              giftSubMode: row.gift_sub_mode || 'per_sub'
+            };
+          }
+          const mergedConfigs = { ...rewardConfigsRef.current, ...remoteMap };
+          setRewardConfigs(mergedConfigs);
+          rewardConfigsRef.current = mergedConfigs;
+          localStorage.setItem('twitch_reward_configs_v2', JSON.stringify(mergedConfigs));
+
+          const mergedNames = Array.from(new Set([...(configuredRewardsRef.current || []), ...remoteNames]));
+          setConfiguredRewards(mergedNames);
+          configuredRewardsRef.current = mergedNames;
+          localStorage.setItem('twitch_configured_rewards_v3', JSON.stringify(mergedNames));
+        }
+      } catch (e) {}
+    };
+    loadSharedConfigs();
+  }, []);
+
   const saveRewardSettings = (name, newConfig) => {
+    const finalCfg = {
+      ...(rewardConfigsRef.current?.[name] || {}),
+      ...newConfig,
+      name
+    };
     const updated = {
       ...rewardConfigsRef.current,
-      [name]: {
-        ...(rewardConfigsRef.current?.[name] || {}),
-        ...newConfig,
-        name
-      }
+      [name]: finalCfg
     };
     setRewardConfigs(updated);
     rewardConfigsRef.current = updated;
     try {
       localStorage.setItem('twitch_reward_configs_v2', JSON.stringify(updated));
     } catch(e) {}
+    syncRewardConfigToSupabase(name, finalCfg);
   };
 
   // State for Editing Reward Config modal
@@ -3356,8 +3500,9 @@ function App() {
         setSelectedRewardName(null);
       }
 
-      // Eliminar reclamos asociados en Supabase y localmente
+      // Eliminar configuración y reclamos asociados en Supabase y localmente
       try {
+        await supabase.from('twitch_reward_configs').delete().ilike('reward_name', rewardName);
         await supabase.from('twitch_redemptions').delete().ilike('reward_name', rewardName);
         setTwitchList(prev => prev.filter(c => normalizeRewardName(c.reward_name).toLowerCase() !== normalizeRewardName(rewardName).toLowerCase()));
         invalidateLibraryCache();
