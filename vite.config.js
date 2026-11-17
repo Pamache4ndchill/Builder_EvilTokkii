@@ -8,24 +8,18 @@ export default defineConfig({
   server: {
     proxy: {
       '/twitch-eventsub-ws': {
-        target: 'https://18.164.13.71',
+        target: 'https://eventsub.wss.twitch.tv',
         changeOrigin: true,
         ws: true,
-        headers: {
-          Host: 'eventsub.wss.twitch.tv'
-        },
         rewrite: (path) => path.replace(/^\/twitch-eventsub-ws/, '/ws'),
-        secure: false
+        secure: true
       },
       '/Builder_EvilTokkii/twitch-eventsub-ws': {
-        target: 'https://18.164.13.71',
+        target: 'https://eventsub.wss.twitch.tv',
         changeOrigin: true,
         ws: true,
-        headers: {
-          Host: 'eventsub.wss.twitch.tv'
-        },
         rewrite: (path) => path.replace(/^\/Builder_EvilTokkii\/twitch-eventsub-ws/, '/ws'),
-        secure: false
+        secure: true
       }
     }
   }

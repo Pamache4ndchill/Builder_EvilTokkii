@@ -1402,8 +1402,27 @@ function App() {
         }
       }
 
-      // Guardar en Supabase para el historial
+      // Guardar en Supabase para el historial y emitir evento local
       const artistsStr = track.artists ? track.artists.map(a => a.name).join(', ') : '';
+      const coverUrl = track.album?.images?.[0]?.url || '';
+      const newQueueItem = {
+        id: `sr_${Date.now()}_${track.id}`,
+        title: `${track.name} - ${artistsStr}`,
+        video_id: track.id,
+        requested_by: requester,
+        cover_url: coverUrl,
+        status: 'completed',
+        created_at: new Date().toISOString()
+      };
+
+      try {
+        const localQ = JSON.parse(localStorage.getItem('spotify_sr_queue') || '[]');
+        localQ.push(newQueueItem);
+        localStorage.setItem('spotify_sr_queue', JSON.stringify(localQ.slice(-100)));
+      } catch (e) {}
+
+      window.dispatchEvent(new CustomEvent('sr-queue-updated', { detail: newQueueItem }));
+
       if (supabase) {
         await supabase.from('song_requests').insert([{
           title: `${track.name} - ${artistsStr}`,
@@ -3719,12 +3738,15 @@ function App() {
     triggerToast("🗑️ Lista de participantes limpiada.");
   };
 
-  // Control Estricto de Conexión del Bot: Solo se conecta si el interruptor está ACTIVADO
+  // Auto-conectar el bot de Twitch y detector EventSub al iniciar
   useEffect(() => {
     if (!localStorage.getItem('twitch_bot_username')) localStorage.setItem('twitch_bot_username', 'EmiliaMaria_exe');
     if (!localStorage.getItem('twitch_bot_channel')) localStorage.setItem('twitch_bot_channel', 'eviltokkii');
+    if (localStorage.getItem('twitch_bot_enabled') === null) {
+      localStorage.setItem('twitch_bot_enabled', 'true');
+    }
 
-    const isBotActive = localStorage.getItem('twitch_bot_enabled') === 'true';
+    const isBotActive = localStorage.getItem('twitch_bot_enabled') !== 'false';
     if (isBotActive) {
       const timer = setTimeout(() => {
         // Inicializar timestamps al momento actual para evitar que dispare mensajes viejos de golpe
@@ -3737,6 +3759,7 @@ function App() {
         lastBdayChatCountRef.current = userMessagesCountRef.current;
 
         connectTwitchBot();
+        connectTwitchEventSub();
       }, 1000);
       return () => clearTimeout(timer);
     } else {
@@ -3748,7 +3771,7 @@ function App() {
   useEffect(() => {
     const broadcasterToken = (localStorage.getItem('twitch_broadcaster_oauth') || '').replace(/^oauth:/i, '').trim();
     const botToken = (localStorage.getItem('twitch_bot_oauth') || '').replace(/^oauth:/i, '').trim();
-    if (broadcasterToken || botToken) {
+    if (broadcasterToken || botToken || DEFAULT_TWITCH_TOKEN) {
       connectTwitchEventSub();
     }
   }, []);

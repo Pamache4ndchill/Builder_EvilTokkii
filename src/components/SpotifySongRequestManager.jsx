@@ -666,26 +666,108 @@ export default function SpotifySongRequestManager({
         setConfirmModal({ isOpen: false, title: '', message: '', confirmText: 'Confirmar', onConfirm: null });
     };
 
-    // Cargar peticiones desde Supabase
+    // Cargar peticiones desde Spotify Playlist, Supabase y LocalStorage
     const fetchQueue = useCallback(async () => {
-        if (!supabase) return;
-        try {
-            const { data, error } = await supabase
-                .from('song_requests')
-                .select('*')
-                .order('created_at', { ascending: true })
-                .limit(60);
+        let dbList = [];
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('song_requests')
+                    .select('*')
+                    .order('created_at', { ascending: true })
+                    .limit(100);
 
-            if (!error && data) {
-                setSongQueue(data);
+                if (!error && data) {
+                    dbList = data;
+                }
+            } catch (e) {
+                console.error('Error fetching song requests from db:', e);
             }
-        } catch (e) {
-            console.error('Error fetching song requests:', e);
         }
-    }, [supabase]);
+
+        let localList = [];
+        try {
+            localList = JSON.parse(localStorage.getItem('spotify_sr_queue') || '[]');
+        } catch (e) {}
+
+        // Mapa de solicitudes conocidas para asociar el usuario solicitante por video_id o título
+        const requestMap = new Map();
+        for (const item of [...localList, ...dbList]) {
+            if (item.video_id) requestMap.set(item.video_id, item);
+            if (item.title) requestMap.set(item.title.toLowerCase().trim(), item);
+        }
+
+        // Si tenemos token de Spotify y playlist ID, consultar las canciones reales de la playlist
+        const savedPlaylistId = extractSpotifyPlaylistId(localStorage.getItem('spotify_sr_playlist_id'));
+        if (spotifyToken && savedPlaylistId) {
+            try {
+                const res = await requestSpotifyPlaylistItems(savedPlaylistId, 'GET', spotifyToken);
+                if (res?.ok) {
+                    const plData = await res.json();
+                    const items = plData.items || [];
+                    if (items.length > 0) {
+                        const playlistQueue = items.map((pi, idx) => {
+                            const track = pi.track || pi.item;
+                            if (!track) return null;
+                            const artistsStr = track.artists?.map(a => a.name).join(', ') || '';
+                            const titleStr = `${track.name} - ${artistsStr}`;
+                            const matchedReq = requestMap.get(track.id) || requestMap.get(titleStr.toLowerCase().trim());
+                            return {
+                                id: matchedReq?.id || `sp_${track.id}_${idx}`,
+                                title: titleStr,
+                                video_id: track.id,
+                                requested_by: matchedReq?.requested_by || 'Twitch Stream',
+                                cover_url: track.album?.images?.[0]?.url || matchedReq?.cover_url || '',
+                                status: 'completed',
+                                created_at: matchedReq?.created_at || new Date().toISOString()
+                            };
+                        }).filter(Boolean);
+
+                        if (playlistQueue.length > 0) {
+                            setSongQueue(playlistQueue);
+                            return;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not fetch items directly from Spotify playlist:', e);
+            }
+        }
+
+        // Si no se pudieron obtener de Spotify, usamos las combinadas de Supabase y localStorage
+        const map = new Map();
+        for (const item of [...localList, ...dbList]) {
+            const key = item.video_id || item.title;
+            if (key) map.set(key, { ...map.get(key), ...item });
+        }
+        const combined = Array.from(map.values());
+        setSongQueue(combined);
+    }, [supabase, spotifyToken]);
 
     useEffect(() => {
         fetchQueue();
+
+        const handleQueueUpdated = (e) => {
+            if (e?.detail) {
+                setSongQueue(prev => {
+                    const exists = prev.some(item => 
+                        (item.video_id && item.video_id === e.detail.video_id) || 
+                        (item.title && item.title.toLowerCase() === e.detail.title.toLowerCase())
+                    );
+                    if (exists) return prev;
+                    return [...prev, e.detail];
+                });
+            }
+            fetchQueue();
+        };
+
+        window.addEventListener('sr-queue-updated', handleQueueUpdated);
+
+        // Polling cada 4 segundos para asegurar sincronización en vivo
+        const pollInterval = setInterval(() => {
+            fetchQueue();
+        }, 4000);
+
         if (supabase) {
             const channel = supabase
                 .channel('sr_realtime_sync')
@@ -695,9 +777,16 @@ export default function SpotifySongRequestManager({
                 .subscribe();
 
             return () => {
+                window.removeEventListener('sr-queue-updated', handleQueueUpdated);
+                clearInterval(pollInterval);
                 supabase.removeChannel(channel);
             };
         }
+
+        return () => {
+            window.removeEventListener('sr-queue-updated', handleQueueUpdated);
+            clearInterval(pollInterval);
+        };
     }, [fetchQueue, supabase]);
 
     // Sincronizar el nuevo orden con la Playlist remota de Spotify
@@ -2516,28 +2605,60 @@ export default function SpotifySongRequestManager({
                                         </span>
 
                                         {/* Portada o Icono */}
-                                        <div style={{
-                                            width: '36px',
-                                            height: '36px',
-                                            borderRadius: '6px',
-                                            background: 'rgba(29, 185, 84, 0.15)',
-                                            color: '#1DB954',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0
-                                        }}>
-                                            <Music size={18} />
-                                        </div>
+                                        {item.cover_url ? (
+                                            <img
+                                                src={item.cover_url}
+                                                alt=""
+                                                style={{
+                                                    width: '42px',
+                                                    height: '42px',
+                                                    borderRadius: '8px',
+                                                    objectFit: 'cover',
+                                                    flexShrink: 0,
+                                                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                                                }}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: '42px',
+                                                height: '42px',
+                                                borderRadius: '8px',
+                                                background: 'rgba(29, 185, 84, 0.15)',
+                                                color: '#1DB954',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0
+                                            }}>
+                                                <Music size={20} />
+                                            </div>
+                                        )}
 
                                         {/* Título & Pedido por */}
                                         <div style={{ overflow: 'hidden' }}>
-                                            <h4 style={{ margin: 0, color: '#F8FAFC', fontSize: '0.92rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            <h4 style={{ margin: 0, color: '#F8FAFC', fontSize: '0.93rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {item.title}
                                             </h4>
-                                            <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
-                                                Pedida por <strong style={{ color: '#38BDF8' }}>@{item.requested_by || 'Viewer'}</strong>
-                                            </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                                                <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                                                    Pedida por:
+                                                </span>
+                                                <span style={{
+                                                    background: 'rgba(168, 85, 247, 0.18)',
+                                                    color: '#d8b4fe',
+                                                    border: '1px solid rgba(168, 85, 247, 0.35)',
+                                                    borderRadius: '5px',
+                                                    padding: '1px 7px',
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: 800,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}>
+                                                    <MessageSquare size={10} />
+                                                    @{item.requested_by || 'Viewer'}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
