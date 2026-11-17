@@ -1848,7 +1848,15 @@ export default function SpotifySongRequestManager({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                             type="button"
-                            onClick={() => setIsTestPlaying(!isTestPlaying)}
+                            onClick={() => {
+                                const next = !isTestPlaying;
+                                setIsTestPlaying(next);
+                                try {
+                                    const bc = new BroadcastChannel('spotify_overlay_channel');
+                                    bc.postMessage({ type: 'TEST_PLAYBACK_TOGGLE', isPlaying: next });
+                                    bc.close();
+                                } catch (e) {}
+                            }}
                             style={{
                                 background: isTestPlaying ? 'rgba(255, 95, 162, 0.2)' : 'rgba(255, 255, 255, 0.08)',
                                 color: isTestPlaying ? '#ff5fa2' : '#F8FAFC',
@@ -2190,7 +2198,9 @@ export default function SpotifySongRequestManager({
                                 border: '7px solid #fff',
                                 background: 'repeating-radial-gradient(circle at center, #2a1650 0 3px, #3a2170 3px 5px)',
                                 boxShadow: '0 0 0 5px #3fd8ff',
-                                animation: isTestPlaying ? 'spinOverlayVinyl 9s linear infinite' : 'none'
+                                animation: 'spinOverlayVinyl 9s linear infinite',
+                                animationPlayState: isTestPlaying ? 'running' : 'paused',
+                                transformOrigin: '50% 50%'
                             }}>
                                 {/* Brillo de vinilo */}
                                 <div style={{

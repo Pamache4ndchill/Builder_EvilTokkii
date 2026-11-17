@@ -72,9 +72,12 @@
     box-shadow:0 0 0 5px var(--cyan);
     animation:spin 9s linear infinite;
     animation-play-state:paused;
+    transform-origin:50% 50%;
+    will-change:transform;
   }
-  .playing .disc{
-    animation-play-state:running;
+  .playing .disc,
+  .disc.is-spinning{
+    animation-play-state:running !important;
   }
 
   /* Brillo del vinilo */
@@ -101,7 +104,8 @@
   }
 
   @keyframes spin{
-    to{transform:rotate(360deg)}
+    0%{transform:rotate(0deg)}
+    100%{transform:rotate(360deg)}
   }
 
   /* ========================================================= */
@@ -168,10 +172,6 @@
   .fade-out{
     opacity:0 !important;
     pointer-events:none;
-  }
-
-  @media (prefers-reduced-motion:reduce){
-    .disc,.comp-title span.scroll{animation:none}
   }
 </style>
 </head>
@@ -298,8 +298,12 @@ try {
       currentLayout = { ...currentLayout, ...event.data.layout };
       applyLayout();
     }
-    if (event.data && event.data.type === 'TEST_STATE') {
-      renderTrack(event.data.track, event.data.isPlaying);
+    if (event.data && (event.data.type === 'TEST_STATE' || event.data.type === 'TEST_PLAYBACK_TOGGLE')) {
+      const playing = event.data.isPlaying !== undefined ? event.data.isPlaying : event.data.playing;
+      setDiscSpinState(playing);
+      if (event.data.track) {
+        renderTrack(event.data.track, playing);
+      }
     }
   };
 } catch (e) {}
@@ -325,6 +329,16 @@ let progressMs = 0;
 let durationMs = 1;
 let lastSync = 0;
 
+function setDiscSpinState(playing) {
+  isPlaying = !!playing;
+  if (stage) stage.classList.toggle('playing', isPlaying);
+  const discEl = document.querySelector('.disc');
+  if (discEl) {
+    discEl.classList.toggle('is-spinning', isPlaying);
+    discEl.style.animationPlayState = isPlaying ? 'running' : 'paused';
+  }
+}
+
 function fitMarquee() {
   titleEl.classList.remove('scroll');
   const parentBox = titleEl.parentElement;
@@ -338,8 +352,7 @@ function fitMarquee() {
 }
 
 function renderTrack(track, playing) {
-  isPlaying = !!playing;
-  stage.classList.toggle('playing', isPlaying);
+  setDiscSpinState(playing);
 
   if (!track) {
     if (currentLayout.hideWhenPaused) {
@@ -389,10 +402,10 @@ async function pollSpotify() {
 
     if (res.status === 204) {
       // Nada reproduciendo
+      setDiscSpinState(false);
       if (currentLayout.hideWhenPaused) {
         stage.classList.add('fade-out');
       }
-      renderTrack(null, false);
       return;
     }
 
@@ -422,10 +435,14 @@ async function pollSpotify() {
       return;
     }
 
-    if (!res.ok) return;
+    if (!res.ok) {
+      setDiscSpinState(false);
+      return;
+    }
 
     const data = await res.json();
     if (!data.item || data.currently_playing_type !== 'track') {
+      setDiscSpinState(false);
       if (currentLayout.hideWhenPaused) stage.classList.add('fade-out');
       return;
     }
