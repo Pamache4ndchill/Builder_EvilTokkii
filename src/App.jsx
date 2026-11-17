@@ -1339,45 +1339,66 @@ function App() {
         return;
       }
 
-      // Limpiar playlist ID para asegurar que sea solo el ID alfanumérico
-      const cleanPlaylistId = (playlistId.match(/playlist\/([a-zA-Z0-9]+)/)?.[1] || playlistId.split('?')[0].split('/')[0]).trim();
+      // Limpiar playlist ID para asegurar que sea solo el ID alfanumérico limpio
+      let cleanPlaylistId = (playlistId || '').trim();
+      if (cleanPlaylistId.includes('playlist/')) {
+        cleanPlaylistId = cleanPlaylistId.split('playlist/')[1];
+      } else if (cleanPlaylistId.startsWith('spotify:playlist:')) {
+        cleanPlaylistId = cleanPlaylistId.replace('spotify:playlist:', '');
+      }
+      cleanPlaylistId = cleanPlaylistId.split('?')[0].split('/')[0].split('#')[0].trim();
+
       addBotLog(`[Spotify SR] Añadiendo URI "${track.uri}" a Playlist ID: "${cleanPlaylistId}"`);
 
-      // Añadir a la Playlist de Spotify Free
-      let addRes = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
-        method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${spotifyToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ uris: [track.uri] })
-      });
+      // Añadir a la Playlist de Spotify (Endpoint moderno: /items, fallback: /tracks)
+      const executeAddTrack = async (tkn) => {
+        let r = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/items`, {
+          method: 'POST',
+          headers: { 
+            Authorization: `Bearer ${tkn}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uris: [track.uri] })
+        });
 
-      if (addRes.status === 401) {
-        spotifyToken = await getValidSpotifyAccessToken(true);
-        if (spotifyToken) {
-          addRes = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
+        // Si da 404 o 400 en /items, intentar con el endpoint clásico /tracks
+        if (!r.ok && r.status !== 401 && r.status !== 403) {
+          const fallback = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
             method: 'POST',
             headers: { 
-              Authorization: `Bearer ${spotifyToken}`,
+              Authorization: `Bearer ${tkn}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({ uris: [track.uri] })
           });
+          if (fallback.ok || fallback.status === 401) {
+            r = fallback;
+          }
+        }
+        return r;
+      };
+
+      let addRes = await executeAddTrack(spotifyToken);
+
+      if (addRes.status === 401) {
+        spotifyToken = await getValidSpotifyAccessToken(true);
+        if (spotifyToken) {
+          addRes = await executeAddTrack(spotifyToken);
         }
       }
 
       if (!addRes.ok) {
         const errJson = await addRes.json().catch(() => ({}));
-        const rawMsg = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+        const rawMsg = errJson.error?.message || errJson.message || (typeof errJson === 'string' ? errJson : JSON.stringify(errJson));
         addBotLog(`[Spotify SR Add Error] Status ${addRes.status}: ${rawMsg}`);
         
         if (addRes.status === 403) {
-          throw new Error('Faltan permisos de modificación en tu cuenta o la Playlist no es tuya. Dale a "Desconectar" y vuelve a "Conectar Cuenta" en el Builder.');
+          const detail = rawMsg && rawMsg !== '{}' ? ` (${rawMsg})` : '';
+          throw new Error(`Permisos insuficientes o la Playlist no es tuya${detail}. Dale a "Desconectar" y vuelve a "Conectar Spotify" en el Builder.`);
         } else if (addRes.status === 404) {
-          throw new Error('No se encontró la Playlist. Asegúrate de haber pegado una Playlist creada por ti en tu Spotify.');
+          throw new Error(`No se encontró la Playlist con ID "${cleanPlaylistId}". Asegúrate de haberla creado en tu cuenta de Spotify.`);
         } else {
-          throw new Error(rawMsg);
+          throw new Error(rawMsg || `Error HTTP ${addRes.status}`);
         }
       }
 

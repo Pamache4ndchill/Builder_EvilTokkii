@@ -39,14 +39,47 @@ function base64encode(input) {
         .replace(/\//g, '_');
 }
 
-// Extraer ID limpio de Playlist desde URL o texto
+// Extraer ID limpio de Playlist desde URL, URI de Spotify o texto plano
 export function extractSpotifyPlaylistId(input) {
     if (!input) return '';
-    const clean = input.trim();
-    if (clean.includes('spotify.com/playlist/')) {
-        return clean.split('playlist/')[1]?.split('?')[0]?.split('/')[0] || '';
+    let clean = input.trim();
+    if (clean.includes('playlist/')) {
+        clean = clean.split('playlist/')[1];
+    } else if (clean.startsWith('spotify:playlist:')) {
+        clean = clean.replace('spotify:playlist:', '');
     }
-    return clean;
+    return clean.split('?')[0].split('/')[0].split('#')[0].trim();
+}
+
+// Helper para solicitudes a Playlists de Spotify (soporta endpoint moderno /items y fallback a /tracks)
+export async function requestSpotifyPlaylistItems(playlistId, method, token, bodyData) {
+    const cleanId = extractSpotifyPlaylistId(playlistId);
+    if (!cleanId || !token) return null;
+
+    const urls = [
+        `https://api.spotify.com/v1/playlists/${cleanId}/items`,
+        `https://api.spotify.com/v1/playlists/${cleanId}/tracks`
+    ];
+
+    let lastRes = null;
+    for (const url of urls) {
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: bodyData ? JSON.stringify(bodyData) : undefined
+            });
+            if (res.ok) return res;
+            if (res.status === 401) return res;
+            lastRes = res;
+        } catch (e) {
+            console.warn(`Request failed to ${url}:`, e);
+        }
+    }
+    return lastRes;
 }
 
 export default function SpotifySongRequestManager({ 
@@ -293,17 +326,18 @@ export default function SpotifySongRequestManager({
     const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
 
     const fetchPlaylistDetails = useCallback(async (playlistId) => {
-        if (!spotifyToken || !playlistId) return;
+        const cleanId = extractSpotifyPlaylistId(playlistId);
+        if (!spotifyToken || !cleanId) return;
         setIsLoadingPlaylist(true);
         try {
-            let res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+            let res = await fetch(`https://api.spotify.com/v1/playlists/${cleanId}`, {
                 headers: { Authorization: `Bearer ${spotifyToken}` }
             });
 
             if (res.status === 401) {
                 const newToken = await refreshSpotifyToken();
                 if (newToken) {
-                    res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+                    res = await fetch(`https://api.spotify.com/v1/playlists/${cleanId}`, {
                         headers: { Authorization: `Bearer ${newToken}` }
                     });
                 }
@@ -404,7 +438,7 @@ export default function SpotifySongRequestManager({
                 body: JSON.stringify({
                     name: name,
                     description: 'Playlist oficial de peticiones del stream en Twitch con EvilTokkii Bot',
-                    public: false
+                    public: true
                 })
             });
 
@@ -684,30 +718,16 @@ export default function SpotifySongRequestManager({
                 .filter(Boolean);
 
             if (uris.length > 0) {
-                let res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                    method: 'PUT',
-                    headers: {
-                        Authorization: `Bearer ${spotifyToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ uris: uris.slice(0, 100) })
-                });
+                let res = await requestSpotifyPlaylistItems(playlistId, 'PUT', spotifyToken, { uris: uris.slice(0, 100) });
 
-                if (res.status === 401) {
+                if (res?.status === 401) {
                     const newToken = await refreshSpotifyToken();
                     if (newToken) {
-                        res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                            method: 'PUT',
-                            headers: {
-                                Authorization: `Bearer ${newToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ uris: uris.slice(0, 100) })
-                        });
+                        res = await requestSpotifyPlaylistItems(playlistId, 'PUT', newToken, { uris: uris.slice(0, 100) });
                     }
                 }
 
-                if (res.ok) {
+                if (res?.ok) {
                     if (triggerToast) triggerToast('↕️ ¡Orden sincronizado 1:1 con tu Playlist de Spotify!');
                     fetchPlaylistDetails(playlistId);
                 }
@@ -786,15 +806,9 @@ export default function SpotifySongRequestManager({
                 try {
                     if (spotifyToken && playlistId && trackUri) {
                         try {
-                            await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                                method: 'DELETE',
-                                headers: {
-                                    Authorization: `Bearer ${spotifyToken}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    tracks: [{ uri: trackUri }]
-                                })
+                            await requestSpotifyPlaylistItems(playlistId, 'DELETE', spotifyToken, {
+                                tracks: [{ uri: trackUri }],
+                                items: [{ uri: trackUri }]
                             });
                         } catch (e) {
                             console.warn('Error deleting track from remote Spotify playlist:', e);
@@ -829,17 +843,10 @@ export default function SpotifySongRequestManager({
 
                 try {
                     if (spotifyToken && playlistId) {
-                        const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                            method: 'PUT',
-                            headers: {
-                                Authorization: `Bearer ${spotifyToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ uris: [] })
-                        });
+                        const res = await requestSpotifyPlaylistItems(playlistId, 'PUT', spotifyToken, { uris: [] });
 
-                        if (!res.ok) {
-                            console.warn('Could not empty remote playlist:', await res.text());
+                        if (!res?.ok) {
+                            console.warn('Could not empty remote playlist:', await res?.text());
                         }
                     }
 
@@ -895,16 +902,9 @@ export default function SpotifySongRequestManager({
         }
 
         try {
-            const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${spotifyToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ uris: [track.uri] })
-            });
+            const res = await requestSpotifyPlaylistItems(playlistId, 'POST', spotifyToken, { uris: [track.uri] });
 
-            if (res.ok) {
+            if (res?.ok) {
                 const artistsStr = track.artists?.map(a => a.name).join(', ') || '';
                 if (supabase) {
                     await supabase.from('song_requests').insert([{
@@ -1191,6 +1191,11 @@ export default function SpotifySongRequestManager({
                                 <span style={{ fontSize: '0.78rem', color: '#94A3B8' }}>
                                     {playlistData.tracks?.total || 0} canciones en Spotify • Por {playlistData.owner?.display_name || 'Tú'}
                                 </span>
+                                {spotifyUser && playlistData.owner && playlistData.owner.id !== spotifyUser.id && !playlistData.collaborative && (
+                                    <div style={{ marginTop: '4px', fontSize: '0.73rem', color: '#F87171', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <AlertCircle size={12} /> Esta playlist pertenece a otra cuenta y no es colaborativa. Las canciones solicitadas fallarán al agregarse si no es tuya.
+                                    </div>
+                                )}
                             </div>
                         </div>
 
