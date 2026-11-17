@@ -727,6 +727,10 @@ export default function SpotifySongRequestManager({
                             setSongQueue(playlistQueue);
                             return;
                         }
+                    } else {
+                        // La playlist remota de Spotify existe y está actualmente vacía (0 canciones)
+                        setSongQueue([]);
+                        return;
                     }
                 }
             } catch (e) {
@@ -887,7 +891,8 @@ export default function SpotifySongRequestManager({
             `¿Deseas quitar "${song.title}" de la lista y de tu Playlist de Spotify?`,
             'Eliminar Canción',
             async () => {
-                const playlistId = localStorage.getItem('spotify_sr_playlist_id');
+                const rawId = localStorage.getItem('spotify_sr_playlist_id');
+                const playlistId = extractSpotifyPlaylistId(rawId) || playlistData?.id;
                 const trackUri = song.video_id?.startsWith('spotify:track:')
                     ? song.video_id
                     : song.video_id ? `spotify:track:${song.video_id}` : null;
@@ -905,8 +910,17 @@ export default function SpotifySongRequestManager({
                     }
 
                     if (supabase && song.id) {
-                        await supabase.from('song_requests').delete().eq('id', song.id);
+                        try {
+                            await supabase.from('song_requests').delete().eq('id', song.id);
+                        } catch (e) {}
                     }
+
+                    // Limpiar también de localStorage
+                    try {
+                        const localQ = JSON.parse(localStorage.getItem('spotify_sr_queue') || '[]');
+                        const filtered = localQ.filter(s => s.id !== song.id && s.video_id !== song.video_id);
+                        localStorage.setItem('spotify_sr_queue', JSON.stringify(filtered));
+                    } catch (e) {}
 
                     setSongQueue(prev => prev.filter(s => s.id !== song.id));
                     if (triggerToast) triggerToast(`🗑️ "${song.title}" eliminada de la lista y de Spotify.`);
@@ -920,36 +934,117 @@ export default function SpotifySongRequestManager({
         );
     };
 
-    // Vaciar todas las canciones de la Playlist en Spotify y comenzar una nueva lista
+    // Vaciar todas las canciones de la Playlist en Spotify y de la lista de canciones solicitadas
     const handleClearAllPlaylist = () => {
         const playlistName = playlistData?.name || 'tu Playlist de Spotify';
         openConfirm(
-            '¿Vaciar Playlist en Spotify?',
-            `Esta acción eliminará TODAS las canciones de "${playlistName}" en Spotify y vaciará la lista del stream para que comiences una nueva sesión limpia en tu siguiente directo.`,
-            'Sí, Vaciar Playlist',
+            '¿Vaciar Playlist y Lista de Solicitudes?',
+            `Esta acción eliminará TODAS las canciones de "${playlistName}" en Spotify y vaciará la lista de canciones solicitadas para comenzar una nueva sesión limpia en tu directo.`,
+            'Sí, Vaciar Todo',
             async () => {
-                const playlistId = localStorage.getItem('spotify_sr_playlist_id');
+                const rawId = localStorage.getItem('spotify_sr_playlist_id');
+                const cleanId = extractSpotifyPlaylistId(rawId) || playlistData?.id;
 
                 try {
-                    if (spotifyToken && playlistId) {
-                        const res = await requestSpotifyPlaylistItems(playlistId, 'PUT', spotifyToken, { uris: [] });
+                    // 1. Vaciar canciones en la Playlist remota de Spotify
+                    if (spotifyToken && cleanId) {
+                        try {
+                            // Método 1: PUT con uris: [] a /items y /tracks
+                            await requestSpotifyPlaylistItems(cleanId, 'PUT', spotifyToken, { uris: [] });
+                        } catch (e) {
+                            console.warn('PUT empty uris error:', e);
+                        }
 
-                        if (!res?.ok) {
-                            console.warn('Could not empty remote playlist:', await res?.text());
+                        try {
+                            // Método 2: PUT alternativo con query string uris=
+                            await fetch(`https://api.spotify.com/v1/playlists/${cleanId}/items?uris=`, {
+                                method: 'PUT',
+                                headers: { Authorization: `Bearer ${spotifyToken}` }
+                            });
+                        } catch (e) {}
+
+                        // Método 3: Asegurar eliminación completa consultando items restantes y aplicando DELETE
+                        try {
+                            let hasMore = true;
+                            let attempts = 0;
+                            while (hasMore && attempts < 10) {
+                                attempts++;
+                                const getRes = await fetch(`https://api.spotify.com/v1/playlists/${cleanId}/items?limit=100`, {
+                                    headers: { Authorization: `Bearer ${spotifyToken}` }
+                                });
+                                if (!getRes.ok) break;
+                                const data = await getRes.json();
+                                const items = data.items || [];
+                                if (items.length === 0) {
+                                    hasMore = false;
+                                    break;
+                                }
+
+                                const urisToDelete = items
+                                    .map(it => (it.track || it.item)?.uri)
+                                    .filter(Boolean)
+                                    .map(uri => ({ uri }));
+
+                                if (urisToDelete.length > 0) {
+                                    await fetch(`https://api.spotify.com/v1/playlists/${cleanId}/items`, {
+                                        method: 'DELETE',
+                                        headers: {
+                                            Authorization: `Bearer ${spotifyToken}`,
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ tracks: urisToDelete, items: urisToDelete })
+                                    });
+                                }
+
+                                if (!data.next || items.length < 100) {
+                                    hasMore = false;
+                                }
+                            }
+                        } catch (errLoop) {
+                            console.warn('Loop deleting remaining tracks error:', errLoop);
                         }
                     }
 
+                    // 2. Limpiar Base de Datos Supabase (song_requests)
                     if (supabase) {
-                        await supabase.from('song_requests').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                        try {
+                            await supabase
+                                .from('song_requests')
+                                .delete()
+                                .neq('status', 'nonexistent_status_placeholder');
+                        } catch (supErr) {
+                            console.warn('Supabase delete by status failed, fallback to gt created_at:', supErr);
+                            try {
+                                await supabase
+                                    .from('song_requests')
+                                    .delete()
+                                    .gt('created_at', '1970-01-01');
+                            } catch (e) {}
+                        }
                     }
 
+                    // 3. Limpiar almacenamiento local (localStorage)
+                    localStorage.removeItem('spotify_sr_queue');
+                    localStorage.setItem('spotify_sr_queue', '[]');
+
+                    // 4. Limpiar estado de la cola en memoria
                     setSongQueue([]);
-                    if (playlistId) fetchPlaylistDetails(playlistId);
-                    if (triggerToast) triggerToast('🧹 ¡Playlist de Spotify vaciada! Lista lista para el nuevo directo.');
+
+                    // 5. Notificar a otros listeners / componentes
+                    window.dispatchEvent(new CustomEvent('sr-queue-updated', { detail: null }));
+                    window.dispatchEvent(new CustomEvent('spotify_queue_cleared'));
+                    window.dispatchEvent(new CustomEvent('song_requests_updated'));
+
+                    // 6. Actualizar información de la playlist
+                    if (cleanId) {
+                        await fetchPlaylistDetails(cleanId);
+                    }
+
+                    if (triggerToast) triggerToast('🧹 ¡Playlist y lista de canciones vaciadas por completo!');
 
                 } catch (err) {
-                    console.error('Error emptying playlist:', err);
-                    if (triggerToast) triggerToast('❌ Error al vaciar la playlist.');
+                    console.error('Error emptying playlist and queue:', err);
+                    if (triggerToast) triggerToast('❌ Error al vaciar la playlist y la lista.');
                 }
             }
         );
@@ -1163,7 +1258,7 @@ export default function SpotifySongRequestManager({
                         </div>
                     </div>
 
-                    {playlistData && (
+                    {(playlistData || localStorage.getItem('spotify_sr_playlist_id') || songQueue.length > 0) && (
                         <button
                             type="button"
                             onClick={handleClearAllPlaylist}
@@ -1181,9 +1276,9 @@ export default function SpotifySongRequestManager({
                                 gap: '6px',
                                 transition: 'all 0.2s'
                             }}
-                            title="Elimina todas las canciones de la playlist en Spotify para empezar una nueva sesión"
+                            title="Elimina todas las canciones de la playlist en Spotify y de la lista de solicitudes"
                         >
-                            <Trash2 size={14} /> Vaciar Playlist (Nueva Sesión)
+                            <Trash2 size={14} /> Vaciar Playlist y Lista
                         </button>
                     )}
                 </div>
@@ -2426,7 +2521,29 @@ export default function SpotifySongRequestManager({
                         </p>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {songQueue.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleClearAllPlaylist}
+                                style={{
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    color: '#EF4444',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    borderRadius: '8px',
+                                    padding: '6px 12px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                                title="Elimina todas las canciones de la lista de peticiones y de Spotify"
+                            >
+                                <Trash2 size={14} /> Vaciar Lista ({songQueue.length})
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => setShowManualSearch(!showManualSearch)}

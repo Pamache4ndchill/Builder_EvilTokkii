@@ -951,13 +951,19 @@ function App() {
       songRequestCommandRef.current = savedCmd;
       isSongRequestEnabledRef.current = savedEnabled;
     };
+    const handleQueueCleared = () => {
+      setSongRequests([]);
+      setCurrentSong(null);
+    };
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('sr-state-changed', handleStorageChange);
     window.addEventListener('sr-cmd-changed', handleStorageChange);
+    window.addEventListener('spotify_queue_cleared', handleQueueCleared);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('sr-state-changed', handleStorageChange);
       window.removeEventListener('sr-cmd-changed', handleStorageChange);
+      window.removeEventListener('spotify_queue_cleared', handleQueueCleared);
     };
   }, []);
 
