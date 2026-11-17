@@ -918,7 +918,10 @@ function App() {
   const [manualQuery, setManualQuery] = useState('');
   const [playerVolume, setPlayerVolume] = useState(() => Number(localStorage.getItem('song_player_volume')) || 50);
   const [isPlayerEnabledInDashboard, setIsPlayerEnabledInDashboard] = useState(() => localStorage.getItem('dashboard_player_enabled') === 'true');
-  const [songRequestCommand, setSongRequestCommand] = useState(() => localStorage.getItem('song_request_command') || '!spotifybloqued');
+  const [songRequestCommand, setSongRequestCommand] = useState(() => {
+    const saved = localStorage.getItem('song_request_command');
+    return (!saved || saved === '!spotifybloqued') ? '!sr' : saved;
+  });
   const [isSongRequestEnabled, setIsSongRequestEnabled] = useState(() => localStorage.getItem('song_request_enabled') === 'true');
 
   const songRequestCommandRef = useRef(songRequestCommand);
@@ -940,7 +943,8 @@ function App() {
 
   useEffect(() => {
     const handleStorageChange = () => {
-      const savedCmd = localStorage.getItem('song_request_command') || '!spotifybloqued';
+      const rawCmd = localStorage.getItem('song_request_command');
+      const savedCmd = (!rawCmd || rawCmd === '!spotifybloqued') ? '!sr' : rawCmd;
       const savedEnabled = localStorage.getItem('song_request_enabled') === 'true';
       setSongRequestCommand(savedCmd);
       setIsSongRequestEnabled(savedEnabled);

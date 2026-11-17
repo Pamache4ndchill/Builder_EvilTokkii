@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Spotify Overlay OBS · Muse Dash</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pink:#ff5fa2; --pink-d:#d4337a;
+    --cyan:#3fd8ff; --cyan-d:#0f9ad1;
+    --yellow:#ffe45e;
+    --night:#2a1650; --white:#fff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:transparent !important;
+    overflow:hidden;
+    width:100%;height:100%;
+    font-family:'Fredoka','Nunito','Segoe UI',sans-serif;
+  }
+
+  #overlay-stage{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+    background:transparent !important;
+  }
+
+  /* ========================================================= */
+  /* 1. DISCO DE VINILO (COMPONENTE 1) */
+  /* ========================================================= */
+  .comp-disc{
+    position:absolute;
+    width:320px;height:320px;
+    user-select:none;
+    transform-origin:0 0;
+    will-change:transform, left, top;
+    transition:opacity 0.4s ease;
+  }
+
+  .disc-wrap{
+    position:relative;width:100%;height:100%;
+  }
+
+  /* Sombra pop sólida estilo Muse Dash */
+  .disc-wrap::before{
+    content:"";position:absolute;inset:0;border-radius:50%;
+    background:var(--pink);transform:translate(8px,8px);
+  }
+
+  /* Barra de progreso circular */
+  .progress{
+    position:absolute;left:-20px;top:-20px;width:360px;height:360px;
+    transform:rotate(-90deg);z-index:3;pointer-events:none;
+    overflow:visible !important;
+  }
+  .progress circle{fill:none;stroke-width:6;stroke-linecap:round}
+  .progress .track{stroke:rgba(42,22,80,.35)}
+  .progress .bar{
+    stroke:var(--yellow);stroke-dasharray:1000;stroke-dashoffset:1000;
+    filter:drop-shadow(0 0 8px rgba(255,228,94,.95));
+    transition:stroke-dashoffset 0.25s linear;
+  }
+
+  /* Cuerpo del disco */
+  .disc{
+    position:absolute;inset:0;border-radius:50%;
+    border:7px solid var(--white);
+    background:repeating-radial-gradient(circle at center,#2a1650 0 3px,#3a2170 3px 5px);
+    box-shadow:0 0 0 5px var(--cyan);
+    animation:spin 9s linear infinite;
+    animation-play-state:paused;
+  }
+  .playing .disc{
+    animation-play-state:running;
+  }
+
+  /* Brillo del vinilo */
+  .disc::after{
+    content:"";position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(from 20deg,transparent 0 15%,rgba(255,255,255,.22) 22%,transparent 30% 65%,rgba(63,216,255,.25) 72%,transparent 80%);
+    pointer-events:none;
+  }
+
+  /* Carátula del disco en el centro */
+  .cover{
+    position:absolute;left:50%;top:50%;width:62%;height:62%;
+    transform:translate(-50%,-50%);border-radius:50%;
+    background:var(--pink) center/cover no-repeat;
+    border:6px solid var(--white);
+    box-shadow:0 0 0 5px var(--pink);
+    overflow:hidden;
+  }
+
+  /* Agujero central del vinilo */
+  .hole{
+    position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);
+    border-radius:50%;background:var(--night);border:5px solid var(--white);z-index:2;
+  }
+
+  @keyframes spin{
+    to{transform:rotate(360deg)}
+  }
+
+  /* ========================================================= */
+  /* 2. CASILLA AUTOR / ARTISTA (COMPONENTE 2) */
+  /* ========================================================= */
+  .comp-artist{
+    position:absolute;
+    display:inline-block;
+    width:fit-content;
+    box-sizing:border-box;
+    padding:10px 28px 10px 34px;
+    background:linear-gradient(100deg,var(--pink),#ff8bbd);
+    color:#fff;font-weight:700;font-size:30px;line-height:1.1;
+    border:5px solid #fff;border-radius:14px;
+    transform:skewX(-9deg);
+    box-shadow:7px 7px 0 var(--night);
+    text-shadow:2px 2px 0 var(--pink-d);
+    overflow:hidden;white-space:nowrap;
+    user-select:none;
+    transform-origin:0 0;
+    will-change:transform, left, top, max-width;
+    transition:opacity 0.4s ease;
+  }
+  .comp-artist span{
+    display:inline-block;transform:skewX(9deg);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    max-width:100%;vertical-align:bottom;
+  }
+
+  /* ========================================================= */
+  /* 3. CASILLA CANCIÓN / TÍTULO (COMPONENTE 3) */
+  /* ========================================================= */
+  .comp-title{
+    position:absolute;
+    display:inline-block;
+    padding:12px 30px;
+    background:linear-gradient(100deg,var(--cyan),#8ae9ff);
+    color:var(--night);font-weight:700;font-size:38px;line-height:1.15;
+    border:5px solid #fff;border-radius:14px;
+    transform:skewX(-9deg);
+    box-shadow:7px 7px 0 var(--night);
+    overflow:hidden;white-space:nowrap;
+    max-width:580px;
+    user-select:none;
+    transform-origin:0 0;
+    will-change:transform, left, top;
+    transition:opacity 0.4s ease;
+  }
+  .comp-title span{
+    display:inline-block;transform:skewX(9deg);
+    will-change:transform;
+  }
+  .comp-title span.scroll{
+    animation:marquee var(--dur,12s) linear infinite;
+    padding-right:80px;
+  }
+
+  @keyframes marquee{
+    0%,12%{transform:skewX(9deg) translateX(0)}
+    100%{transform:skewX(9deg) translateX(var(--dist,-200px))}
+  }
+
+  /* Estado inactivo / Oculto */
+  .fade-out{
+    opacity:0 !important;
+    pointer-events:none;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .disc,.comp-title span.scroll{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="overlay-stage">
+  <!-- 1. DISCO -->
+  <div id="comp-disc" class="comp-disc">
+    <div class="disc-wrap">
+      <svg class="progress" viewBox="0 0 100 100" style="overflow: visible;">
+        <circle class="track" cx="50" cy="50" r="45" pathLength="1000"/>
+        <circle class="bar" id="bar" cx="50" cy="50" r="45" pathLength="1000"/>
+      </svg>
+      <div class="disc"><div class="cover" id="cover"></div></div>
+      <div class="hole"></div>
+    </div>
+  </div>
+
+  <!-- 2. CASILLA AUTOR -->
+  <div id="comp-artist" class="comp-artist">
+    <span id="artist-text">Artista</span>
+  </div>
+
+  <!-- 3. CASILLA CANCIÓN -->
+  <div id="comp-title" class="comp-title">
+    <span id="title-text">Canción</span>
+  </div>
+</div>
+
+<script>
+/* ========================================================= */
+/* CONTROLADOR DEL OVERLAY PARA OBS (SIN FONDO)              */
+/* ========================================================= */
+
+// Posiciones por defecto (X, Y, Escala, MaxWidth) para los 3 componentes
+const DEFAULT_LAYOUT = {
+  disc:   { x: 45,  y: 45,  scale: 1 },
+  artist: { x: 380, y: 105, scale: 1, maxWidth: 450 },
+  title:  { x: 350, y: 195, scale: 1, maxWidth: 580 },
+  hideWhenPaused: false
+};
+
+let currentLayout = { ...DEFAULT_LAYOUT };
+
+// Cargar tokens y layout guardado (soporta URL hash, query y localStorage)
+function loadLayout() {
+  try {
+    const searchParams = new URLSearchParams(location.search);
+    const hashStr = location.hash ? location.hash.replace(/^#/, '') : '';
+    const hashParams = new URLSearchParams(hashStr);
+
+    // Extraer tokens si vienen en la URL para OBS (que tiene su propio almacenamiento interno)
+    const token = hashParams.get('token') || searchParams.get('token');
+    const refresh = hashParams.get('refresh') || searchParams.get('refresh');
+    const clientId = hashParams.get('client_id') || searchParams.get('client_id');
+    const rawLayout = hashParams.get('layout') || searchParams.get('layout');
+
+    if (token) localStorage.setItem('spotify_access_token', token);
+    if (refresh) localStorage.setItem('spotify_refresh_token', refresh);
+    if (clientId) localStorage.setItem('spotify_custom_client_id', clientId);
+
+    if (rawLayout) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(rawLayout));
+        currentLayout = { ...DEFAULT_LAYOUT, ...parsed };
+        localStorage.setItem('spotify_overlay_layout', JSON.stringify(currentLayout));
+        applyLayout();
+        return;
+      } catch (e) {}
+    }
+
+    const saved = localStorage.getItem('spotify_overlay_layout');
+    if (saved) {
+      currentLayout = { ...DEFAULT_LAYOUT, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.warn('Error loading overlay layout:', e);
+  }
+  applyLayout();
+}
+
+function applyLayout() {
+  const discEl = document.getElementById('comp-disc');
+  const artistEl = document.getElementById('comp-artist');
+  const titleEl = document.getElementById('comp-title');
+
+  if (discEl && currentLayout.disc) {
+    discEl.style.left = (currentLayout.disc.x || 45) + 'px';
+    discEl.style.top = (currentLayout.disc.y || 45) + 'px';
+    const s = currentLayout.disc.scale || 1;
+    discEl.style.transform = `scale(${s})`;
+  }
+
+  if (artistEl && currentLayout.artist) {
+    artistEl.style.left = (currentLayout.artist.x || 380) + 'px';
+    artistEl.style.top = (currentLayout.artist.y || 105) + 'px';
+    const s = currentLayout.artist.scale || 1;
+    artistEl.style.transform = `scale(${s}) skewX(-9deg)`;
+    if (currentLayout.artist.maxWidth) {
+      artistEl.style.maxWidth = currentLayout.artist.maxWidth + 'px';
+    } else {
+      artistEl.style.maxWidth = '450px';
+    }
+  }
+
+  if (titleEl && currentLayout.title) {
+    titleEl.style.left = (currentLayout.title.x || 350) + 'px';
+    titleEl.style.top = (currentLayout.title.y || 195) + 'px';
+    const s = currentLayout.title.scale || 1;
+    titleEl.style.transform = `scale(${s}) skewX(-9deg)`;
+    if (currentLayout.title.maxWidth) {
+      titleEl.style.maxWidth = currentLayout.title.maxWidth + 'px';
+    } else {
+      titleEl.style.maxWidth = '580px';
+    }
+  }
+}
+
+// Sincronización en tiempo real desde el Builder (BroadcastChannel)
+try {
+  const channel = new BroadcastChannel('spotify_overlay_channel');
+  channel.onmessage = (event) => {
+    if (event.data && event.data.type === 'UPDATE_LAYOUT') {
+      currentLayout = { ...currentLayout, ...event.data.layout };
+      applyLayout();
+    }
+    if (event.data && event.data.type === 'TEST_STATE') {
+      renderTrack(event.data.track, event.data.isPlaying);
+    }
+  };
+} catch (e) {}
+
+window.addEventListener('storage', (e) => {
+  if (e.key === 'spotify_overlay_layout') {
+    loadLayout();
+  }
+});
+
+/* ========================================================= */
+/* ESTADO DE REPRODUCCIÓN & SPOTIFY API                      */
+/* ========================================================= */
+const stage = document.getElementById('overlay-stage');
+const coverEl = document.getElementById('cover');
+const artistEl = document.getElementById('artist-text');
+const titleEl = document.getElementById('title-text');
+const barEl = document.getElementById('bar');
+
+let currentTrackId = null;
+let isPlaying = false;
+let progressMs = 0;
+let durationMs = 1;
+let lastSync = 0;
+
+function fitMarquee() {
+  titleEl.classList.remove('scroll');
+  const parentBox = titleEl.parentElement;
+  const avail = parentBox.clientWidth - 50;
+  if (titleEl.scrollWidth > avail) {
+    const dist = -(titleEl.scrollWidth + 70 - avail);
+    titleEl.style.setProperty('--dist', dist + 'px');
+    titleEl.style.setProperty('--dur', Math.max(8, titleEl.scrollWidth / 38) + 's');
+    titleEl.classList.add('scroll');
+  }
+}
+
+function renderTrack(track, playing) {
+  isPlaying = !!playing;
+  stage.classList.toggle('playing', isPlaying);
+
+  if (!track) {
+    if (currentLayout.hideWhenPaused) {
+      stage.classList.add('fade-out');
+    }
+    return;
+  }
+
+  stage.classList.remove('fade-out');
+
+  if (track.id !== currentTrackId) {
+    currentTrackId = track.id;
+    const imgUrl = track.album?.images?.[0]?.url || track.image || '';
+    coverEl.style.backgroundImage = imgUrl ? `url("${imgUrl}")` : '';
+    artistEl.textContent = Array.isArray(track.artists) ? track.artists.map(a => a.name).join(', ') : (track.artist || 'Artista');
+    titleEl.textContent = track.name || track.title || 'Canción';
+    requestAnimationFrame(fitMarquee);
+  }
+}
+
+function updateProgressLoop() {
+  let p = progressMs;
+  if (isPlaying) {
+    p += Date.now() - lastSync;
+  }
+  const frac = Math.min(1, Math.max(0, p / durationMs));
+  barEl.style.strokeDashoffset = 1000 - frac * 1000;
+  requestAnimationFrame(updateProgressLoop);
+}
+
+// Polling de Spotify
+async function getSpotifyToken() {
+  return localStorage.getItem('spotify_access_token');
+}
+
+async function pollSpotify() {
+  const token = await getSpotifyToken();
+  if (!token) {
+    // Si no hay token de Spotify aún, no ocultar si hay demo
+    return;
+  }
+
+  try {
+    const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (res.status === 204) {
+      // Nada reproduciendo
+      if (currentLayout.hideWhenPaused) {
+        stage.classList.add('fade-out');
+      }
+      renderTrack(null, false);
+      return;
+    }
+
+    if (res.status === 401) {
+      // Token expirado: intentar renovar si hay refresh_token
+      const rToken = localStorage.getItem('spotify_refresh_token');
+      const cId = localStorage.getItem('spotify_custom_client_id') || '467b4e8480964c26913cb87d276ed20c';
+      if (rToken) {
+        try {
+          const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: cId,
+              grant_type: 'refresh_token',
+              refresh_token: rToken
+            }).toString()
+          });
+          if (tokenRes.ok) {
+            const data = await tokenRes.json();
+            if (data.access_token) {
+              localStorage.setItem('spotify_access_token', data.access_token);
+            }
+          }
+        } catch (e) {}
+      }
+      return;
+    }
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (!data.item || data.currently_playing_type !== 'track') {
+      if (currentLayout.hideWhenPaused) stage.classList.add('fade-out');
+      return;
+    }
+
+    progressMs = data.progress_ms || 0;
+    durationMs = data.item.duration_ms || 1;
+    lastSync = Date.now();
+
+    renderTrack(data.item, data.is_playing);
+
+    if (!data.is_playing && currentLayout.hideWhenPaused) {
+      stage.classList.add('fade-out');
+    }
+
+  } catch (err) {
+    console.warn('Poll currently playing error:', err);
+  }
+}
+
+// Inicialización
+loadLayout();
+requestAnimationFrame(updateProgressLoop);
+
+// Si se abre con ?demo=1 o no hay Spotify conectado, mostrar muestra inicial estilo Muse Dash
+const isDemo = new URLSearchParams(location.search).has('demo');
+if (isDemo || !localStorage.getItem('spotify_access_token')) {
+  renderTrack({
+    id: 'demo-track',
+    name: 'Exit This Earth’s Atmosphere',
+    artist: 'Camellia',
+    artists: [{ name: 'Camellia' }],
+    album: {
+      images: [{ url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80' }]
+    }
+  }, true);
+  progressMs = 60000;
+  durationMs = 210000;
+  lastSync = Date.now();
+}
+
+setInterval(pollSpotify, 1500);
+pollSpotify();
+</script>
+</body>
+</html>
