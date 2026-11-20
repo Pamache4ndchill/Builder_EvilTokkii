@@ -88,7 +88,11 @@ export default function SpotifySongRequestManager({
     songRequestCommand: propCmd, 
     setSongRequestCommand: propSetCmd,
     isSongRequestEnabled: propEnabled,
-    setIsSongRequestEnabled: propSetEnabled
+    setIsSongRequestEnabled: propSetEnabled,
+    canEditFullConfig = true,
+    canManageQueue = true,
+    sessionUsername = '',
+    sessionEmail = ''
 }) {
     // -------------------------------------------------------------
     // 1. ESTADO DE COMANDO DE TWITCH
@@ -316,14 +320,50 @@ export default function SpotifySongRequestManager({
     };
 
     // -------------------------------------------------------------
-    // 3. ESTADO DE PLAYLIST DE SPOTIFY
+    // 3. MODO DE DESTINO Y PLAYLIST DE SPOTIFY
     // -------------------------------------------------------------
+    const [spotifyTargetMode, setSpotifyTargetMode] = useState(() => {
+        return localStorage.getItem('spotify_target_mode') || (localStorage.getItem('spotify_sr_playlist_id') ? 'playlist' : 'queue');
+    });
+
     const [playlistInput, setPlaylistInput] = useState(() => 
         localStorage.getItem('spotify_sr_playlist_name') || localStorage.getItem('spotify_sr_playlist_url') || ''
     );
     const [playlistData, setPlaylistData] = useState(null);
     const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false);
     const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+
+    // Guardar configuración compartida en Supabase app_settings
+    const saveSharedConfig = useCallback(async (overrides = {}) => {
+        if (!supabase || !canEditFullConfig) return;
+        try {
+            await supabase.from('app_settings').upsert({
+                key: 'spotify_song_request_config',
+                value: {
+                    access_token: localStorage.getItem('spotify_access_token') || spotifyToken,
+                    refresh_token: localStorage.getItem('spotify_refresh_token') || refreshToken,
+                    client_id: activeClientId,
+                    playlist_id: localStorage.getItem('spotify_sr_playlist_id') || '',
+                    playlist_name: localStorage.getItem('spotify_sr_playlist_name') || '',
+                    target_mode: overrides.target_mode || spotifyTargetMode,
+                    overlay_layout: overrides.overlay_layout || overlayLayout,
+                    response_template: responseTemplate,
+                    command: songRequestCommand,
+                    is_enabled: isSongRequestEnabled,
+                    updated_at: new Date().toISOString()
+                }
+            });
+        } catch (e) {
+            console.warn('Error saving shared spotify config:', e);
+        }
+    }, [supabase, canEditFullConfig, spotifyToken, refreshToken, activeClientId, spotifyTargetMode, responseTemplate, songRequestCommand, isSongRequestEnabled]);
+
+    const handleSelectTargetMode = (mode) => {
+        setSpotifyTargetMode(mode);
+        localStorage.setItem('spotify_target_mode', mode);
+        saveSharedConfig({ target_mode: mode });
+        if (triggerToast) triggerToast(mode === 'queue' ? '🎧 Modo activado: Solo Cola de Reproducción (Sin Playlist)' : '📁 Modo activado: Guardar en Playlist de Spotify');
+    };
 
     const fetchPlaylistDetails = useCallback(async (playlistId) => {
         const cleanId = extractSpotifyPlaylistId(playlistId);
@@ -466,8 +506,8 @@ export default function SpotifySongRequestManager({
     // -------------------------------------------------------------
     const DEFAULT_OVERLAY_LAYOUT = {
         disc:   { x: 45,  y: 45,  scale: 1 },
-        artist: { x: 380, y: 105, scale: 1, maxWidth: 450 },
-        title:  { x: 350, y: 195, scale: 1, maxWidth: 580 },
+        artist: { x: 380, y: 105, scale: 1, maxWidth: 450, align: 'ltr' },
+        title:  { x: 350, y: 195, scale: 1, maxWidth: 580, align: 'ltr' },
         hideWhenPaused: false
     };
 
@@ -512,7 +552,7 @@ export default function SpotifySongRequestManager({
         });
     };
 
-    // Redimensionar límite máximo horizontal (arrastrar borde derecho)
+    // Redimensionar límite máximo horizontal (arrastrar tirador)
     const handleResizeMouseDown = (compKey, e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -527,10 +567,11 @@ export default function SpotifySongRequestManager({
 
     useEffect(() => {
         const handleMouseMove = (e) => {
-            // Manejo de redimensionamiento de ancho máximo
+            // Manejo de redimensionamiento de ancho máximo (soporta LTR y RTL)
             if (resizeInfo) {
+                const isRtl = overlayLayout[resizeInfo.comp]?.align === 'rtl';
                 const dx = (e.clientX - resizeInfo.startX) / resizeInfo.scale;
-                const newWidth = Math.round(Math.max(160, Math.min(1200, resizeInfo.origMaxWidth + dx)));
+                const newWidth = Math.round(Math.max(160, Math.min(1200, isRtl ? (resizeInfo.origMaxWidth - dx) : (resizeInfo.origMaxWidth + dx))));
                 setOverlayLayout(prev => ({
                     ...prev,
                     [resizeInfo.comp]: {
@@ -582,26 +623,38 @@ export default function SpotifySongRequestManager({
         }
     }, [dragInfo, resizeInfo, overlayLayout]);
 
+    // Cambiar orientación LTR / RTL para autor y canción
+    const handleSetOrientation = (dir) => {
+        const next = {
+            ...overlayLayout,
+            artist: { ...overlayLayout.artist, align: dir },
+            title: { ...overlayLayout.title, align: dir }
+        };
+        saveOverlayLayout(next);
+        saveSharedConfig({ overlay_layout: next });
+        if (triggerToast) triggerToast(dir === 'rtl' ? '⬅️ Orientación cambiada: Derecha a Izquierda (RTL)' : '➡️ Orientación cambiada: Izquierda a Derecha (LTR)');
+    };
+
     // Presets de ubicación rápida
     const applyPreset = (presetName) => {
         let preset = {};
         if (presetName === 'horizontal') {
             preset = {
                 disc:   { x: 45,  y: 45,  scale: 1 },
-                artist: { x: 380, y: 105, scale: 1, maxWidth: 450 },
-                title:  { x: 350, y: 195, scale: 1, maxWidth: 580 }
+                artist: { x: 380, y: 105, scale: 1, maxWidth: 450, align: 'ltr' },
+                title:  { x: 350, y: 195, scale: 1, maxWidth: 580, align: 'ltr' }
             };
         } else if (presetName === 'vertical') {
             preset = {
                 disc:   { x: 230, y: 20,  scale: 0.9 },
-                artist: { x: 180, y: 325, scale: 0.9, maxWidth: 450 },
-                title:  { x: 140, y: 390, scale: 0.9, maxWidth: 580 }
+                artist: { x: 180, y: 325, scale: 0.9, maxWidth: 450, align: 'ltr' },
+                title:  { x: 140, y: 390, scale: 0.9, maxWidth: 580, align: 'ltr' }
             };
         } else if (presetName === 'right') {
             preset = {
-                disc:   { x: 420, y: 40,  scale: 1 },
-                artist: { x: 40,  y: 105, scale: 1, maxWidth: 360 },
-                title:  { x: 20,  y: 195, scale: 1, maxWidth: 380 }
+                disc:   { x: 440, y: 40,  scale: 1 },
+                artist: { x: 420, y: 105, scale: 1, maxWidth: 380, align: 'rtl' },
+                title:  { x: 430, y: 195, scale: 1, maxWidth: 410, align: 'rtl' }
             };
         } else {
             preset = DEFAULT_OVERLAY_LAYOUT;
@@ -609,6 +662,7 @@ export default function SpotifySongRequestManager({
 
         const next = { ...overlayLayout, ...preset };
         saveOverlayLayout(next);
+        saveSharedConfig({ overlay_layout: next });
         if (triggerToast) triggerToast(`📐 Preset "${presetName}" aplicado.`);
     };
 
@@ -697,9 +751,10 @@ export default function SpotifySongRequestManager({
             if (item.title) requestMap.set(item.title.toLowerCase().trim(), item);
         }
 
-        // Si tenemos token de Spotify y playlist ID, consultar las canciones reales de la playlist
+        // Si estamos en modo playlist y tenemos token de Spotify y playlist ID, consultar las canciones reales de la playlist
+        const currentMode = localStorage.getItem('spotify_target_mode') || spotifyTargetMode;
         const savedPlaylistId = extractSpotifyPlaylistId(localStorage.getItem('spotify_sr_playlist_id'));
-        if (spotifyToken && savedPlaylistId) {
+        if (currentMode === 'playlist' && spotifyToken && savedPlaylistId) {
             try {
                 const res = await requestSpotifyPlaylistItems(savedPlaylistId, 'GET', spotifyToken);
                 if (res?.ok) {
@@ -746,7 +801,7 @@ export default function SpotifySongRequestManager({
         }
         const combined = Array.from(map.values());
         setSongQueue(combined);
-    }, [supabase, spotifyToken]);
+    }, [supabase, spotifyToken, spotifyTargetMode]);
 
     useEffect(() => {
         fetchQueue();
@@ -936,11 +991,18 @@ export default function SpotifySongRequestManager({
 
     // Vaciar todas las canciones de la Playlist en Spotify y de la lista de canciones solicitadas
     const handleClearAllPlaylist = () => {
+        const isQueueMode = (localStorage.getItem('spotify_target_mode') || spotifyTargetMode) === 'queue';
         const playlistName = playlistData?.name || 'tu Playlist de Spotify';
+        const title = isQueueMode ? '¿Vaciar Lista de Canciones Solicitadas?' : '¿Vaciar Playlist y Lista de Solicitudes?';
+        const msg = isQueueMode
+            ? 'Esta acción vaciará la lista de canciones solicitadas para comenzar una nueva sesión limpia en tu directo.'
+            : `Esta acción eliminará TODAS las canciones de "${playlistName}" en Spotify y vaciará la lista de canciones solicitadas para comenzar una nueva sesión limpia en tu directo.`;
+        const btnText = isQueueMode ? 'Sí, Vaciar Lista' : 'Sí, Vaciar Todo';
+
         openConfirm(
-            '¿Vaciar Playlist y Lista de Solicitudes?',
-            `Esta acción eliminará TODAS las canciones de "${playlistName}" en Spotify y vaciará la lista de canciones solicitadas para comenzar una nueva sesión limpia en tu directo.`,
-            'Sí, Vaciar Todo',
+            title,
+            msg,
+            btnText,
             async () => {
                 const rawId = localStorage.getItem('spotify_sr_playlist_id');
                 const cleanId = extractSpotifyPlaylistId(rawId) || playlistData?.id;
@@ -1040,7 +1102,7 @@ export default function SpotifySongRequestManager({
                         await fetchPlaylistDetails(cleanId);
                     }
 
-                    if (triggerToast) triggerToast('🧹 ¡Playlist y lista de canciones vaciadas por completo!');
+                    if (triggerToast) triggerToast(isQueueMode ? '🧹 ¡Lista de canciones vaciada por completo!' : '🧹 ¡Playlist y lista de canciones vaciadas por completo!');
 
                 } catch (err) {
                     console.error('Error emptying playlist and queue:', err);
@@ -1079,32 +1141,101 @@ export default function SpotifySongRequestManager({
     };
 
     const handleAddManualTrack = async (track) => {
+        if (!spotifyToken) {
+            if (triggerToast) triggerToast('⚠️ Conecta tu cuenta de Spotify primero.');
+            return;
+        }
+
+        const isQueueMode = (localStorage.getItem('spotify_target_mode') || spotifyTargetMode) === 'queue';
         const playlistId = localStorage.getItem('spotify_sr_playlist_id');
-        if (!playlistId) {
-            if (triggerToast) triggerToast('⚠️ Primero vincula tu Playlist de Spotify.');
+
+        if (!isQueueMode && !playlistId) {
+            if (triggerToast) triggerToast('⚠️ Primero vincula tu Playlist de Spotify o activa el modo "Solo Cola de Reproducción".');
             return;
         }
 
         try {
-            const res = await requestSpotifyPlaylistItems(playlistId, 'POST', spotifyToken, { uris: [track.uri] });
+            let success = false;
+            if (isQueueMode) {
+                // Modo Cola Directa de Spotify
+                const qRes = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${spotifyToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-            if (res?.ok) {
+                if (qRes.ok || qRes.status === 204) {
+                    success = true;
+                } else if (qRes.status === 404) {
+                    if (triggerToast) triggerToast('⚠️ No hay reproducción activa en Spotify. Pon play en alguna canción primero.');
+                    return;
+                } else if (qRes.status === 401) {
+                    const newToken = await refreshSpotifyToken();
+                    if (newToken) {
+                        const retryQ = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${newToken}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        if (retryQ.ok || retryQ.status === 204) success = true;
+                    }
+                }
+            } else {
+                // Modo Playlist
+                const res = await requestSpotifyPlaylistItems(playlistId, 'POST', spotifyToken, { uris: [track.uri] });
+                if (res?.ok) {
+                    success = true;
+                } else if (res?.status === 403) {
+                    if (triggerToast) triggerToast('⚠️ Faltan permisos de modificación en tu cuenta o la Playlist no es tuya. Prueba "Solo Cola de Reproducción".');
+                    return;
+                }
+            }
+
+            if (success) {
                 const artistsStr = track.artists?.map(a => a.name).join(', ') || '';
+                const requesterName = sessionUsername || 'Moderador';
+                const coverUrl = track.album?.images?.[0]?.url || '';
+
+                const newSong = {
+                    id: `sr_${Date.now()}_${track.id}`,
+                    title: `${track.name} - ${artistsStr}`,
+                    video_id: track.id,
+                    requested_by: requesterName,
+                    cover_url: coverUrl,
+                    status: 'completed',
+                    created_at: new Date().toISOString()
+                };
+
                 if (supabase) {
                     await supabase.from('song_requests').insert([{
                         title: `${track.name} - ${artistsStr}`,
                         video_id: track.id,
-                        requested_by: 'Streamer',
-                        status: 'pending'
+                        requested_by: requesterName,
+                        status: 'completed'
                     }]);
                 }
-                if (triggerToast) triggerToast(`🎵 Agregada: "${track.name}"`);
-                fetchPlaylistDetails(playlistId);
+
+                try {
+                    const localQ = JSON.parse(localStorage.getItem('spotify_sr_queue') || '[]');
+                    localQ.push(newSong);
+                    localStorage.setItem('spotify_sr_queue', JSON.stringify(localQ.slice(-100)));
+                } catch (e) {}
+
+                window.dispatchEvent(new CustomEvent('sr-queue-updated', { detail: newSong }));
+                setSongQueue(prev => [...prev, newSong]);
+
+                if (triggerToast) triggerToast(`🎵 Agregada: "${track.name}" ${isQueueMode ? 'a la cola activa' : 'a la playlist'}`);
+                if (!isQueueMode && playlistId) fetchPlaylistDetails(playlistId);
                 setSearchQuery('');
                 setSearchResults([]);
             }
         } catch (e) {
             console.error('Error adding track manually:', e);
+            if (triggerToast) triggerToast('❌ Error al agregar canción.');
         }
     };
 
@@ -1239,107 +1370,204 @@ export default function SpotifySongRequestManager({
                 </div>
             </div>
 
-            {/* ============================================================= */}
-            {/* 🎵 2. CASILLA: PLAYLIST DE SPOTIFY (VINCULAR Y VACIAR) */}
-            {/* ============================================================= */}
-            <div className="card" style={{ padding: '1.5rem 1.6rem', marginBottom: '1.5rem', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(29, 185, 84, 0.3)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(29, 185, 84, 0.15)', color: '#1DB954', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Music size={20} />
+            {/* Aviso especial para asistentes o moderadores con permiso restringido */}
+            {!canEditFullConfig && (
+                <div style={{
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1.5px solid rgba(16, 185, 129, 0.4)',
+                    borderRadius: '16px',
+                    padding: '14px 18px',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
+                }}>
+                    <ShieldCheck size={28} color="#10B981" />
+                    <div>
+                        <div style={{ color: '#10B981', fontWeight: 800, fontSize: '0.98rem' }}>
+                            Modo Asistente / Moderador Activo
                         </div>
-                        <div>
-                            <h3 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.05rem', fontWeight: 800 }}>
-                                Playlist de Spotify para Peticiones
-                            </h3>
-                            <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                Ingresa el nombre o enlace de la playlist donde se agregarán las canciones solicitadas.
-                            </p>
+                        <div style={{ color: '#CBD5E1', fontSize: '0.84rem', marginTop: '2px' }}>
+                            Tienes permisos activos para gestionar la <strong>Lista de Canciones Solicitadas</strong> en vivo (agregar canciones manualmente con el buscador, reordenar y eliminar peticiones). La configuración avanzada de credenciales, OBS y comandos está reservada para el administrador.
                         </div>
                     </div>
-
-                    {(playlistData || localStorage.getItem('spotify_sr_playlist_id') || songQueue.length > 0) && (
-                        <button
-                            type="button"
-                            onClick={handleClearAllPlaylist}
-                            style={{
-                                background: 'rgba(239, 68, 68, 0.12)',
-                                color: '#EF4444',
-                                border: '1px solid rgba(239, 68, 68, 0.35)',
-                                borderRadius: '10px',
-                                padding: '8px 14px',
-                                fontSize: '0.82rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                transition: 'all 0.2s'
-                            }}
-                            title="Elimina todas las canciones de la playlist en Spotify y de la lista de solicitudes"
-                        >
-                            <Trash2 size={14} /> Vaciar Playlist y Lista
-                        </button>
-                    )}
                 </div>
+            )}
 
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                    <input
-                        type="text"
-                        value={playlistInput}
-                        onChange={(e) => setPlaylistInput(e.target.value)}
-                        placeholder="Ej: Canciones del Stream o https://open.spotify.com/playlist/..."
-                        className="gift-input-field"
-                        style={{ flex: 1, minWidth: '260px', marginBottom: 0 }}
-                    />
+            {canEditFullConfig && (
+                <>
+                    {/* ============================================================= */}
+                    {/* 🎵 2. CASILLA: PLAYLIST DE SPOTIFY (VINCULAR Y VACIAR) */}
+                    {/* ============================================================= */}
+                    <div className="card" style={{ padding: '1.5rem 1.6rem', marginBottom: '1.5rem', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(29, 185, 84, 0.3)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(29, 185, 84, 0.15)', color: '#1DB954', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Music size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, color: '#F8FAFC', fontSize: '1.05rem', fontWeight: 800 }}>
+                                        Destino de Canciones de Spotify
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                        Elige si enviar peticiones directamente a tu cola activa en Spotify o guardarlas en una Playlist.
+                                    </p>
+                                </div>
+                            </div>
 
-                    <button
-                        type="button"
-                        onClick={handleSavePlaylist}
-                        disabled={isLoadingPlaylist}
-                        style={{
-                            background: '#1DB954',
-                            color: '#000',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '0 18px',
-                            fontWeight: 800,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
+                            {(playlistData || localStorage.getItem('spotify_sr_playlist_id') || songQueue.length > 0) && (
+                                <button
+                                    type="button"
+                                    onClick={handleClearAllPlaylist}
+                                    style={{
+                                        background: 'rgba(239, 68, 68, 0.12)',
+                                        color: '#EF4444',
+                                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                                        borderRadius: '10px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.82rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    title="Elimina todas las canciones de la lista de solicitudes y de Spotify"
+                                >
+                                    <Trash2 size={14} /> Vaciar {spotifyTargetMode === 'queue' ? 'Lista de Canciones' : 'Playlist y Lista'}
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Selector de Modo: Solo Cola vs Playlist */}
+                        <div style={{
+                            background: 'rgba(0, 0, 0, 0.3)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '12px',
+                            padding: '12px 14px',
+                            marginBottom: '1.2rem',
                             display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        {isLoadingPlaylist ? <RefreshCw size={15} className="animate-spin" /> : <Check size={15} />}
-                        Vincular Playlist
-                    </button>
+                            flexDirection: 'column',
+                            gap: '10px'
+                        }}>
+                            <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#E2E8F0' }}>
+                                Modo de Recepción de Canciones:
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectTargetMode('queue')}
+                                    style={{
+                                        background: spotifyTargetMode === 'queue' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.05)',
+                                        border: `1.5px solid ${spotifyTargetMode === 'queue' ? '#10B981' : 'rgba(255, 255, 255, 0.12)'}`,
+                                        color: spotifyTargetMode === 'queue' ? '#34D399' : '#94A3B8',
+                                        borderRadius: '8px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.82rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    <Radio size={14} /> Solo Cola de Reproducción (Recomendado - Sin Playlist)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectTargetMode('playlist')}
+                                    style={{
+                                        background: spotifyTargetMode === 'playlist' ? 'rgba(56, 189, 248, 0.22)' : 'rgba(255, 255, 255, 0.05)',
+                                        border: `1.5px solid ${spotifyTargetMode === 'playlist' ? '#38BDF8' : 'rgba(255, 255, 255, 0.12)'}`,
+                                        color: spotifyTargetMode === 'playlist' ? '#38BDF8' : '#94A3B8',
+                                        borderRadius: '8px',
+                                        padding: '8px 14px',
+                                        fontSize: '0.82rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    <ListMusic size={14} /> Playlist de Spotify (Guardar en Playlist)
+                                </button>
+                            </div>
 
-                    {spotifyToken && (
-                        <button
-                            type="button"
-                            onClick={handleCreatePlaylist}
-                            disabled={isCreatingPlaylist}
-                            style={{
-                                background: 'rgba(255, 255, 255, 0.08)',
-                                color: '#F8FAFC',
-                                border: '1px solid rgba(255, 255, 255, 0.15)',
-                                borderRadius: '10px',
-                                padding: '0 14px',
-                                fontWeight: 700,
-                                fontSize: '0.82rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
-                            title="Crea una nueva playlist con este nombre en tu cuenta de Spotify"
-                        >
-                            {isCreatingPlaylist ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
-                            Crear en mi Spotify
-                        </button>
-                    )}
-                </div>
+                            {spotifyTargetMode === 'queue' ? (
+                                <div style={{ fontSize: '0.8rem', color: '#34D399', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <CheckCircle2 size={14} /> Las canciones se agregan directamente a la cola activa de Spotify del streamer. ¡No necesitas crear ni vincular ninguna playlist, evitando problemas de permisos o playlists ajenas!
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                                    Las canciones se guardarán en la playlist de Spotify que vincules o crees a continuación.
+                                </div>
+                            )}
+                        </div>
+
+                        {spotifyTargetMode === 'playlist' && (
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                                <input
+                                    type="text"
+                                    value={playlistInput}
+                                    onChange={(e) => setPlaylistInput(e.target.value)}
+                                    placeholder="Ej: Canciones del Stream o https://open.spotify.com/playlist/..."
+                                    className="gift-input-field"
+                                    style={{ flex: 1, minWidth: '260px', marginBottom: 0 }}
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={handleSavePlaylist}
+                                    disabled={isLoadingPlaylist}
+                                    style={{
+                                        background: '#1DB954',
+                                        color: '#000',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        padding: '0 18px',
+                                        fontWeight: 800,
+                                        fontSize: '0.85rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    {isLoadingPlaylist ? <RefreshCw size={15} className="animate-spin" /> : <Check size={15} />}
+                                    Vincular Playlist
+                                </button>
+
+                                {spotifyToken && (
+                                    <button
+                                        type="button"
+                                        onClick={handleCreatePlaylist}
+                                        disabled={isCreatingPlaylist}
+                                        style={{
+                                            background: 'rgba(255, 255, 255, 0.08)',
+                                            color: '#F8FAFC',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            borderRadius: '10px',
+                                            padding: '0 14px',
+                                            fontWeight: 700,
+                                            fontSize: '0.82rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                        title="Crea una nueva playlist con este nombre en tu cuenta de Spotify"
+                                    >
+                                        {isCreatingPlaylist ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+                                        Crear en mi Spotify
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                 {playlistData ? (
                     <div style={{
@@ -2133,6 +2361,32 @@ export default function SpotifySongRequestManager({
                                 <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>px</span>
                             </label>
                         )}
+
+                        {(activeComponent === 'artist' || activeComponent === 'title') && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94A3B8' }}>
+                                Inicio:
+                                <select
+                                    value={overlayLayout[activeComponent]?.align || 'ltr'}
+                                    onChange={(e) => {
+                                        const alignVal = e.target.value;
+                                        const next = {
+                                            ...overlayLayout,
+                                            [activeComponent]: { ...overlayLayout[activeComponent], align: alignVal }
+                                        };
+                                        saveOverlayLayout(next);
+                                        saveSharedConfig({ overlay_layout: next });
+                                    }}
+                                    style={{
+                                        background: '#0b1120', border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '4px', padding: '3px 6px', color: '#fff', fontSize: '0.78rem'
+                                    }}
+                                    title="Punto de anclaje y dirección del texto"
+                                >
+                                    <option value="ltr">➡️ Izq a Der (LTR)</option>
+                                    <option value="rtl">⬅️ Der a Izq (RTL)</option>
+                                </select>
+                            </label>
+                        )}
                     </div>
 
                     {/* Probar texto de ejemplo para comprobar el límite de autor */}
@@ -2176,8 +2430,47 @@ export default function SpotifySongRequestManager({
                         </button>
                     </div>
 
-                    {/* Presets de diseño */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {/* Presets de diseño y orientación */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        {/* Selector de Orientación rápida LTR / RTL */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '6px' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#64748B' }}>Orientación:</span>
+                            <button
+                                type="button"
+                                onClick={() => handleSetOrientation('ltr')}
+                                style={{
+                                    background: (overlayLayout.artist?.align || 'ltr') === 'ltr' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                                    border: `1px solid ${(overlayLayout.artist?.align || 'ltr') === 'ltr' ? '#38BDF8' : 'rgba(255,255,255,0.1)'}`,
+                                    color: (overlayLayout.artist?.align || 'ltr') === 'ltr' ? '#38BDF8' : '#94A3B8',
+                                    borderRadius: '4px',
+                                    padding: '2px 6px',
+                                    fontSize: '0.72rem',
+                                    cursor: 'pointer',
+                                    fontWeight: 700
+                                }}
+                                title="Inicio de izquierda a derecha (disco a la izquierda)"
+                            >
+                                ➡️ Izq a Der
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleSetOrientation('rtl')}
+                                style={{
+                                    background: overlayLayout.artist?.align === 'rtl' ? 'rgba(244, 114, 182, 0.25)' : 'transparent',
+                                    border: `1px solid ${overlayLayout.artist?.align === 'rtl' ? '#F472B6' : 'rgba(255,255,255,0.1)'}`,
+                                    color: overlayLayout.artist?.align === 'rtl' ? '#F472B6' : '#94A3B8',
+                                    borderRadius: '4px',
+                                    padding: '2px 6px',
+                                    fontSize: '0.72rem',
+                                    cursor: 'pointer',
+                                    fontWeight: 700
+                                }}
+                                title="Inicio de derecha a izquierda (disco a la derecha)"
+                            >
+                                ⬅️ Der a Izq
+                            </button>
+                        </div>
+
                         <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Plantillas:</span>
                         <button
                             type="button"
@@ -2326,151 +2619,171 @@ export default function SpotifySongRequestManager({
                     </div>
 
                     {/* COMPONENTE 2: CASILLA AUTOR (AUTO-AJUSTABLE CON LÍMITE MÁXIMO HORIZONTAL) */}
-                    <div
-                        onMouseDown={(e) => handleCompMouseDown('artist', e)}
-                        style={{
-                            position: 'absolute',
-                            left: `${overlayLayout.artist?.x || 380}px`,
-                            top: `${overlayLayout.artist?.y || 105}px`,
-                            width: 'fit-content',
-                            maxWidth: `${overlayLayout.artist?.maxWidth || 450}px`,
-                            boxSizing: 'border-box',
-                            transform: `scale(${overlayLayout.artist?.scale || 1}) skewX(-9deg)`,
-                            transformOrigin: '0 0',
-                            padding: '10px 28px 10px 34px',
-                            background: 'linear-gradient(100deg, #ff5fa2, #ff8bbd)',
-                            color: '#fff',
-                            fontFamily: "'Fredoka', 'Nunito', sans-serif",
-                            fontWeight: 700,
-                            fontSize: '28px',
-                            lineHeight: 1.1,
-                            border: '5px solid #fff',
-                            borderRadius: '14px',
-                            boxShadow: '7px 7px 0 #2a1650',
-                            textShadow: '2px 2px 0 #d4337a',
-                            whiteSpace: 'nowrap',
-                            cursor: dragInfo?.comp === 'artist' ? 'grabbing' : 'grab',
-                            zIndex: activeComponent === 'artist' ? 30 : 22,
-                            filter: activeComponent === 'artist' ? 'drop-shadow(0 0 10px rgba(255,95,162,0.95))' : 'none',
-                            transition: resizeInfo?.comp === 'artist' ? 'none' : 'max-width 0.15s ease'
-                        }}
-                    >
-                        <div className="comp-handle-tag" style={{ transform: 'skewX(9deg)' }}>
-                            👤 Autor (Límite Máx: {overlayLayout.artist?.maxWidth || 450}px)
-                        </div>
+                    {(() => {
+                        const isArtistRtl = overlayLayout.artist?.align === 'rtl';
+                        return (
+                            <div
+                                onMouseDown={(e) => handleCompMouseDown('artist', e)}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${overlayLayout.artist?.x || 380}px`,
+                                    top: `${overlayLayout.artist?.y || 105}px`,
+                                    width: 'fit-content',
+                                    maxWidth: `${overlayLayout.artist?.maxWidth || 450}px`,
+                                    boxSizing: 'border-box',
+                                    transform: isArtistRtl 
+                                        ? `translateX(-100%) scale(${overlayLayout.artist?.scale || 1}) skewX(-9deg)` 
+                                        : `scale(${overlayLayout.artist?.scale || 1}) skewX(-9deg)`,
+                                    transformOrigin: isArtistRtl ? '100% 0' : '0 0',
+                                    textAlign: isArtistRtl ? 'right' : 'left',
+                                    padding: isArtistRtl ? '10px 34px 10px 28px' : '10px 28px 10px 34px',
+                                    background: 'linear-gradient(100deg, #ff5fa2, #ff8bbd)',
+                                    color: '#fff',
+                                    fontFamily: "'Fredoka', 'Nunito', sans-serif",
+                                    fontWeight: 700,
+                                    fontSize: '28px',
+                                    lineHeight: 1.1,
+                                    border: '5px solid #fff',
+                                    borderRadius: '14px',
+                                    boxShadow: '7px 7px 0 #2a1650',
+                                    textShadow: '2px 2px 0 #d4337a',
+                                    whiteSpace: 'nowrap',
+                                    cursor: dragInfo?.comp === 'artist' ? 'grabbing' : 'grab',
+                                    zIndex: activeComponent === 'artist' ? 30 : 22,
+                                    filter: activeComponent === 'artist' ? 'drop-shadow(0 0 10px rgba(255,95,162,0.95))' : 'none',
+                                    transition: resizeInfo?.comp === 'artist' ? 'none' : 'max-width 0.15s ease'
+                                }}
+                            >
+                                <div className="comp-handle-tag" style={{ transform: 'skewX(9deg)', left: isArtistRtl ? 'auto' : '10px', right: isArtistRtl ? '10px' : 'auto' }}>
+                                    👤 Autor ({isArtistRtl ? 'RTL' : 'LTR'}, Máx: {overlayLayout.artist?.maxWidth || 450}px)
+                                </div>
 
-                        {/* Texto auto-ajustable con truncado si supera el límite máximo */}
-                        <span style={{ 
-                            display: 'inline-block', 
-                            transform: 'skewX(9deg)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            maxWidth: '100%',
-                            verticalAlign: 'bottom'
-                        }}>
-                            {sampleArtistMode === 'short' 
-                                ? 'Camellia' 
-                                : sampleArtistMode === 'normal' 
-                                    ? 'Camellia & Nanahira' 
-                                    : 'Camellia feat. Toby Fox, Nanahira & Virtual Streamers Band'}
-                        </span>
+                                {/* Texto auto-ajustable con truncado si supera el límite máximo */}
+                                <span style={{ 
+                                    display: 'inline-block', 
+                                    transform: 'skewX(9deg)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '100%',
+                                    verticalAlign: 'bottom'
+                                }}>
+                                    {sampleArtistMode === 'short' 
+                                        ? 'Camellia' 
+                                        : sampleArtistMode === 'normal' 
+                                            ? 'Camellia & Nanahira' 
+                                            : 'Camellia feat. Toby Fox, Nanahira & Virtual Streamers Band'}
+                                </span>
 
-                        {/* Tirador interactivo de redimensionamiento horizontal en el borde derecho */}
-                        <div
-                            onMouseDown={(e) => handleResizeMouseDown('artist', e)}
-                            title="Haz clic y arrastra horizontalmente para definir el límite máximo de ancho"
-                            style={{
-                                position: 'absolute',
-                                right: '-8px',
-                                top: '15%',
-                                bottom: '15%',
-                                width: '16px',
-                                background: '#ffd24a',
-                                borderRadius: '6px',
-                                border: '2px solid #fff',
-                                cursor: 'ew-resize',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                zIndex: 40,
-                                boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
-                                transform: 'skewX(9deg)',
-                                transition: 'transform 0.1s'
-                            }}
-                        >
-                            <span style={{ fontSize: '10px', color: '#000', fontWeight: 900, userSelect: 'none' }}>↔</span>
-                        </div>
-                    </div>
+                                {/* Tirador interactivo de redimensionamiento horizontal */}
+                                <div
+                                    onMouseDown={(e) => handleResizeMouseDown('artist', e)}
+                                    title={`Haz clic y arrastra horizontalmente para definir el límite máximo (${isArtistRtl ? 'arrastra a la izquierda' : 'arrastra a la derecha'})`}
+                                    style={{
+                                        position: 'absolute',
+                                        right: isArtistRtl ? 'auto' : '-8px',
+                                        left: isArtistRtl ? '-8px' : 'auto',
+                                        top: '15%',
+                                        bottom: '15%',
+                                        width: '16px',
+                                        background: '#ffd24a',
+                                        borderRadius: '6px',
+                                        border: '2px solid #fff',
+                                        cursor: 'ew-resize',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        zIndex: 40,
+                                        boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                                        transform: 'skewX(9deg)',
+                                        transition: 'transform 0.1s'
+                                    }}
+                                >
+                                    <span style={{ fontSize: '10px', color: '#000', fontWeight: 900, userSelect: 'none' }}>↔</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* COMPONENTE 3: CASILLA CANCIÓN */}
-                    <div
-                        onMouseDown={(e) => handleCompMouseDown('title', e)}
-                        style={{
-                            position: 'absolute',
-                            left: `${overlayLayout.title?.x || 350}px`,
-                            top: `${overlayLayout.title?.y || 195}px`,
-                            width: 'fit-content',
-                            maxWidth: `${overlayLayout.title?.maxWidth || 580}px`,
-                            boxSizing: 'border-box',
-                            transform: `scale(${overlayLayout.title?.scale || 1}) skewX(-9deg)`,
-                            transformOrigin: '0 0',
-                            padding: '12px 30px',
-                            background: 'linear-gradient(100deg, #3fd8ff, #8ae9ff)',
-                            color: '#2a1650',
-                            fontFamily: "'Fredoka', 'Nunito', sans-serif",
-                            fontWeight: 700,
-                            fontSize: '34px',
-                            lineHeight: 1.15,
-                            border: '5px solid #fff',
-                            borderRadius: '14px',
-                            boxShadow: '7px 7px 0 #2a1650',
-                            whiteSpace: 'nowrap',
-                            cursor: dragInfo?.comp === 'title' ? 'grabbing' : 'grab',
-                            zIndex: activeComponent === 'title' ? 30 : 21,
-                            filter: activeComponent === 'title' ? 'drop-shadow(0 0 8px rgba(63,216,255,0.9))' : 'none',
-                            transition: resizeInfo?.comp === 'title' ? 'none' : 'max-width 0.15s ease'
-                        }}
-                    >
-                        <div className="comp-handle-tag" style={{ transform: 'skewX(9deg)' }}>🎵 Canción (Límite Máx: {overlayLayout.title?.maxWidth || 580}px)</div>
-                        <span style={{ 
-                            display: 'inline-block', 
-                            transform: 'skewX(9deg)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            maxWidth: '100%',
-                            verticalAlign: 'bottom'
-                        }}>
-                            Exit This Earth’s Atmosphere
-                        </span>
+                    {(() => {
+                        const isTitleRtl = overlayLayout.title?.align === 'rtl';
+                        return (
+                            <div
+                                onMouseDown={(e) => handleCompMouseDown('title', e)}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${overlayLayout.title?.x || 350}px`,
+                                    top: `${overlayLayout.title?.y || 195}px`,
+                                    width: 'fit-content',
+                                    maxWidth: `${overlayLayout.title?.maxWidth || 580}px`,
+                                    boxSizing: 'border-box',
+                                    transform: isTitleRtl 
+                                        ? `translateX(-100%) scale(${overlayLayout.title?.scale || 1}) skewX(-9deg)` 
+                                        : `scale(${overlayLayout.title?.scale || 1}) skewX(-9deg)`,
+                                    transformOrigin: isTitleRtl ? '100% 0' : '0 0',
+                                    textAlign: isTitleRtl ? 'right' : 'left',
+                                    padding: '12px 30px',
+                                    background: 'linear-gradient(100deg, #3fd8ff, #8ae9ff)',
+                                    color: '#2a1650',
+                                    fontFamily: "'Fredoka', 'Nunito', sans-serif",
+                                    fontWeight: 700,
+                                    fontSize: '34px',
+                                    lineHeight: 1.15,
+                                    border: '5px solid #fff',
+                                    borderRadius: '14px',
+                                    boxShadow: '7px 7px 0 #2a1650',
+                                    whiteSpace: 'nowrap',
+                                    cursor: dragInfo?.comp === 'title' ? 'grabbing' : 'grab',
+                                    zIndex: activeComponent === 'title' ? 30 : 21,
+                                    filter: activeComponent === 'title' ? 'drop-shadow(0 0 8px rgba(63,216,255,0.9))' : 'none',
+                                    transition: resizeInfo?.comp === 'title' ? 'none' : 'max-width 0.15s ease'
+                                }}
+                            >
+                                <div className="comp-handle-tag" style={{ transform: 'skewX(9deg)', left: isTitleRtl ? 'auto' : '10px', right: isTitleRtl ? '10px' : 'auto' }}>
+                                    🎵 Canción ({isTitleRtl ? 'RTL' : 'LTR'}, Máx: {overlayLayout.title?.maxWidth || 580}px)
+                                </div>
+                                <span style={{ 
+                                    display: 'inline-block', 
+                                    transform: 'skewX(9deg)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '100%',
+                                    verticalAlign: 'bottom'
+                                }}>
+                                    Exit This Earth’s Atmosphere
+                                </span>
 
-                        {/* Tirador interactivo de redimensionamiento horizontal en el borde derecho */}
-                        <div
-                            onMouseDown={(e) => handleResizeMouseDown('title', e)}
-                            title="Haz clic y arrastra horizontalmente para definir el límite máximo de ancho"
-                            style={{
-                                position: 'absolute',
-                                right: '-8px',
-                                top: '15%',
-                                bottom: '15%',
-                                width: '16px',
-                                background: '#3fd8ff',
-                                borderRadius: '6px',
-                                border: '2px solid #fff',
-                                cursor: 'ew-resize',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                zIndex: 40,
-                                boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
-                                transform: 'skewX(9deg)',
-                                transition: 'transform 0.1s'
-                            }}
-                        >
-                            <span style={{ fontSize: '10px', color: '#000', fontWeight: 900, userSelect: 'none' }}>↔</span>
-                        </div>
-                    </div>
+                                {/* Tirador interactivo de redimensionamiento horizontal */}
+                                <div
+                                    onMouseDown={(e) => handleResizeMouseDown('title', e)}
+                                    title={`Haz clic y arrastra horizontalmente para definir el límite máximo (${isTitleRtl ? 'arrastra a la izquierda' : 'arrastra a la derecha'})`}
+                                    style={{
+                                        position: 'absolute',
+                                        right: isTitleRtl ? 'auto' : '-8px',
+                                        left: isTitleRtl ? '-8px' : 'auto',
+                                        top: '15%',
+                                        bottom: '15%',
+                                        width: '16px',
+                                        background: '#3fd8ff',
+                                        borderRadius: '6px',
+                                        border: '2px solid #fff',
+                                        cursor: 'ew-resize',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        zIndex: 40,
+                                        boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                                        transform: 'skewX(9deg)',
+                                        transition: 'transform 0.1s'
+                                    }}
+                                >
+                                    <span style={{ fontSize: '10px', color: '#000', fontWeight: 900, userSelect: 'none' }}>↔</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Footer del Overlay: Instrucciones de OBS */}
@@ -2499,6 +2812,8 @@ export default function SpotifySongRequestManager({
                     </label>
                 </div>
             </div>
+            </>
+            )}
 
             {/* ============================================================= */}
             {/* 📜 7. COLA DE CANCIONES SOLICITADAS (CON DRAG & DROP Y DELETE) */}

@@ -163,9 +163,37 @@
     padding-right:80px;
   }
 
+  /* RTL mode (Derecha hacia Izquierda) */
+  .comp-artist.rtl{
+    transform-origin:100% 0 !important;
+    text-align:right !important;
+    padding:10px 34px 10px 28px;
+  }
+  .comp-artist.rtl span{
+    text-align:right !important;
+  }
+
+  .comp-title.rtl{
+    transform-origin:100% 0 !important;
+    text-align:right !important;
+  }
+  .comp-title.rtl span{
+    text-align:right !important;
+  }
+  .comp-title.rtl span.scroll{
+    animation:marquee-rtl var(--dur,12s) linear infinite;
+    padding-left:80px;
+    padding-right:0;
+  }
+
   @keyframes marquee{
     0%,12%{transform:skewX(9deg) translateX(0)}
     100%{transform:skewX(9deg) translateX(var(--dist,-200px))}
+  }
+
+  @keyframes marquee-rtl{
+    0%,12%{transform:skewX(9deg) translateX(0)}
+    100%{transform:skewX(9deg) translateX(var(--dist-rtl,200px))}
   }
 
   /* Estado inactivo / Oculto */
@@ -269,7 +297,16 @@ function applyLayout() {
     artistEl.style.left = (currentLayout.artist.x || 380) + 'px';
     artistEl.style.top = (currentLayout.artist.y || 105) + 'px';
     const s = currentLayout.artist.scale || 1;
-    artistEl.style.transform = `scale(${s}) skewX(-9deg)`;
+    const isRtl = currentLayout.artist.align === 'rtl';
+    if (isRtl) {
+      artistEl.classList.add('rtl');
+      artistEl.style.transformOrigin = '100% 0';
+      artistEl.style.transform = `translateX(-100%) scale(${s}) skewX(-9deg)`;
+    } else {
+      artistEl.classList.remove('rtl');
+      artistEl.style.transformOrigin = '0 0';
+      artistEl.style.transform = `scale(${s}) skewX(-9deg)`;
+    }
     if (currentLayout.artist.maxWidth) {
       artistEl.style.maxWidth = currentLayout.artist.maxWidth + 'px';
     } else {
@@ -281,7 +318,16 @@ function applyLayout() {
     titleEl.style.left = (currentLayout.title.x || 350) + 'px';
     titleEl.style.top = (currentLayout.title.y || 195) + 'px';
     const s = currentLayout.title.scale || 1;
-    titleEl.style.transform = `scale(${s}) skewX(-9deg)`;
+    const isRtl = currentLayout.title.align === 'rtl';
+    if (isRtl) {
+      titleEl.classList.add('rtl');
+      titleEl.style.transformOrigin = '100% 0';
+      titleEl.style.transform = `translateX(-100%) scale(${s}) skewX(-9deg)`;
+    } else {
+      titleEl.classList.remove('rtl');
+      titleEl.style.transformOrigin = '0 0';
+      titleEl.style.transform = `scale(${s}) skewX(-9deg)`;
+    }
     if (currentLayout.title.maxWidth) {
       titleEl.style.maxWidth = currentLayout.title.maxWidth + 'px';
     } else {
@@ -342,10 +388,12 @@ function setDiscSpinState(playing) {
 function fitMarquee() {
   titleEl.classList.remove('scroll');
   const parentBox = titleEl.parentElement;
+  const isRtl = parentBox.classList.contains('rtl') || currentLayout.title?.align === 'rtl';
   const avail = parentBox.clientWidth - 50;
   if (titleEl.scrollWidth > avail) {
     const dist = -(titleEl.scrollWidth + 70 - avail);
     titleEl.style.setProperty('--dist', dist + 'px');
+    titleEl.style.setProperty('--dist-rtl', Math.abs(dist) + 'px');
     titleEl.style.setProperty('--dur', Math.max(8, titleEl.scrollWidth / 38) + 's');
     titleEl.classList.add('scroll');
   }

@@ -655,6 +655,10 @@ function App() {
                          sessionPermissions === '*' ||
                          (typeof sessionPermissions === 'object' && sessionPermissions?.email?.toLowerCase() === 'pamacheyt@gmail.com');
 
+  const isBroadcasterOrPamache = isPamacheAdmin ||
+    (sessionUsername && (sessionUsername.toLowerCase() === 'eviltokkii' || sessionUsername.toLowerCase() === 'pamache_')) ||
+    (sessionEmail && (sessionEmail.toLowerCase().includes('eviltokkii') || sessionEmail.toLowerCase() === 'pamacheyt@gmail.com'));
+
   const hasAccess = (requiredPermission) => {
     if (requiredPermission === 'user_permissions') return isPamacheAdmin;
     if (sessionPermissions === '*') return true;
@@ -684,7 +688,11 @@ function App() {
         case 'scheduled_messages':
           return !!sessionPermissions.access_scheduled_messages;
         case 'song_request':
-          return !!sessionPermissions.access_song_request;
+          return isBroadcasterOrPamache || !!(sessionPermissions.access_song_request || sessionPermissions.access_song_request_queue);
+        case 'song_request_config':
+          return isBroadcasterOrPamache || !!sessionPermissions.access_song_request;
+        case 'song_request_queue':
+          return isBroadcasterOrPamache || !!(sessionPermissions.access_song_request || sessionPermissions.access_song_request_queue);
         case 'commands':
           return !!sessionPermissions.access_commands;
         case 'reports':
@@ -704,12 +712,13 @@ function App() {
         case 'tierlists':
           return sessionPermissions.access_tierlists !== undefined ? !!sessionPermissions.access_tierlists : true;
         case 'admin':
-          return !!(
+          return isBroadcasterOrPamache || !!(
             sessionPermissions.access_participations ||
             sessionPermissions.access_twitch ||
             sessionPermissions.access_most_streamed ||
             sessionPermissions.access_scheduled_messages ||
             sessionPermissions.access_song_request ||
+            sessionPermissions.access_song_request_queue ||
             sessionPermissions.access_commands ||
             sessionPermissions.access_reports ||
             sessionPermissions.access_minigames ||
@@ -1234,8 +1243,10 @@ function App() {
         return;
       }
 
+      const targetMode = localStorage.getItem('spotify_target_mode') || (localStorage.getItem('spotify_sr_playlist_id') ? 'playlist' : 'queue');
       const playlistId = localStorage.getItem('spotify_sr_playlist_id');
-      if (!playlistId) {
+
+      if (targetMode === 'playlist' && !playlistId) {
         addBotLog(`[Spotify SR] ⚠️ No hay Playlist de Spotify configurada en el Builder.`);
         enviarMensajeTwitch(`@${requester} ⚠️ El streamer aún no ha configurado la Playlist de Spotify en el Builder.`, true);
         return;
@@ -1345,31 +1356,54 @@ function App() {
         return;
       }
 
-      // Limpiar playlist ID para asegurar que sea solo el ID alfanumérico limpio
-      let cleanPlaylistId = (playlistId || '').trim();
-      if (cleanPlaylistId.includes('playlist/')) {
-        cleanPlaylistId = cleanPlaylistId.split('playlist/')[1];
-      } else if (cleanPlaylistId.startsWith('spotify:playlist:')) {
-        cleanPlaylistId = cleanPlaylistId.replace('spotify:playlist:', '');
-      }
-      cleanPlaylistId = cleanPlaylistId.split('?')[0].split('/')[0].split('#')[0].trim();
+      if (targetMode === 'queue') {
+        addBotLog(`[Spotify SR] Modo Cola Directa: Añadiendo "${track.name}" (${track.uri}) a la cola activa de Spotify`);
 
-      addBotLog(`[Spotify SR] Añadiendo URI "${track.uri}" a Playlist ID: "${cleanPlaylistId}"`);
+        const executeAddToQueue = async (tkn) => {
+          return await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`, {
+            method: 'POST',
+            headers: { 
+              Authorization: `Bearer ${tkn}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        };
 
-      // Añadir a la Playlist de Spotify (Endpoint moderno: /items, fallback: /tracks)
-      const executeAddTrack = async (tkn) => {
-        let r = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/items`, {
-          method: 'POST',
-          headers: { 
-            Authorization: `Bearer ${tkn}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ uris: [track.uri] })
-        });
+        let addRes = await executeAddToQueue(spotifyToken);
 
-        // Si da 404 o 400 en /items, intentar con el endpoint clásico /tracks
-        if (!r.ok && r.status !== 401 && r.status !== 403) {
-          const fallback = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
+        if (addRes.status === 401) {
+          spotifyToken = await getValidSpotifyAccessToken(true);
+          if (spotifyToken) {
+            addRes = await executeAddToQueue(spotifyToken);
+          }
+        }
+
+        if (!addRes.ok) {
+          const errJson = await addRes.json().catch(() => ({}));
+          const rawMsg = errJson.error?.message || errJson.message || `Error HTTP ${addRes.status}`;
+          addBotLog(`[Spotify SR Queue Error] Status ${addRes.status}: ${rawMsg}`);
+
+          if (addRes.status === 404) {
+            throw new Error('No hay reproducción activa en Spotify. Por favor asegúrate de tener Spotify abierto reproduciendo música en algún dispositivo.');
+          } else {
+            throw new Error(rawMsg);
+          }
+        }
+      } else {
+        // Limpiar playlist ID para asegurar que sea solo el ID alfanumérico limpio
+        let cleanPlaylistId = (playlistId || '').trim();
+        if (cleanPlaylistId.includes('playlist/')) {
+          cleanPlaylistId = cleanPlaylistId.split('playlist/')[1];
+        } else if (cleanPlaylistId.startsWith('spotify:playlist:')) {
+          cleanPlaylistId = cleanPlaylistId.replace('spotify:playlist:', '');
+        }
+        cleanPlaylistId = cleanPlaylistId.split('?')[0].split('/')[0].split('#')[0].trim();
+
+        addBotLog(`[Spotify SR] Modo Playlist: Añadiendo URI "${track.uri}" a Playlist ID: "${cleanPlaylistId}"`);
+
+        // Añadir a la Playlist de Spotify (Endpoint moderno: /items, fallback: /tracks)
+        const executeAddTrack = async (tkn) => {
+          let r = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/items`, {
             method: 'POST',
             headers: { 
               Authorization: `Bearer ${tkn}`,
@@ -1377,34 +1411,46 @@ function App() {
             },
             body: JSON.stringify({ uris: [track.uri] })
           });
-          if (fallback.ok || fallback.status === 401) {
-            r = fallback;
+
+          // Si da 404 o 400 en /items, intentar con el endpoint clásico /tracks
+          if (!r.ok && r.status !== 401 && r.status !== 403) {
+            const fallback = await fetch(`https://api.spotify.com/v1/playlists/${cleanPlaylistId}/tracks`, {
+              method: 'POST',
+              headers: { 
+                Authorization: `Bearer ${tkn}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ uris: [track.uri] })
+            });
+            if (fallback.ok || fallback.status === 401) {
+              r = fallback;
+            }
+          }
+          return r;
+        };
+
+        let addRes = await executeAddTrack(spotifyToken);
+
+        if (addRes.status === 401) {
+          spotifyToken = await getValidSpotifyAccessToken(true);
+          if (spotifyToken) {
+            addRes = await executeAddTrack(spotifyToken);
           }
         }
-        return r;
-      };
 
-      let addRes = await executeAddTrack(spotifyToken);
-
-      if (addRes.status === 401) {
-        spotifyToken = await getValidSpotifyAccessToken(true);
-        if (spotifyToken) {
-          addRes = await executeAddTrack(spotifyToken);
-        }
-      }
-
-      if (!addRes.ok) {
-        const errJson = await addRes.json().catch(() => ({}));
-        const rawMsg = errJson.error?.message || errJson.message || (typeof errJson === 'string' ? errJson : JSON.stringify(errJson));
-        addBotLog(`[Spotify SR Add Error] Status ${addRes.status}: ${rawMsg}`);
-        
-        if (addRes.status === 403) {
-          const detail = rawMsg && rawMsg !== '{}' ? ` (${rawMsg})` : '';
-          throw new Error(`Permisos insuficientes o la Playlist no es tuya${detail}. Dale a "Desconectar" y vuelve a "Conectar Spotify" en el Builder.`);
-        } else if (addRes.status === 404) {
-          throw new Error(`No se encontró la Playlist con ID "${cleanPlaylistId}". Asegúrate de haberla creado en tu cuenta de Spotify.`);
-        } else {
-          throw new Error(rawMsg || `Error HTTP ${addRes.status}`);
+        if (!addRes.ok) {
+          const errJson = await addRes.json().catch(() => ({}));
+          const rawMsg = errJson.error?.message || errJson.message || (typeof errJson === 'string' ? errJson : JSON.stringify(errJson));
+          addBotLog(`[Spotify SR Add Error] Status ${addRes.status}: ${rawMsg}`);
+          
+          if (addRes.status === 403) {
+            const detail = rawMsg && rawMsg !== '{}' ? ` (${rawMsg})` : '';
+            throw new Error(`Permisos insuficientes o la Playlist no es tuya${detail}. Sugerencia: En el Builder activa "Solo Cola de Reproducción" para enviar peticiones directamente sin requerir crear ni vincular playlists.`);
+          } else if (addRes.status === 404) {
+            throw new Error(`No se encontró la Playlist con ID "${cleanPlaylistId}". Asegúrate de haberla creado en tu cuenta de Spotify.`);
+          } else {
+            throw new Error(rawMsg || `Error HTTP ${addRes.status}`);
+          }
         }
       }
 
@@ -1438,9 +1484,13 @@ function App() {
         }]);
       }
 
-      addBotLog(`[Spotify SR] ✅ Agregada a la Playlist: "${track.name}" de ${artistsStr} por @${requester}`);
+      const destLabel = targetMode === 'queue' ? 'la cola de Spotify' : 'la Playlist';
+      addBotLog(`[Spotify SR] ✅ Agregada a ${destLabel}: "${track.name}" de ${artistsStr} por @${requester}`);
       
-      const template = localStorage.getItem('spotify_sr_response_template') || '🎵 @{user} ¡Canción agregada a la Playlist del stream! "{song}" - {artist}';
+      const defaultTpl = targetMode === 'queue'
+        ? '🎵 @{user} ¡Canción agregada a la cola de Spotify! "{song}" - {artist}'
+        : '🎵 @{user} ¡Canción agregada a la Playlist del stream! "{song}" - {artist}';
+      const template = localStorage.getItem('spotify_sr_response_template') || defaultTpl;
       const finalMsg = template
         .replace(/{user}/gi, requester)
         .replace(/{requester}/gi, requester)
@@ -1452,7 +1502,7 @@ function App() {
 
     } catch (err) {
       addBotLog(`[Spotify SR Error] ${err.message}`);
-      enviarMensajeTwitch(`@${requester} ⚠️ Error al agregar la canción a la Playlist de Spotify: ${err.message}`, true);
+      enviarMensajeTwitch(`@${requester} ⚠️ Error con Spotify: ${err.message}`, true);
     }
   };
 
@@ -3810,6 +3860,25 @@ function App() {
           if (!data.username) setNeedsUsername(true);
           else setSessionUsername(data.username);
           
+          // Asegurar permisos dobles activos para eviltokkii y pamache_
+          const cleanEmail = (sessionEmail || '').toLowerCase();
+          const cleanUser = (data.username || '').toLowerCase();
+          const isEviltokkiiOrPamache = cleanEmail.includes('eviltokkii') || 
+                                        cleanEmail === 'pamacheyt@gmail.com' || 
+                                        cleanUser === 'eviltokkii' || 
+                                        cleanUser === 'pamache_';
+
+          if (isEviltokkiiOrPamache) {
+            data.access_song_request = true;
+            data.access_song_request_queue = true;
+            if (supabase) {
+              supabase.from('whitelist').update({
+                access_song_request: true,
+                access_song_request_queue: true
+              }).eq('email', sessionEmail).then(() => {}).catch(() => {});
+            }
+          }
+
           setSessionPermissions(data);
           localStorage.setItem('builder_permissions', JSON.stringify(data));
         }
@@ -3854,6 +3923,7 @@ function App() {
               access_most_streamed: false,
               access_scheduled_messages: false,
               access_song_request: false,
+              access_song_request_queue: false,
               access_commands: false,
               access_reports: false,
               access_minigames: false,
@@ -8468,6 +8538,10 @@ function App() {
               setSongRequestCommand={setSongRequestCommand}
               isSongRequestEnabled={isSongRequestEnabled}
               setIsSongRequestEnabled={setIsSongRequestEnabled}
+              canEditFullConfig={hasAccess('song_request_config')}
+              canManageQueue={hasAccess('song_request_queue')}
+              sessionUsername={sessionUsername}
+              sessionEmail={sessionEmail}
             />
           </div>
         ) : view === 'view_tierlists' ? (

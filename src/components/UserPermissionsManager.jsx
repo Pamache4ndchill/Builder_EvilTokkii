@@ -16,7 +16,8 @@ const PERMISSION_COLUMNS = [
     { key: 'access_twitch_giveaway', label: 'Sorteo en Vivo (Chat)', desc: 'Sorteo de palabras clave', color: '#9146FF' },
     { key: 'access_twitch', label: 'Canjes de Twitch', desc: 'Reclamos de puntos de canal', color: '#8B5CF6' },
     { key: 'access_scheduled_messages', label: 'Mensajes Programados', desc: 'Temporizadores del bot', color: '#3B82F6' },
-    { key: 'access_song_request', label: 'Song Request', desc: 'Cola de Spotify y reproductor', color: '#1DB954' },
+    { key: 'access_song_request', label: 'Song Request (Configuración Total)', desc: 'Tokens, comando Twitch, overlay OBS y cola', color: '#1DB954' },
+    { key: 'access_song_request_queue', label: 'Song Request (Solo Cola de Canciones)', desc: 'Gestionar, agregar y quitar peticiones', color: '#10B981' },
     { key: 'access_commands', label: 'Comandos del Chat', desc: 'Comandos de pelea y diversión', color: '#10B981' },
     { key: 'access_birthdays', label: 'Cumpleaños', desc: 'Felicitaciones automáticas de viewers', color: '#EC4899' },
     { key: 'access_bot_credentials', label: 'Credenciales Bot', desc: 'Configuración de cuenta y token', color: '#9146FF' }
@@ -165,6 +166,7 @@ export default function UserPermissionsManager({ supabase, triggerToast, session
                 access_twitch: false,
                 access_scheduled_messages: false,
                 access_song_request: false,
+                access_song_request_queue: false,
                 access_commands: false,
                 access_birthdays: false,
                 access_bot_credentials: false,

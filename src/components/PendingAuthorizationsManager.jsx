@@ -66,6 +66,7 @@ export default function PendingAuthorizationsManager({ supabase, triggerToast, s
                     access_twitch: true,
                     access_scheduled_messages: true,
                     access_song_request: true,
+                    access_song_request_queue: true,
                     access_commands: true,
                     access_minigames: true,
                     access_ruleta: true,
